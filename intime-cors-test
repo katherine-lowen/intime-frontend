@@ -1,0 +1,13 @@
+<!doctype html>
+<html>
+  <body>
+    <h1>CORS test</h1>
+    <pre id="out">Loading…</pre>
+    <script>
+      fetch("https://intime-backend-1.onrender.com/admin/health")
+        .then(r => r.json())
+        .then(data => document.getElementById('out').textContent = JSON.stringify(data, null, 2))
+        .catch(err => document.getElementById('out').textContent = 'Error: ' + err);
+    </script>
+  </body>
+</html>

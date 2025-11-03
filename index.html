@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+  <body>
+    <h1>Intime Test Page</h1>
+    <button id="check">Check Backend</button>
+    <pre id="output">Press the button to test...</pre>
+
+    <script>
+      // ✅ Set your backend URL — no < >, no spaces, exactly as shown
+      const API_URL = "https://intime-backend-1.onrender.com".trim();
+
+      // ✅ Build a clean /admin/health URL (Safari-safe)
+      const HEALTH_URL = new URL("/admin/health", API_URL).toString();
+
+      console.log("API_URL =", JSON.stringify(API_URL));
+      console.log("HEALTH_URL =", HEALTH_URL);
+
+      // ✅ When button is clicked, fetch the backend health check
+      document.getElementById("check").onclick = async () => {
+        try {
+          const res = await fetch(HEALTH_URL);
+          console.log("status =", res.status);
+          const data = await res.json();
+          document.getElementById("output").textContent = JSON.stringify(data, null, 2);
+        } catch (error) {
+          document.getElementById("output").textContent = "Error: " + error;
+          console.error(error);
+        }
+      };
+    </script>
+  </body>
+</html>
