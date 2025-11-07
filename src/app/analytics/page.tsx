@@ -1,26 +1,21 @@
 // src/app/analytics/page.tsx
 
-// Accept multiple possible shapes from /stats
-type Stats =
-  Partial<
-    Record<
-      | "users"
-      | "employees"
-      | "teams"
-      | "openRoles"
-      | "approvals"
-      | "events"
-      | "userCount"
-      | "teamCount"
-      | "eventCount",
-      number | string
-    >
-  > &
-    Record<string, unknown>;
+type StatsResponse = {
+  employees?: number;
+  users?: number;
+  teams?: number;
+  openRoles?: number;
+  approvals?: number;
+  events?: number;
+  userCount?: number;
+  teamCount?: number;
+  eventCount?: number;
+  [key: string]: unknown;
+};
 
-function toNum(v: unknown): number {
-  const n = typeof v === "string" ? Number(v) : (v as number);
-  return Number.isFinite(n) ? (n as number) : 0;
+function toNumber(value: unknown): number {
+  const n = typeof value === "string" ? Number(value) : (value as number);
+  return Number.isFinite(n) ? n : 0;
 }
 
 async function fetchStats(): Promise<{
@@ -37,14 +32,14 @@ async function fetchStats(): Promise<{
       cache: "no-store",
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data: Stats = await res.json();
+    const data: StatsResponse = await res.json();
 
-    // Map common field names to the three numbers we show
-    const employees = toNum(
-      data.employees ?? data.users ?? data.userCount ?? 0
-    );
-    const teams = toNum(data.teams ?? data.teamCount ?? 0);
-    const events = toNum(data.events ?? data.eventCount ?? 0);
+    const employees =
+      toNumber(data.employees) ||
+      toNumber(data.users) ||
+      toNumber(data.userCount);
+    const teams = toNumber(data.teams) || toNumber(data.teamCount);
+    const events = toNumber(data.events) || toNumber(data.eventCount);
 
     return { employees, teams, events };
   } catch {
@@ -63,14 +58,17 @@ export default async function AnalyticsPage() {
 
   return (
     <div className="mx-auto max-w-6xl p-6">
-      <h1 className="text-2xl font-semibold">Analytics</h1>
+      <h1 className="text-2xl font-semibold">Analytics • Live</h1>
       <p className="mt-2 text-neutral-600">
         Key metrics across your organization.
       </p>
 
       <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         {cards.map((c) => (
-          <div key={c.label} className="rounded-lg border border-neutral-200 p-4">
+          <div
+            key={c.label}
+            className="rounded-lg border border-neutral-200 p-4 shadow-sm"
+          >
             <div className="text-sm text-neutral-600">{c.label}</div>
             <div className="mt-1 text-2xl font-semibold">{c.value}</div>
           </div>
