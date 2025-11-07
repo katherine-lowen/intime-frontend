@@ -1,47 +1,48 @@
-"use client";
+import { api } from '@/lib/api';
 
-import { useState } from "react";
+type EventItem = {
+  id: string;
+  orgId: string;
+  source: string;
+  type: string;
+  summary: string;
+  startsAt?: string;
+  createdAt?: string;
+};
 
-export default function NewEventPage() {
-  const [status, setStatus] = useState<string>("");
+async function getEvents(): Promise<EventItem[]> {
+  return api.get('/events');
+}
 
-  async function createEvent() {
-    setStatus("Creating…");
-    try {
-      const base = process.env.NEXT_PUBLIC_API_URL!;
-      const res = await fetch(`${base}/events/ingest`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "demo_ingest",
-          payload: { note: "created from Next.js" },
-        }),
-      });
-
-      const text = await res.text(); // handle JSON or text
-      setStatus(`Response: ${text}`);
-    } catch (e: any) {
-      setStatus(`Error: ${e?.message || e}`);
-    }
-  }
+export default async function EventsPage() {
+  const events = await getEvents();
 
   return (
-    <main style={{ padding: 24 }}>
-      <h1 style={{ fontSize: 24, fontWeight: 600 }}>New Event</h1>
-      <button
-        onClick={createEvent}
-        style={{ padding: "8px 12px", borderRadius: 8, background: "black", color: "white" }}
-      >
-        Create demo event
-      </button>
+    <main className="p-6 space-y-4">
+      <header className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">Events</h1>
+          <p className="text-sm opacity-70">Latest activity in your org.</p>
+        </div>
+        <a href="/add-event" className="rounded border px-3 py-2">Add Event</a>
+      </header>
 
-      <pre style={{ background: "#f5f5f5", padding: 12, borderRadius: 8, marginTop: 12 }}>
-        {status || "Click the button to create an event."}
-      </pre>
-
-      <p style={{ marginTop: 12 }}>
-        <a href="/events">← Back to Events</a>
-      </p>
+      <ul className="divide-y rounded border bg-white">
+        {events.map(ev => (
+          <li key={ev.id} className="p-3 flex items-center justify-between">
+            <div>
+              <div className="font-medium">{ev.summary}</div>
+              <div className="text-xs opacity-60">
+                {ev.type} • {ev.source} • {ev.startsAt ? new Date(ev.startsAt).toLocaleString() : '—'}
+              </div>
+            </div>
+            <span className="text-xs rounded bg-neutral-100 px-2 py-1">{ev.orgId}</span>
+          </li>
+        ))}
+        {events.length === 0 && (
+          <li className="p-4 text-sm opacity-70">No events yet.</li>
+        )}
+      </ul>
     </main>
   );
 }

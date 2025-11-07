@@ -1,21 +1,56 @@
+/* src/app/globals.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+:root { color-scheme: light; }
+.dark { color-scheme: dark; }
+
+/* Optional tokens used by plain CSS (Tailwind uses config above) */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --radius: 12px;
+  --radius-md: 14px;
+  --radius-lg: 16px;
+  --shadow-card: 0 1px 2px rgba(16,24,40,.06), 0 8px 28px rgba(2,8,20,.05);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  html, body {
+    @apply min-h-screen bg-surface-subtle text-text antialiased;
+    font-feature-settings: "cv02","cv03","cv04","cv11";
   }
+
+  a { @apply text-brand hover:underline; }
+
+  /* Page fade-in */
+  body {
+    @apply opacity-0;
+    animation: fadeIn 0.4s ease-out forwards;
+  }
+
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Focus ring */
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(78,141,255,.18);
+  border-radius: 6px;
+}
+
+/* Smooth color transitions */
+* { @apply transition-colors duration-150; }
+
+/* Scrollbars */
+*::-webkit-scrollbar { height: 10px; width: 10px; }
+*::-webkit-scrollbar-thumb { background: #E7E9EC; border-radius: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+.dark *::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); }
+
+/* Row hover */
+.table-row { @apply hover:bg-surface-muted/60 dark:hover:bg-white/5 transition-colors; }
+
+/* Brand gradient utility */
+.bg-brand-gradient {
+  background-image: linear-gradient(135deg, #4E8DFF 0%, #66E3FF 100%);
 }
