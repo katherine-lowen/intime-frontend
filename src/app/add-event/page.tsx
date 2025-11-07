@@ -1,5 +1,5 @@
 import { revalidatePath } from 'next/cache';
-import { api } from '@/lib/api';
+import api from '@/lib/api';
 
 export default async function AddEventPage() {
   async function createEvent(formData: FormData) {
@@ -50,3 +50,5 @@ export default async function AddEventPage() {
     </main>
   );
 }
+
+export {};

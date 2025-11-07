@@ -1,5 +1,5 @@
 // src/app/users/page.tsx
-import { api } from '@/lib/api';
+import api from '@/lib/api';
 import { revalidatePath } from 'next/cache';
 
 type User = {
@@ -75,3 +75,5 @@ export default async function UsersPage() {
     </div>
   );
 }
+
+export {};

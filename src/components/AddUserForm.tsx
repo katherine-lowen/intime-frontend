@@ -1,53 +1,67 @@
+// src/components/AddUserForm.tsx
 'use client';
 
-import { useState, FormEvent } from 'react';
-import { API_URL } from '@/lib/api';
-const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID || 'demo-org';
+import { useState, type FormEvent } from 'react';
+import api from '@/lib/api'; // uses the default export { get, post, ... } from src/lib/api.ts
 
-export default function AddUserForm({ onDone }: { onDone?: () => void }) {
-  const [email, setEmail] = useState('');
+type Props = {
+  onCreated?: () => void; // optional callback after a successful create
+};
+
+export default function AddUserForm({ onCreated }: Props) {
   const [name, setName] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [email, setEmail] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setSaving(true); setError(null);
+    setSubmitting(true);
+    setError(null);
+
     try {
-      const res = await fetch(`${API_URL}/users`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Org-Id': ORG_ID },
-        body: JSON.stringify({ email, name }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      setEmail(''); setName('');
-      onDone?.();
+      await api.post('/users', { name, email });
+      setName('');
+      setEmail('');
+      onCreated?.();
     } catch (err: any) {
-      setError(err?.message || 'Failed to invite user');
+      setError(err?.message ?? 'Failed to create user');
     } finally {
-      setSaving(false);
+      setSubmitting(false);
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-4 flex flex-wrap gap-2">
-      <input
-        className="border rounded px-3 py-2 min-w-[220px]"
-        placeholder="email@domain.com"
-        type="email" value={email} onChange={e => setEmail(e.target.value)} required
-      />
-      <input
-        className="border rounded px-3 py-2 min-w-[180px]"
-        placeholder="Name (optional)"
-        value={name} onChange={e => setName(e.target.value)}
-      />
+    <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-neutral-200 p-4">
+      <div className="text-sm font-medium">Add user</div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <input
+          className="w-full rounded-md border border-neutral-300 p-2"
+          placeholder="Full name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+        />
+        <input
+          className="w-full rounded-md border border-neutral-300 p-2"
+          type="email"
+          placeholder="name@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
+      </div>
+
+      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+
       <button
-        disabled={saving}
-        className="rounded border px-3 py-2 disabled:opacity-50"
+        type="submit"
+        disabled={submitting}
+        className="rounded-md bg-black px-4 py-2 text-white disabled:opacity-60"
       >
-        {saving ? 'Adding…' : 'Invite User'}
+        {submitting ? 'Adding…' : 'Add user'}
       </button>
-      {error && <div className="text-red-600 text-sm">{error}</div>}
     </form>
   );
 }

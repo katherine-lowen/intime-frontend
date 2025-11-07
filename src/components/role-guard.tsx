@@ -1,16 +1,22 @@
+// src/components/role-guard.tsx
 "use client";
-import { ReactNode } from "react";
-import { useAuth } from "@/context/auth";
+
 import Link from "next/link";
+import { useAuth } from "@/context/auth";
+import type { ReactNode } from "react";
 
 export function RequireAdmin({ children }: { children: ReactNode }) {
   const { currentRole } = useAuth();
   if (currentRole !== "admin") {
     return (
-      <div className="p-8">
-        <h2 className="text-xl font-semibold mb-2">Insufficient permissions</h2>
-        <p className="text-sm text-gray-500 mb-4">This area is for Admins.</p>
-        <Link className="text-intime-blue underline" href={currentRole === "employee" ? "/me" : "/"}>Go back</Link>
+      <div className="p-8 space-y-3">
+        <h2 className="text-xl font-semibold">Admins only</h2>
+        <p className="text-neutral-600">
+          You don’t have permission to view this page.
+        </p>
+        <Link href="/" className="text-blue-600 underline">
+          Go back
+        </Link>
       </div>
     );
   }
@@ -21,10 +27,14 @@ export function RequireEmployee({ children }: { children: ReactNode }) {
   const { currentRole } = useAuth();
   if (currentRole !== "employee") {
     return (
-      <div className="p-8">
-        <h2 className="text-xl font-semibold mb-2">Insufficient permissions</h2>
-        <p className="text-sm text-gray-500 mb-4">This area is for Employees.</p>
-        <Link className="text-intime-blue underline" href="/">Go back</Link>
+      <div className="p-8 space-y-3">
+        <h2 className="text-xl font-semibold">Employees only</h2>
+        <p className="text-neutral-600">
+          You don’t have permission to view this page.
+        </p>
+        <Link href="/" className="text-blue-600 underline">
+          Go back
+        </Link>
       </div>
     );
   }

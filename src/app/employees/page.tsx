@@ -1,5 +1,5 @@
 // src/app/employees/page.tsx
-import { api } from "@/lib/api";
+import api from "@/lib/api";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
 type Employee = {
@@ -64,3 +64,5 @@ export default async function EmployeesPage() {
     </div>
   );
 }
+
+export {};

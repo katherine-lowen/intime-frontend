@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { api } from "@/lib/api"; // ✅ uses your existing api helper
+import api from "@/lib/api"; // ✅ uses your existing api helper
 
 export function InviteInline() {
   const [email, setEmail] = useState("");

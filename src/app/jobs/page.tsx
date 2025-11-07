@@ -66,3 +66,5 @@ export default async function JobsPage() {
     </div>
   );
 }
+
+export {};

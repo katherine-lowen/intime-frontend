@@ -1,4 +1,4 @@
-import { api } from '@/lib/api';
+import api from '@/lib/api';
 
 type EventItem = {
   id: string;
@@ -46,3 +46,5 @@ export default async function EventsPage() {
     </main>
   );
 }
+
+export {};

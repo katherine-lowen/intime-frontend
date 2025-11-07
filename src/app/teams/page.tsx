@@ -1,5 +1,5 @@
 // src/app/teams/page.tsx
-import { users } from "@/lib/api";
+import { get } from "@/lib/api";
 import { InviteInline } from "@/components/invite-inline";
 
 type User = { id: string; name: string; email: string };
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic"; // avoid stale caching
 export default async function TeamsPage() {
   let members: User[] = [];
   try {
-    const data = await users.list();
+    const data = await get("/users");
     members = Array.isArray(data) ? data : [];
   } catch {
     members = [];
@@ -56,3 +56,5 @@ export default async function TeamsPage() {
     </div>
   );
 }
+
+export {};

@@ -2,3 +2,5 @@
 export default function CandidatesPage() {
   return <div className="text-neutral-700">Candidates</div>;
 }
+
+export {};

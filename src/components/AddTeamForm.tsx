@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState, type FormEvent } from 'react'; 
 import { API_URL } from '@/lib/api';
 const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID || 'demo-org';
 
