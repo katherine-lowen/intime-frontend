@@ -1,4 +1,3 @@
-// src/app/not-found.tsx
 export default function NotFound() {
   return (
     <div className="flex min-h-[60vh] items-center justify-center p-6">

@@ -1,18 +1,16 @@
+// src/app/layout.tsx
 import "./globals.css";
 import type { Metadata } from "next";
-import { AppShell } from "@/components/app-shell";
 
 export const metadata: Metadata = {
-  title: "Intime — HR + Recruiting",
-  description: "Soft, fast HR platform with integrated ATS.",
+  title: "Intime",
+  description: "Unified HR time intelligence",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>
-        <AppShell>{children}</AppShell>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
