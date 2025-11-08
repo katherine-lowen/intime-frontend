@@ -1,5 +1,6 @@
 // src/app/page.tsx
 import Link from "next/link";
+import QuickAddEvent from "@/components/quick-add-event";
 
 async function fetchStats() {
   const api = process.env.NEXT_PUBLIC_API_URL!;
@@ -28,7 +29,6 @@ export default async function DashboardPage() {
   ];
 
   const quick = [
-    { label: "Add Event", href: "/add-event" },
     { label: "Invite Employee", href: "/teams" },
     { label: "Create Job", href: "/jobs" },
     { label: "View Analytics", href: "/analytics" },
@@ -36,14 +36,17 @@ export default async function DashboardPage() {
 
   return (
     <div className="relative">
-      {/* Gradient hero */}
+      {/* Background gradient */}
       <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-indigo-50 via-white to-white" />
+
+      {/* Hero */}
       <section className="mx-auto max-w-6xl px-6 pt-8">
         <div className="rounded-2xl border border-neutral-200 bg-white/70 p-6 shadow-sm backdrop-blur-sm">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
-                <span className="inline-block h-2 w-2 rounded-full bg-indigo-500" /> Unified Time Intelligence
+                <span className="inline-block h-2 w-2 rounded-full bg-indigo-500" />
+                Unified Time Intelligence
               </div>
               <h1 className="mt-3 text-3xl font-semibold tracking-tight">
                 Welcome to <span className="text-indigo-600">Intime</span>
@@ -59,18 +62,20 @@ export default async function DashboardPage() {
               >
                 Open Analytics
               </Link>
-              <Link
-                href="/add-event"
+              <a
+                href={`${process.env.NEXT_PUBLIC_API_URL}/healthz`}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-neutral-900 shadow-sm transition hover:bg-neutral-50"
               >
-                Quick Add Event
-              </Link>
+                API Health
+              </a>
             </div>
           </div>
         </div>
       </section>
 
-      {/* KPI cards */}
+      {/* KPI Cards */}
       <section className="mx-auto max-w-6xl px-6">
         <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {stats.map((s) => (
@@ -78,7 +83,6 @@ export default async function DashboardPage() {
               key={s.label}
               className="group relative overflow-hidden rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm transition hover:shadow-md"
             >
-              {/* subtle corner glow */}
               <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-indigo-100 opacity-0 blur-2xl transition group-hover:opacity-100" />
               <div className="text-sm text-neutral-600">{s.label}</div>
               <div className="mt-1 text-3xl font-semibold tracking-tight">{s.value}</div>
@@ -91,13 +95,13 @@ export default async function DashboardPage() {
       {/* Quick Actions + Highlights */}
       <section className="mx-auto max-w-6xl px-6">
         <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-3">
-          {/* Quick actions */}
+          {/* Quick actions with embedded QuickAddEvent */}
           <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm lg:col-span-2">
             <h2 className="text-lg font-semibold">Quick Actions</h2>
             <p className="mt-1 text-sm text-neutral-600">
               Create activity you can immediately see in Analytics and Events.
             </p>
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
               {quick.map((a) => (
                 <Link
                   key={a.href}
@@ -108,9 +112,14 @@ export default async function DashboardPage() {
                 </Link>
               ))}
             </div>
+
+            {/* Embedded Quick Add Event */}
+            <div className="mt-6">
+              <QuickAddEvent />
+            </div>
           </div>
 
-          {/* Highlights / “Why now” */}
+          {/* Highlights */}
           <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-semibold">Highlights</h2>
             <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-neutral-700">
