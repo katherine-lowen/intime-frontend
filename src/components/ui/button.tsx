@@ -1,42 +1,32 @@
-import { cn } from "@/lib/cn";
+// src/components/ui/button.tsx
+import * as React from "react";
+import { cn } from "@/lib/utils";
 
-type ButtonProps = {
-  as?: any;                 // e.g., "a"
-  href?: string;            // allow href when as="a"
-  className?: string;
-  variant?: "primary" | "subtle" | "ghost" | "danger";
-  size?: "sm" | "md" | "lg";
-  // allow any other DOM props without complaining
-  [key: string]: any;
+type Props = React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: "default" | "outline";
+  size?: "sm" | "md" | "icon";
 };
 
-export function Button({
-  className,
-  variant = "primary",
-  size = "md",
-  as: Tag = "button",
-  href,
-  ...props
-}: ButtonProps) {
+export const Button = React.forwardRef<HTMLButtonElement, Props>(function Button(
+  { className, variant = "default", size = "md", ...props },
+  ref
+) {
   const base =
-    "inline-flex items-center justify-center rounded-md text-sm font-medium transition select-none disabled:opacity-60 disabled:cursor-not-allowed";
-  const variants: Record<string, string> = {
-    primary: "bg-brand text-white hover:bg-brand-600 shadow-card active:translate-y-[0.5px]",
-    subtle: "bg-surface text-text hover:bg-surface-muted border border-line-subtle",
-    ghost: "hover:bg-surface-muted text-text-soft",
-    danger: "bg-red-500 text-white hover:bg-red-600",
+    "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus:outline-none border";
+  const variants = {
+    default: "bg-black text-white border-black hover:opacity-90",
+    outline: "bg-white text-neutral-900 border-neutral-300 hover:bg-neutral-50",
   };
-  const sizes: Record<string, string> = {
+  const sizes = {
     sm: "h-8 px-3",
-    md: "h-9 px-3.5",
-    lg: "h-10 px-4 text-[15px]",
+    md: "h-9 px-4",
+    icon: "h-9 w-9 p-0",
   };
-
   return (
-    <Tag
+    <button
+      ref={ref}
       className={cn(base, variants[variant], sizes[size], className)}
-      href={href}
       {...props}
     />
   );
-}
+});
