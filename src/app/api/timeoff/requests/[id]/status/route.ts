@@ -1,41 +1,45 @@
 // src/app/api/timeoff/requests/[id]/status/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import api from "@/lib/api";
 
-type TimeOffStatus =
-  | "REQUESTED"
-  | "APPROVED"
-  | "DENIED"
-  | "CANCELLED";
-
 type Body = {
-  status: TimeOffStatus;
+  status?: string;
 };
 
+/**
+ * PATCH /api/timeoff/requests/[id]/status
+ * Proxies to backend: PATCH /timeoff/requests/:id/status
+ */
 export async function PATCH(
-  req: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await context.params;
+
+  let body: Body = {};
   try {
-    const id = params.id;
-    const body = (await req.json()) as Body;
+    body = (await request.json()) ?? {};
+  } catch {
+    body = {};
+  }
 
-    if (!body.status) {
-      return NextResponse.json(
-        { error: "status is required" },
-        { status: 400 }
-      );
-    }
+  if (!body.status) {
+    return NextResponse.json(
+      { error: "Missing required field: status" },
+      { status: 400 }
+    );
+  }
 
+  try {
     const updated = await api.patch(`/timeoff/requests/${id}/status`, {
       status: body.status,
     });
 
-    return NextResponse.json(updated, { status: 200 });
+    return NextResponse.json(updated);
   } catch (err) {
-    console.error("API timeoff status error", err);
+    console.error("Error updating time off request status:", err);
     return NextResponse.json(
-      { error: "Failed to update time off status" },
+      { error: "Failed to update time off request status" },
       { status: 500 }
     );
   }
