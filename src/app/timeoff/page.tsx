@@ -1,11 +1,10 @@
-// src/app/timeoff/page.tsx
+// src/app/timeoff/new/page.tsx
+"use client";
+
+import { useEffect, useState, FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import api from "@/lib/api";
-
-export const dynamic = "force-dynamic";
-
-type TimeOffPolicyKind = "UNLIMITED" | "FIXED";
-
-type TimeOffStatus = "REQUESTED" | "APPROVED" | "DENIED" | "CANCELLED";
+import { AuthGate } from "@/components/dev-auth-gate";
 
 type TimeOffType =
   | "PTO"
@@ -19,279 +18,245 @@ type EmployeeLite = {
   id: string;
   firstName: string;
   lastName: string;
-  email: string;
   department?: string | null;
-  timeOffPolicy?: {
-    id: string;
-    name: string;
-    kind: TimeOffPolicyKind;
-    annualAllowanceDays?: number | null;
-  } | null;
 };
 
-type ManagerLite = {
-  id: string;
-  firstName: string;
-  lastName: string;
-} | null;
+const TIME_OFF_OPTIONS: { value: TimeOffType; label: string }[] = [
+  { value: "PTO", label: "Vacation / PTO" },
+  { value: "SICK", label: "Sick leave" },
+  { value: "PERSONAL", label: "Personal day" },
+  { value: "UNPAID", label: "Unpaid leave" },
+  { value: "JURY_DUTY", label: "Jury duty" },
+  { value: "PARENTAL_LEAVE", label: "Parental leave" },
+];
 
-type PolicyLite = {
-  id: string;
-  name: string;
-  kind: TimeOffPolicyKind;
-  annualAllowanceDays?: number | null;
-} | null;
-
-type TimeOffRequest = {
-  id: string;
-  orgId: string;
-  employeeId: string;
-  policyId?: string | null;
-  type: TimeOffType;
-  status: TimeOffStatus;
-  startDate: string;
-  endDate: string;
-  reason?: string | null;
-  managerId?: string | null;
-  employee: EmployeeLite;
-  manager: ManagerLite;
-  policy: PolicyLite;
-};
-
-async function getTimeOffRequests(): Promise<TimeOffRequest[]> {
+async function fetchEmployees(): Promise<EmployeeLite[]> {
   try {
-    const data = await api.get<TimeOffRequest[]>("/timeoff/requests");
+    const data = await api.get<EmployeeLite[]>("/employees");
     if (Array.isArray(data)) return data;
     return [];
   } catch (err) {
-    console.error(
-      "Failed to load time off requests, showing empty state",
-      err
-    );
+    console.error("Failed to load employees for time off form", err);
     return [];
   }
 }
 
-function formatDateRange(start: string, end: string) {
-  const s = new Date(start);
-  const e = new Date(end);
+export default function NewTimeOffRequestPage() {
+  const router = useRouter();
+  const [employees, setEmployees] = useState<EmployeeLite[]>([]);
+  const [loadingEmployees, setLoadingEmployees] = useState(true);
 
-  const sValid = !Number.isNaN(s.getTime());
-  const eValid = !Number.isNaN(e.getTime());
+  const [employeeId, setEmployeeId] = useState<string>("");
+  const [type, setType] = useState<TimeOffType>("PTO");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [reason, setReason] = useState("");
 
-  if (!sValid || !eValid) return "Dates not set";
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const sameMonth = s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear();
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const list = await fetchEmployees();
+      if (!cancelled) {
+        setEmployees(list);
+        if (list.length > 0) {
+          setEmployeeId(list[0].id);
+        }
+        setLoadingEmployees(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const startLabel = s.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
-  const endLabel = e.toLocaleDateString(undefined, {
-    month: sameMonth ? undefined : "short",
-    day: "numeric",
-  });
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
 
-  return `${startLabel} – ${endLabel}`;
-}
+    if (!employeeId) {
+      setError("Select an employee to continue.");
+      return;
+    }
 
-function statusBadgeClasses(status: TimeOffStatus) {
-  switch (status) {
-    case "APPROVED":
-      return "bg-emerald-50 text-emerald-700 border-emerald-200";
-    case "DENIED":
-      return "bg-red-50 text-red-700 border-red-200";
-    case "CANCELLED":
-      return "bg-slate-50 text-slate-500 border-slate-200";
-    default:
-      return "bg-amber-50 text-amber-700 border-amber-200";
+    if (!startDate || !endDate) {
+      setError("Start and end dates are required.");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+
+      await api.post("/timeoff/requests", {
+        employeeId,
+        type,
+        startDate,
+        endDate,
+        reason: reason || null,
+        // policyId: can plug in later if you want explicit policy selection
+      });
+
+      router.push("/timeoff");
+      router.refresh();
+    } catch (err) {
+      console.error(err);
+      setError(
+        "Something went wrong submitting the request. Check the API or try again."
+      );
+    } finally {
+      setSubmitting(false);
+    }
   }
-}
-
-export default async function TimeOffPage() {
-  const requests = await getTimeOffRequests();
-
-  const total = requests.length;
-  const byStatus: Record<TimeOffStatus, TimeOffRequest[]> = {
-    REQUESTED: [],
-    APPROVED: [],
-    DENIED: [],
-    CANCELLED: [],
-  };
-
-  for (const r of requests) {
-    byStatus[r.status]?.push(r);
-  }
-
-  const approvedThisYear = byStatus.APPROVED.length;
-  const pending = byStatus.REQUESTED.length;
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-8 space-y-6">
-      {/* Header */}
-      <section className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Time off
-          </p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">
-            PTO policies & requests
+    <AuthGate>
+      <main className="mx-auto max-w-3xl px-4 py-6">
+        <header className="mb-6">
+          <h1 className="text-2xl font-semibold text-slate-900">
+            New time off request
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            See who&apos;s out, how much time is being used, and what&apos;s
-            waiting for approval.
+            Capture a time off request for an employee. Later, employees will
+            submit these themselves from their portal.
           </p>
-        </div>
-      </section>
+        </header>
 
-      {/* Snapshot cards */}
-      <section className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-xs text-slate-500">Total requests</p>
-          <p className="mt-2 text-2xl font-semibold text-slate-900">{total}</p>
-          <p className="mt-1 text-[11px] text-slate-500">
-            All time off records in Intime
-          </p>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-xs text-slate-500">Pending approval</p>
-          <p className="mt-2 text-2xl font-semibold text-slate-900">
-            {pending}
-          </p>
-          <p className="mt-1 text-[11px] text-slate-500">
-            Requests in <span className="font-medium">REQUESTED</span> status
-          </p>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-xs text-slate-500">Approved (all time)</p>
-          <p className="mt-2 text-2xl font-semibold text-slate-900">
-            {approvedThisYear}
-          </p>
-          <p className="mt-1 text-[11px] text-slate-500">
-            Requests in <span className="font-medium">APPROVED</span> status
-          </p>
-        </div>
-      </section>
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          {error && (
+            <div className="mb-4 rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+              {error}
+            </div>
+          )}
 
-      {/* Table */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-900">
-            All time off requests
-          </h2>
-          <p className="text-[11px] text-slate-500">
-            Pulled from <code className="font-mono text-[10px]">/timeoff/requests</code>
-          </p>
-        </div>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Employee */}
+            <div className="space-y-1">
+              <label
+                htmlFor="employee"
+                className="text-xs font-medium text-slate-700"
+              >
+                Employee
+              </label>
+              <select
+                id="employee"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                value={employeeId}
+                onChange={(e) => setEmployeeId(e.target.value)}
+                disabled={loadingEmployees}
+              >
+                {loadingEmployees && (
+                  <option value="">Loading employees…</option>
+                )}
+                {!loadingEmployees && employees.length === 0 && (
+                  <option value="">No employees found</option>
+                )}
+                {!loadingEmployees &&
+                  employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.firstName} {emp.lastName}
+                      {emp.department ? ` · ${emp.department}` : ""}
+                    </option>
+                  ))}
+              </select>
+            </div>
 
-        {requests.length === 0 ? (
-          <p className="text-sm text-slate-500">
-            No time off requests recorded yet. As employees start requesting PTO
-            or sick time, they&apos;ll show up here.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-500">
-                  <th className="py-2 pr-4">Employee</th>
-                  <th className="py-2 pr-4">Type</th>
-                  <th className="py-2 pr-4">Dates</th>
-                  <th className="py-2 pr-4">Policy</th>
-                  <th className="py-2 pr-4">Status</th>
-                  <th className="py-2 pr-4">Manager</th>
-                  <th className="py-2 pr-4">Reason</th>
-                </tr>
-              </thead>
-              <tbody>
-                {requests.map((r) => {
-                  const emp = r.employee;
-                  const manager = r.manager;
-                  const policy = r.policy ?? emp.timeOffPolicy ?? null;
+            {/* Type */}
+            <div className="space-y-1">
+              <label
+                htmlFor="type"
+                className="text-xs font-medium text-slate-700"
+              >
+                Type
+              </label>
+              <select
+                id="type"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                value={type}
+                onChange={(e) => setType(e.target.value as TimeOffType)}
+              >
+                {TIME_OFF_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-                  const employeeName = emp
-                    ? `${emp.firstName} ${emp.lastName}`.trim()
-                    : "Unknown";
+            {/* Dates */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1">
+                <label
+                  htmlFor="startDate"
+                  className="text-xs font-medium text-slate-700"
+                >
+                  Start date
+                </label>
+                <input
+                  id="startDate"
+                  type="date"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <label
+                  htmlFor="endDate"
+                  className="text-xs font-medium text-slate-700"
+                >
+                  End date
+                </label>
+                <input
+                  id="endDate"
+                  type="date"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
 
-                  return (
-                    <tr
-                      key={r.id}
-                      className="border-b border-slate-50 text-xs text-slate-700"
-                    >
-                      <td className="py-2 pr-4">
-                        <div className="flex flex-col">
-                          <span className="font-medium">{employeeName}</span>
-                          <span className="text-[11px] text-slate-500">
-                            {emp?.department || emp?.email || "—"}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="py-2 pr-4">
-                        <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[11px]">
-                          {r.type}
-                        </span>
-                      </td>
-                      <td className="py-2 pr-4">
-                        {formatDateRange(r.startDate, r.endDate)}
-                      </td>
-                      <td className="py-2 pr-4">
-                        {policy ? (
-                          <div className="flex flex-col">
-                            <span className="text-xs font-medium">
-                              {policy.name}
-                            </span>
-                            {policy.kind === "FIXED" &&
-                              typeof policy.annualAllowanceDays === "number" && (
-                                <span className="text-[11px] text-slate-500">
-                                  {policy.annualAllowanceDays} days / year
-                                </span>
-                              )}
-                            {policy.kind === "UNLIMITED" && (
-                              <span className="text-[11px] text-slate-500">
-                                Unlimited PTO
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-[11px] text-slate-400">
-                            Not assigned
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-2 pr-4">
-                        <span
-                          className={
-                            "inline-flex rounded-full border px-2 py-0.5 text-[11px] " +
-                            statusBadgeClasses(r.status)
-                          }
-                        >
-                          {r.status}
-                        </span>
-                      </td>
-                      <td className="py-2 pr-4">
-                        {manager ? (
-                          <span className="text-xs">
-                            {manager.firstName} {manager.lastName}
-                          </span>
-                        ) : (
-                          <span className="text-[11px] text-slate-400">
-                            —
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-2 pr-4 max-w-xs">
-                        <span className="line-clamp-2 text-xs text-slate-600">
-                          {r.reason || "—"}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-    </main>
+            {/* Reason */}
+            <div className="space-y-1">
+              <label
+                htmlFor="reason"
+                className="text-xs font-medium text-slate-700"
+              >
+                Notes (optional)
+              </label>
+              <textarea
+                id="reason"
+                rows={4}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                placeholder="Anything the manager should know about this request."
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                onClick={() => router.push("/timeoff")}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submitting || loadingEmployees}
+                className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {submitting ? "Submitting..." : "Submit request"}
+              </button>
+            </div>
+          </form>
+        </section>
+      </main>
+    </AuthGate>
   );
 }
