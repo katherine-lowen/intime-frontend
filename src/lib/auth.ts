@@ -6,12 +6,10 @@ const API_URL =
 const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID || "demo-org";
 
 export type CurrentUser = {
-  user: {
-    id: string;
-    email: string;
-    name: string;
-    role?: string;
-  };
+  id: string;
+  email: string;
+  name: string;
+  role?: string;
   org?: {
     id: string;
     name: string;
@@ -20,17 +18,15 @@ export type CurrentUser = {
 
 /**
  * Minimal NextAuth config so that /api/auth/[...nextauth] can build.
- * You’re still using the Nest backend for real auth; this is just to satisfy
- * Next.js/TypeScript and keep the API route valid.
+ * Real auth still lives in your Nest backend; this just satisfies Next.js.
  */
 export const authOptions: NextAuthOptions = {
-  providers: [], // no interactive providers yet
+  providers: [], // no browser auth providers wired up yet
   session: {
     strategy: "jwt",
   },
   callbacks: {
     async session({ session }) {
-      // You can later enrich this from your backend if you wire it up
       return session;
     },
   },
@@ -38,7 +34,7 @@ export const authOptions: NextAuthOptions = {
 
 /**
  * Fetch the current user from the backend dev-auth endpoint.
- * This is safe to use in server components (pages, layouts, etc).
+ * Normalizes the shape so pages can safely use `user.name`, `user.email`, etc.
  */
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   try {
@@ -54,9 +50,37 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       return null;
     }
 
-    const data = (await res.json()) as CurrentUser;
-    if (!data?.user) return null;
-    return data;
+    const raw = await res.json();
+
+    // If backend returns { user: { ... }, org: { ... } }
+    if (raw?.user) {
+      const u = raw.user;
+      return {
+        id: u.id,
+        email: u.email,
+        name: u.name ?? "",
+        role: u.role,
+        org: raw.org
+          ? {
+              id: raw.org.id,
+              name: raw.org.name,
+            }
+          : undefined,
+      };
+    }
+
+    // If backend already returns a flat shape
+    if (raw?.id && raw?.email) {
+      return {
+        id: raw.id,
+        email: raw.email,
+        name: raw.name ?? "",
+        role: raw.role,
+        org: raw.org,
+      };
+    }
+
+    return null;
   } catch (err) {
     console.error("getCurrentUser: failed to call /auth/me", err);
     return null;
