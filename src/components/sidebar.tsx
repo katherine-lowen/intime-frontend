@@ -41,14 +41,17 @@ const SECTIONS: NavSection[] = [
     ],
   },
   {
+    
     label: "Operations",
     items: [
       { href: "/operations", label: "Operations", icon: "⚙️" },
+      { href: "/employee-documents", label: "Documents", icon: "📂" },
       { href: "#", label: "Analytics", comingSoon: true, icon: "📈" },
       { href: "#", label: "Payroll", comingSoon: true, icon: "💸" },
       { href: "#", label: "Settings", comingSoon: true, icon: "⚙︎" },
     ],
   },
+
 ];
 
 export function Sidebar() {

@@ -78,27 +78,29 @@ function statusClass(status?: EmployeeStatus | null) {
 export default async function PeoplePage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const params = await searchParams;
+
   const [employees, teams] = await Promise.all([
     getEmployees(),
     getTeamsSafe(),
   ]);
 
-  const q =
-    typeof searchParams?.q === "string" ? searchParams.q.trim() : "";
+  const q = typeof params.q === "string" ? params.q.trim() : "";
+
   const statusFilter =
-    typeof searchParams?.status === "string"
-      ? (searchParams.status as EmployeeStatus | "ALL")
+    typeof params.status === "string"
+      ? (params.status as EmployeeStatus | "ALL")
       : "ALL";
+
   const teamFilter =
-    typeof searchParams?.teamId === "string" ? searchParams.teamId : "ALL";
+    typeof params.teamId === "string" ? params.teamId : "ALL";
+
   const deptFilter =
-    typeof searchParams?.department === "string"
-      ? searchParams.department
-      : "ALL";
-  const sort =
-    typeof searchParams?.sort === "string" ? searchParams.sort : "name";
+    typeof params.department === "string" ? params.department : "ALL";
+
+  const sort = typeof params.sort === "string" ? params.sort : "name";
 
   // Build filter option sets
   const departments = Array.from(

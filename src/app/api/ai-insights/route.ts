@@ -19,90 +19,224 @@ type Body =
   | {
       scope: "candidate";
       candidateId: string;
-    };
+    }
+  | {
+      scope: "employee_document";
+      documentId: string;
+    }
+  | {
+      scope: "dashboard";
+    }
+  // allow "empty" / unknown to fall back to org-level stats
+  | Record<string, unknown>;
 
-async function buildContext(body: Body) {
+// What the frontend expects
+type AiInsights = {
+  summary: string;
+  suggestions: string[];
+};
+
+async function buildContext(body: Body): Promise<{ title: string; json: any }> {
   const orgId = process.env.NEXT_PUBLIC_ORG_ID || "demo-org";
 
-  if (body.scope === "job") {
-    const job = await api.get<any>(`/jobs/${body.jobId}`);
-    const events = await api.get<any>(`/events?jobId=${body.jobId}`);
+  // ----- JOB INSIGHTS -----
+  if (body && (body as any).scope === "job" && "jobId" in body) {
+    const jobId = (body as any).jobId as string;
+    const job = await api.get<any>(`/jobs/${jobId}`);
+    const events = await api.get<any>(`/events?jobId=${jobId}`);
     return {
       title: `AI insights for job: ${job.title}`,
       json: { orgId, job, events },
     };
   }
 
-  if (body.scope === "employee") {
-    const employee = await api.get<any>(`/employees/${body.employeeId}`);
-    const events = await api.get<any>(`/events?employeeId=${body.employeeId}`);
-    const reviews = await api.get<any>(
-      `/performance-reviews?employeeId=${body.employeeId}`,
-    );
+  // ----- EMPLOYEE INSIGHTS -----
+  if (body && (body as any).scope === "employee" && "employeeId" in body) {
+    const employeeId = (body as any).employeeId as string;
+    const employee = await api.get<any>(`/employees/${employeeId}`);
+    const events = await api.get<any>(`/events?employeeId=${employeeId}`);
     return {
-      title: `AI insights for ${employee.firstName} ${employee.lastName}`,
-      json: { orgId, employee, events, reviews },
+      title: `AI insights for employee: ${employee.firstName} ${employee.lastName}`,
+      json: { orgId, employee, events },
     };
   }
 
-  // ✅ New: candidate scope
-  if (body.scope === "candidate") {
-    const candidate = await api.get<any>(`/candidates/${body.candidateId}`);
-    // assuming backend includes answers + notes; if not, you can
-    // add separate endpoints later and include them here.
+  // ----- CANDIDATE INSIGHTS -----
+  if (body && (body as any).scope === "candidate" && "candidateId" in body) {
+    const candidateId = (body as any).candidateId as string;
+    const candidate = await api.get<any>(`/candidates/${candidateId}`);
+
+    // We can also pull the related job if it exists
+    let job: any = null;
+    if (candidate.jobId) {
+      try {
+        job = await api.get<any>(`/jobs/${candidate.jobId}`);
+      } catch {
+        job = null;
+      }
+    }
+
     return {
       title: `AI insights for candidate: ${candidate.name}`,
-      json: { orgId, candidate },
+      json: { orgId, candidate, job },
     };
   }
 
-  throw new Error("Unsupported scope");
+  // ----- EMPLOYEE DOCUMENT INSIGHTS -----
+  if (
+    body &&
+    (body as any).scope === "employee_document" &&
+    "documentId" in body
+  ) {
+    const documentId = (body as any).documentId as string;
+    const document = await api.get<any>(`/employee-documents/${documentId}`);
+    const employee = document.employee ?? null;
+
+    return {
+      title: `AI insights for document: ${document.title}`,
+      json: {
+        orgId,
+        document,
+        employee,
+      },
+    };
+  }
+
+  // ----- DASHBOARD / ORG INSIGHTS (DEFAULT) -----
+  // For scope "dashboard" or any unknown/empty body, use /stats as context.
+  try {
+    const stats = await api.get<any>("/stats");
+    return {
+      title: "AI insights for your organization",
+      json: { orgId, stats },
+    };
+  } catch {
+    return {
+      title: "AI insights for your organization",
+      json: { orgId },
+    };
+  }
+}
+
+function buildFallbackInsights(title: string): AiInsights {
+  return {
+    summary: `${title}. AI is not fully configured, so this is a static summary. Overall, focus on time-to-hire, manager workload, and uneven distribution of PTO usage to find operational moats.`,
+    suggestions: [
+      "Identify roles where time-to-hire is consistently faster and document what those hiring managers do differently.",
+      "Look for employees who regularly step into cross-functional work and consider formalizing that into their role or career path.",
+      "Surface teams that rarely take PTO and proactively nudge managers to schedule coverage and encourage time off.",
+      "Tag candidates with unusual but relevant backgrounds (bootcamps, career switchers, side projects) as potential 'moat' hires, even if they don't match every bullet.",
+      "Use your events, documents, and career moves as a time-series to spot patterns around quarter-end crunch, recurring bottlenecks, and hidden champions.",
+    ],
+  };
 }
 
 export async function POST(req: Request) {
+  let body: Body = {} as Body;
+
+  // Safely parse JSON body – frontend might send an empty body
   try {
-    const body = (await req.json()) as Body;
+    body = (await req.json()) as Body;
+  } catch {
+    body = {} as Body;
+  }
 
-    const { title, json } = await buildContext(body);
+  const { title, json } = await buildContext(body);
 
-    const systemPrompt =
-      "You are an expert people-ops and recruiting assistant. " +
-      "Given raw HR / ATS data as JSON, you produce a short, practical summary " +
-      "for managers and recruiters. Be concrete and concise.";
+  // If no OpenAI API key, return a static-but-useful answer
+  if (!process.env.OPENAI_API_KEY) {
+    return NextResponse.json(buildFallbackInsights(title));
+  }
 
-    const userPrompt = `
-You are given JSON data from an HR system.
+  try {
+    const prompt = `
+You are an expert HR and recruiting strategist.
 
-Return:
-- A 2–3 sentence summary.
-- 3–5 bullet recommendations (if relevant).
+You are helping a founder understand where their organization has hidden "moats" in people and process.
+You will get JSON context about their org (jobs, employees, candidates, documents, stats, events).
 
-Focus on signal, not fluff.
+1. Read the JSON carefully and infer:
+   - Time-based signals (seasonality, crunch periods, slow vs fast hires).
+   - Hidden talent signals (non-traditional backgrounds, internal mobility, "glue" people).
+   - Risk signals (burnout, manager overload, underused teams, stalled roles).
+   - For documents, highlight key obligations, unusual clauses, or patterns vs other templates.
 
-JSON data:
-${JSON.stringify(json, null, 2)}
+2. Respond STRICTLY as minified JSON with this shape:
+
+{
+  "summary": "Short, 2–3 sentence plain-English summary.",
+  "suggestions": [
+    "Concrete, moat-style action 1",
+    "Concrete, moat-style action 2",
+    "Concrete, moat-style action 3",
+    "Optional action 4",
+    "Optional action 5"
+  ]
+}
+
+Do NOT include backticks or markdown. Do NOT include any other keys.
+
+Here is the org context JSON:
+${JSON.stringify(json)}
     `.trim();
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
       messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
+        {
+          role: "system",
+          content: "You are a precise HR strategy AI that always returns valid JSON.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
       ],
-      temperature: 0.3,
+      temperature: 0.4,
     });
 
-    const content = completion.choices[0].message.content ?? "";
+    const raw = completion.choices[0]?.message?.content?.trim() ?? "";
 
-    return NextResponse.json({
-      title,
-      body: content,
-    });
+    let parsed: any = null;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = null;
+    }
+
+    let summary = "";
+    let suggestions: string[] = [];
+
+    if (parsed && typeof parsed === "object") {
+      if (typeof parsed.summary === "string") {
+        summary = parsed.summary;
+      }
+      if (Array.isArray(parsed.suggestions)) {
+        suggestions = parsed.suggestions
+          .map((s) => String(s).trim())
+          .filter(Boolean);
+      }
+    }
+
+    // If the model didn't give clean JSON, fall back to best-effort
+    if (!summary) {
+      summary =
+        raw.slice(0, 400) ||
+        "AI could not generate structured insights. Use static suggestions instead.";
+    }
+
+    if (!suggestions.length) {
+      suggestions = buildFallbackInsights(title).suggestions;
+    }
+
+    const payload: AiInsights = {
+      summary,
+      suggestions,
+    };
+
+    return NextResponse.json(payload);
   } catch (err: any) {
     console.error("AI insights error:", err);
-    return NextResponse.json(
-      { error: "Failed to generate insights" },
-      { status: 500 },
-    );
+    return NextResponse.json(buildFallbackInsights(title), { status: 200 });
   }
 }
