@@ -1,10 +1,18 @@
-import { NextResponse } from "next/server";
+// src/app/people/[id]/resume/route.ts
+import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
 export async function POST(
-  req: Request,
-  { params }: { params: { id: string } }
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> }
 ) {
+  // ✅ Next 16 expects params as a Promise – unwrap it
+  const { id } = await context.params;
+
   const form = await req.formData();
   const file = form.get("resume") as File | null;
 
@@ -14,146 +22,150 @@ export async function POST(
 
   // Read file buffer as text
   const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-  const text = buffer.toString("utf-8");
+  const bytes = new Uint8Array(arrayBuffer);
+  const decoder = new TextDecoder("utf-8");
+  const text = decoder.decode(bytes);
 
-  const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY!,
-  });
-
-  //
-  // 1. Resume Parsing
-  //
-  const parsedCompletion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      {
-        role: "system",
-        content:
-          "Extract structured resume data. ONLY output valid JSON with keys: summary, skills (array), experience (array), rawText.",
-      },
-      {
-        role: "user",
-        content: text,
-      },
-    ],
-  });
-
-  let parsed: any = {};
-  try {
-    parsed = JSON.parse(parsedCompletion.choices[0].message.content || "{}") as any;
-  } catch (err) {
-    console.error("Failed to parse resume JSON", err);
-    parsed = {};
-  }
-
-  //
-  // 2. Fetch job for match scoring (safe types)
-  //
-  let job: any = null;
-
-  try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/applicants?personId=${params.id}`,
-      {
-        headers: {
-          "X-Org-Id": process.env.NEXT_PUBLIC_ORG_ID || "demo-org",
-        },
-      }
-    );
-
-    const applicants: any[] = await res.json();
-    const applicant = applicants[0];
-
-    if (applicant?.jobId) {
-      const jobRes = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/jobs/${applicant.jobId}`,
+  // If no OpenAI key, just store raw text and bounce back
+  if (!process.env.OPENAI_API_KEY) {
+    try {
+      await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/employees/${id}`,
         {
+          method: "PATCH",
           headers: {
+            "Content-Type": "application/json",
             "X-Org-Id": process.env.NEXT_PUBLIC_ORG_ID || "demo-org",
           },
+          body: JSON.stringify({
+            resumeText: text,
+          }),
         }
       );
-
-      job = await jobRes.json();
+    } catch (err) {
+      console.error("Failed to store resumeText without AI:", err);
     }
-  } catch (err) {
-    console.error("Failed to fetch job for scoring", err);
+
+    return NextResponse.redirect(`/people/${id}`);
   }
 
   //
-  // 3. Match Scoring
+  // 1. Resume Parsing via OpenAI
   //
-  let score: number | null = null;
-  let matchDetails: any = null;
+  let parsed: {
+    summary?: string;
+    skills?: string[];
+    experience?: any;
+    rawText?: string;
+  } = {};
 
-  if (job && typeof job.description === "string" && job.description.length > 0) {
-    const matchCompletion = await openai.chat.completions.create({
+  try {
+    const parsedCompletion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
           content:
-            "Score candidate fit. ONLY output JSON: { score: number(0-100), strengths: string[], gaps: string[], notes: string }",
+            "Extract structured resume data. ONLY output valid JSON with keys: summary, skills (array of strings), experience (array or object), rawText.",
         },
         {
           role: "user",
-          content: `Job Description:\n${job.description}\n\nCandidate Resume:\n${text}`,
+          content: text,
         },
       ],
+      temperature: 0.3,
     });
 
+    const raw = parsedCompletion.choices[0]?.message?.content?.trim() ?? "";
     try {
-      matchDetails = JSON.parse(
-        matchCompletion.choices[0].message.content || "{}"
-      ) as any;
-
-      score =
-        typeof matchDetails.score === "number"
-          ? matchDetails.score
-          : null;
-    } catch (err) {
-      console.error("Failed to parse match score JSON", err);
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = { summary: raw.slice(0, 400), rawText: text };
     }
+  } catch (err) {
+    console.error("OpenAI resume parse error:", err);
+    parsed = { summary: "Could not parse resume with AI.", rawText: text };
   }
 
   //
-  // 4. Save everything to backend
+  // 2. Optional: compute a rough internal “match score” style signal
   //
-  await fetch(`${process.env.NEXT_PUBLIC_API_URL}/employees/${params.id}`, {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Org-Id": process.env.NEXT_PUBLIC_ORG_ID || "demo-org",
-    },
-    body: JSON.stringify({
-      resumeText: parsed.rawText || text || "",
-      skills: parsed.skills || [],
-      experience: parsed.experience || [],
-      summary: parsed.summary || "",
-      matchScore: score,
-      matchDetails: matchDetails || null,
-    }),
-  });
+  let scoreSummary = "";
+  try {
+    const scoringCompletion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are an internal matching AI. Based on this employee's resume text, provide a short sentence about their strongest moat-like advantages for the org. ONLY output a single sentence.",
+        },
+        {
+          role: "user",
+          content: text,
+        },
+      ],
+      temperature: 0.4,
+    });
+
+    scoreSummary =
+      scoringCompletion.choices[0]?.message?.content?.trim() ?? "";
+  } catch (err) {
+    console.error("OpenAI resume scoring error:", err);
+  }
 
   //
-  // 5. Log event
+  // 3. Save parsed resume data back to the backend
   //
-  await fetch(`${process.env.NEXT_PUBLIC_API_URL}/events`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Org-Id": process.env.NEXT_PUBLIC_ORG_ID || "demo-org",
-    },
-    body: JSON.stringify({
-      type: "RESUME_PARSED",
-      source: "system",
-      employeeId: params.id,
-      summary: score
-        ? `Resume parsed — match score ${score}`
-        : "Resume uploaded and parsed",
-    }),
-  });
+  try {
+    await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL}/employees/${id}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Org-Id": process.env.NEXT_PUBLIC_ORG_ID || "demo-org",
+        },
+        body: JSON.stringify({
+          resumeText: parsed.rawText || text,
+          summary: parsed.summary || null,
+          skills: Array.isArray(parsed.skills) ? parsed.skills : [],
+          experience: parsed.experience ?? null,
+        }),
+      }
+    );
+  } catch (err) {
+    console.error("Failed to PATCH employee with parsed resume:", err);
+  }
 
-  return NextResponse.redirect(`/people/${params.id}`);
+  //
+  // 4. Optionally log a product event so timelines pick it up
+  //
+  try {
+    await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL}/events/ingest`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Org-Id": process.env.NEXT_PUBLIC_ORG_ID || "demo-org",
+        },
+        body: JSON.stringify({
+          type: "RESUME_PARSED",
+          source: "system",
+          employeeId: id,
+          summary: scoreSummary || "Resume uploaded and parsed",
+          payload: {
+            aiSummary: parsed.summary,
+            skills: parsed.skills,
+          },
+        }),
+      }
+    );
+  } catch (err) {
+    console.error("Failed to create RESUME_PARSED event:", err);
+  }
+
+  // Back to the employee profile
+  return NextResponse.redirect(`/people/${id}`);
 }
