@@ -1,10 +1,15 @@
 // src/lib/users.ts
-import { get, post } from "./api";
+import api from "./api";
+
+type CreateUserInput = {
+  email: string;
+  name?: string | null;
+};
 
 export async function listUsers() {
-  return get("/users");
+  return api.get<any[]>("/users");
 }
 
-export async function createUser(data: any) {
-  return post("/users", data);
+export async function createUser(input: CreateUserInput) {
+  return api.post("/users", input);
 }
