@@ -1,6 +1,7 @@
 // src/app/analytics/page.tsx
 import Link from "next/link";
 import { RecentEventsTable } from "@/components/recent-events";
+import { AuthGate } from "@/components/dev-auth-gate";
 
 /** ---- Types & helpers ---- */
 type StatsResponse = {

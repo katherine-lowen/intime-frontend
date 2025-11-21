@@ -1,5 +1,6 @@
 import { revalidatePath } from 'next/cache';
 import api from '@/lib/api';
+import { AuthGate } from "@/components/dev-auth-gate";
 
 export default async function AddEventPage() {
   async function createEvent(formData: FormData) {

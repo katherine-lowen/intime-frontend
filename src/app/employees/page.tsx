@@ -1,68 +1,42 @@
-// src/app/employees/page.tsx
-import api from "@/lib/api";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-
-type Employee = {
-  id: string;
-  name: string;
-  role: string;
-  status: string;
-};
+// app/employees/page.tsx
+import EmployeesClient from "./employees-client";
 
 export const dynamic = "force-dynamic";
 
-export default async function EmployeesPage() {
-  let employees: Employee[] = [];
-  try {
-    const data = await api.get<Employee[]>("/employees");
-    employees = Array.isArray(data) ? data : [];
-  } catch {
-    employees = [];
-  }
+type SearchParams = Record<string, string | string[] | undefined>;
 
-  return (
-    <div className="mx-auto max-w-5xl p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold">Employees</h1>
-        <p className="mt-1 text-sm text-neutral-600">Directory of active team members.</p>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>All employees</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-hidden rounded-lg border">
-            <table className="min-w-full divide-y">
-              <thead className="bg-neutral-50">
-                <tr>
-                  <th className="px-4 py-2 text-left text-sm font-medium text-neutral-600">Name</th>
-                  <th className="px-4 py-2 text-left text-sm font-medium text-neutral-600">Role</th>
-                  <th className="px-4 py-2 text-left text-sm font-medium text-neutral-600">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {employees.map((e) => (
-                  <tr key={e.id}>
-                    <td className="px-4 py-2">{e.name}</td>
-                    <td className="px-4 py-2">{e.role}</td>
-                    <td className="px-4 py-2">{e.status}</td>
-                  </tr>
-                ))}
-                {employees.length === 0 && (
-                  <tr>
-                    <td colSpan={3} className="px-4 py-6 text-sm text-neutral-500">
-                      No employees yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
+function first(sp: SearchParams, key: string): string | undefined {
+  const v = sp[key];
+  return Array.isArray(v) ? v[0] : v;
 }
 
-export {};
+async function fetchEmployees(sp: SearchParams) {
+  const api = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3333").replace(/\/$/, "");
+  const org = process.env.NEXT_PUBLIC_ORG_ID;
+
+  const url = new URL(`${api}/employees`);
+  const q = first(sp, "q");
+  const dept = first(sp, "dept");
+  const loc = first(sp, "loc");
+  const status = first(sp, "status");
+
+  if (q) url.searchParams.set("q", q);
+  if (dept) url.searchParams.set("dept", dept);
+  if (loc) url.searchParams.set("loc", loc);
+  if (status) url.searchParams.set("status", status);
+  if (org) url.searchParams.set("orgId", String(org));
+
+  try {
+    const res = await fetch(url.toString(), { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return (await res.json()) as any[];
+  } catch {
+    // Fail-soft: return empty list so the page still renders
+    return [];
+  }
+}
+
+export default async function Page({ searchParams }: { searchParams: SearchParams }) {
+  const employees = await fetchEmployees(searchParams);
+  return <EmployeesClient initialEmployees={employees} />;
+}

@@ -1,6 +1,7 @@
 // src/app/users/page.tsx
 import api from '@/lib/api';
 import { revalidatePath } from 'next/cache';
+import { AuthGate } from "@/components/dev-auth-gate";
 
 type User = {
   id: string;

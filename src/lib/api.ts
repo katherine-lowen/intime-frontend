@@ -1,61 +1,62 @@
 // src/lib/api.ts
-export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8080";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8080";
+const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "";
 
-const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID || "demo-org";
+console.log("[api.ts] Using API_URL:", API_URL);
+console.log("[api.ts] Using ORG_ID:", ORG_ID ? ORG_ID : "(none)");
+console.log("[api.ts] Has API_KEY:", API_KEY ? "yes" : "no");
 
-type Json = Record<string, any> | any[];
+type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
 
-async function _request<T = any>(
-  endpoint: string,
-  init: RequestInit = {}
-): Promise<T> {
-  const url = `${API_URL}${endpoint}`;
-  const res = await fetch(url, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      "X-Org-Id": ORG_ID,
-      ...(init.headers || {}),
-    },
-    // prevent hanging fetches in the browser
-    cache: "no-store",
-  });
+async function request<T>(method: HttpMethod, path: string, body?: unknown): Promise<T> {
+  const url = `${API_URL}${path}`;
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Org-Id": ORG_ID,
+        "X-Api-Key": API_KEY,
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      cache: "no-store",
+    });
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`API ${res.status} ${res.statusText}: ${text}`);
-  }
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.error(
+        `[api.ts] API error`,
+        method,
+        url,
+        "status:",
+        res.status,
+        "body:",
+        text
+      );
+      throw new Error(`API ${method} ${path} failed: ${res.status}`);
+    }
 
-  const ct = res.headers.get("content-type") || "";
-  if (ct.includes("application/json")) {
     return (await res.json()) as T;
+  } catch (err) {
+    console.error(`[api.ts] Fetch failed`, method, url, err);
+    throw err;
   }
-  return {} as T;
 }
 
-export function get<T = any>(endpoint: string, init?: RequestInit) {
-  return _request<T>(endpoint, { method: "GET", ...(init || {}) });
-}
+const api = {
+  get<T = any>(path: string) {
+    return request<T>("GET", path);
+  },
+  post<T = any>(path: string, body?: unknown) {
+    return request<T>("POST", path, body);
+  },
+  patch<T = any>(path: string, body?: unknown) {
+    return request<T>("PATCH", path, body);
+  },
+  del<T = any>(path: string) {
+    return request<T>("DELETE", path);
+  },
+};
 
-export function post<T = any>(endpoint: string, body?: Json, init?: RequestInit) {
-  return _request<T>(endpoint, {
-    method: "POST",
-    body: body ? JSON.stringify(body) : undefined,
-    ...(init || {}),
-  });
-}
-
-export function put<T = any>(endpoint: string, body?: Json, init?: RequestInit) {
-  return _request<T>(endpoint, {
-    method: "PUT",
-    body: body ? JSON.stringify(body) : undefined,
-    ...(init || {}),
-  });
-}
-
-export function del<T = any>(endpoint: string, init?: RequestInit) {
-  return _request<T>(endpoint, { method: "DELETE", ...(init || {}) });
-}
-
-export default { API_URL, get, post, put, del };
+export default api;

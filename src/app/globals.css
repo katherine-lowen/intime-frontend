@@ -1,56 +1,96 @@
-/* src/app/globals.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root { color-scheme: light; }
-.dark { color-scheme: dark; }
-
-/* Optional tokens used by plain CSS (Tailwind uses config above) */
-:root {
-  --radius: 12px;
-  --radius-md: 14px;
-  --radius-lg: 16px;
-  --shadow-card: 0 1px 2px rgba(16,24,40,.06), 0 8px 28px rgba(2,8,20,.05);
-}
-
+/* ---------- Base / Typography ---------- */
 @layer base {
-  html, body {
-    @apply min-h-screen bg-surface-subtle text-text antialiased;
-    font-feature-settings: "cv02","cv03","cv04","cv11";
+  :root {
+    color-scheme: light;
   }
 
-  a { @apply text-brand hover:underline; }
-
-  /* Page fade-in */
+  html,
   body {
-    @apply opacity-0;
-    animation: fadeIn 0.4s ease-out forwards;
+    @apply bg-slate-50 text-slate-900 antialiased;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+      "SF Pro Display", Inter, sans-serif;
   }
 
-  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  a {
+    @apply text-indigo-600;
+  }
+
+  a:hover {
+    @apply text-indigo-700;
+  }
 }
 
-/* Focus ring */
-:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(78,141,255,.18);
-  border-radius: 6px;
+/* ---------- App-level background ---------- */
+@layer utilities {
+  .bg-app-gradient {
+    background:
+      radial-gradient(
+        circle at top left,
+        rgba(79, 70, 229, 0.18),
+        transparent 55%
+      ),
+      radial-gradient(
+        circle at bottom right,
+        rgba(56, 189, 248, 0.13),
+        transparent 60%
+      ),
+      #f8fafc;
+  }
 }
 
-/* Smooth color transitions */
-* { @apply transition-colors duration-150; }
+/* ---------- Reusable components ---------- */
+@layer components {
+  .card {
+    @apply rounded-xl border border-slate-200/80 bg-white/90 shadow-sm;
+  }
 
-/* Scrollbars */
-*::-webkit-scrollbar { height: 10px; width: 10px; }
-*::-webkit-scrollbar-thumb { background: #E7E9EC; border-radius: 10px; }
-*::-webkit-scrollbar-track { background: transparent; }
-.dark *::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); }
+  .section-title {
+    @apply text-sm font-semibold tracking-tight text-slate-900;
+  }
 
-/* Row hover */
-.table-row { @apply hover:bg-surface-muted/60 dark:hover:bg-white/5 transition-colors; }
+  .badge-pill {
+    @apply inline-flex items-center gap-1 rounded-full bg-slate-900 text-xs
+      font-medium text-slate-50 px-2.5 py-1 shadow-sm;
+  }
 
-/* Brand gradient utility */
-.bg-brand-gradient {
-  background-image: linear-gradient(135deg, #4E8DFF 0%, #66E3FF 100%);
+  .badge-pill-dot {
+    @apply h-1.5 w-1.5 rounded-full bg-emerald-400;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-full bg-indigo-600 px-3.5
+      py-1.5 text-xs font-semibold text-white shadow-sm transition
+      hover:bg-indigo-700 focus-visible:outline-none
+      focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center rounded-full border border-slate-200
+      bg-white px-3.5 py-1.5 text-xs font-medium text-slate-700 shadow-sm
+      hover:bg-slate-50 hover:border-slate-300;
+  }
+
+  .chip {
+    @apply inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px]
+      font-medium text-slate-600;
+  }
+
+  .field-input {
+    @apply w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm
+      text-slate-900 shadow-sm placeholder:text-slate-400
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500
+      focus-visible:border-indigo-500;
+  }
+
+  .field-label {
+    @apply text-xs font-medium text-slate-700;
+  }
+
+  .field-helper {
+    @apply text-[11px] text-slate-500;
+  }
 }
