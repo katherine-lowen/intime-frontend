@@ -1,35 +1,45 @@
-import { NextResponse } from "next/server";
+// src/app/api/applicants/[id]/stage/route.ts
+import { NextRequest, NextResponse } from "next/server";
 import api from "@/lib/api";
 
-export async function POST(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
-  const applicantId = params.id;
-  const form = await req.formData();
-  const stage = form.get("stage");
+type Body = {
+  stage?: string;
+};
 
-  if (!stage || typeof stage !== "string") {
-    return NextResponse.json({ error: "Invalid stage" }, { status: 400 });
+/**
+ * Update an applicant/candidate stage.
+ * Proxies to the backend /candidates/:id PATCH endpoint.
+ */
+export async function POST(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  const { id } = await context.params;
+
+  let body: Body = {};
+  try {
+    body = (await request.json()) ?? {};
+  } catch {
+    body = {};
+  }
+
+  if (!body.stage) {
+    return NextResponse.json(
+      { error: "Missing required field: stage" },
+      { status: 400 }
+    );
   }
 
   try {
-    // Update applicant
-    await api.patch(`/applicants/${applicantId}`, { stage });
-
-    // Log event
-    await api.post(`/events`, {
-      type: "STAGE_CHANGE",
-      source: "system",
-      summary: `Stage changed to ${stage}`,
-      applicantId,
+    const updated = await api.patch(`/candidates/${id}`, {
+      stage: body.stage,
     });
 
-    return NextResponse.redirect(`/people/${params.id}`);
+    return NextResponse.json(updated);
   } catch (err) {
-    console.error("Failed to update stage", err);
+    console.error("Error updating applicant stage:", err);
     return NextResponse.json(
-      { error: "Failed to update stage" },
+      { error: "Failed to update applicant stage" },
       { status: 500 }
     );
   }
