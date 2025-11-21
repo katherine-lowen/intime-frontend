@@ -1,45 +1,44 @@
 // src/lib/auth.ts
+import { getServerSession, type NextAuthOptions } from "next-auth";
+import CredentialsProvider from "next-auth/providers/credentials";
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8080";
-const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID || "demo-org";
+/**
+ * Minimal NextAuth config so the /api/auth/[...nextauth] route can compile.
+ * This is dev/demo only – real auth can come later.
+ */
+export const authOptions: NextAuthOptions = {
+  providers: [
+    CredentialsProvider({
+      name: "Dev Login",
+      credentials: {
+        email: { label: "Work email", type: "email" },
+      },
+      async authorize(credentials) {
+        const email = credentials?.email?.trim();
+        if (!email) return null;
 
-export type CurrentUser = {
-  user: {
-    id: string;
-    email: string;
-    name: string;
-    role?: string;
-  };
-  org?: {
-    id: string;
-    name: string;
-  };
+        // Simple dev user object
+        return {
+          id: email,
+          email,
+          name: email.split("@")[0],
+        };
+      },
+    }),
+  ],
+  session: {
+    strategy: "jwt",
+  },
+  pages: {
+    signIn: "/login",
+  },
 };
 
 /**
- * Fetch the current user from the backend dev-auth endpoint.
- * This is safe to use in server components (pages, layouts, etc).
+ * Helper: get the current user on the server.
  */
-export async function getCurrentUser(): Promise<CurrentUser | null> {
-  try {
-    const res = await fetch(`${API_URL}/auth/me`, {
-      headers: {
-        "X-Org-Id": ORG_ID,
-      },
-      cache: "no-store",
-    });
-
-    if (!res.ok) {
-      console.error("getCurrentUser: /auth/me returned", res.status);
-      return null;
-    }
-
-    const data = (await res.json()) as CurrentUser;
-    if (!data?.user) return null;
-    return data;
-  } catch (err) {
-    console.error("getCurrentUser: failed to call /auth/me", err);
-    return null;
-  }
+export async function getCurrentUser() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) return null;
+  return session.user;
 }
