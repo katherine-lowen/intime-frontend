@@ -10,15 +10,25 @@ import { AuthGate } from "@/components/dev-auth-gate";
 export const dynamic = "force-dynamic";
 
 async function getRequests(status?: TimeOffStatus): Promise<TimeOffRequestItem[]> {
-  const query = status ? `?status=${status}` : "";
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
   return api.get(`/timeoff/requests${query}`);
+}
+
+// Safe wrapper so a failing API call doesn't break Server Components render
+async function safeGetRequests(status: TimeOffStatus): Promise<TimeOffRequestItem[]> {
+  try {
+    return await getRequests(status);
+  } catch (err) {
+    console.error(`Failed to load time off requests for status=${status}`, err);
+    return [];
+  }
 }
 
 export default async function TimeOffPage() {
   const [requested, approved, denied] = await Promise.all([
-    getRequests("REQUESTED"),
-    getRequests("APPROVED"),
-    getRequests("DENIED"),
+    safeGetRequests("REQUESTED"),
+    safeGetRequests("APPROVED"),
+    safeGetRequests("DENIED"),
   ]);
 
   return (
