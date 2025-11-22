@@ -1,16 +1,32 @@
 // src/lib/api.ts
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8080";
-const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
-const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "";
+
+// Normalize API_URL so it NEVER ends with a trailing slash
+const RAW_API_URL =
+  process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8080";
+
+export const API_URL = RAW_API_URL.replace(/\/+$/, "");
+
+export const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
+export const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "";
 
 console.log("[api.ts] Using API_URL:", API_URL);
-console.log("[api.ts] Using ORG_ID:", ORG_ID ? ORG_ID : "(none)");
+console.log("[api.ts] Using ORG_ID:", ORG_ID || "(none)");
 console.log("[api.ts] Has API_KEY:", API_KEY ? "yes" : "no");
 
 type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
 
-async function request<T>(method: HttpMethod, path: string, body?: unknown): Promise<T> {
-  const url = `${API_URL}${path}`;
+// Always joins paths safely → `/jobs` becomes `https://backend/jobs`
+function buildUrl(path: string) {
+  return `${API_URL}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+async function request<T>(
+  method: HttpMethod,
+  path: string,
+  body?: unknown
+): Promise<T> {
+  const url = buildUrl(path);
+
   try {
     const res = await fetch(url, {
       method,
