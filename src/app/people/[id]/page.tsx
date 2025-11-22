@@ -42,7 +42,7 @@ function statusLabel(status?: EmployeeStatus | null) {
     case "ACTIVE":
       return "Active";
     case "ON_LEAVE":
-      return "On leave";
+      return "On Leave";
     case "CONTRACTOR":
       return "Contractor";
     case "ALUMNI":
@@ -67,11 +67,7 @@ function statusClass(status?: EmployeeStatus | null) {
   }
 }
 
-export default async function PersonPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function PersonPage({ params }: { params: { id: string } }) {
   const [employee, events] = await Promise.all([
     getEmployee(params.id),
     getEmployeeEvents(params.id).catch(() => []),
@@ -80,64 +76,153 @@ export default async function PersonPage({
   const fullName = `${employee.firstName} ${employee.lastName}`;
 
   return (
-    <main className="space-y-6 px-6 py-6">
-      {/* Header */}
-      <section className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-slate-50">
-            {employee.firstName[0]}
-            {employee.lastName[0]}
-          </div>
-          <div className="space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-              {fullName}
-            </h1>
-            <p className="text-sm text-slate-600">
-              {employee.title || "Title not set"}
-              {employee.department ? ` • ${employee.department}` : ""}
-              {employee.location ? ` • ${employee.location}` : ""}
-            </p>
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              {employee.email && (
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">
-                  {employee.email}
+    <AuthGate>
+      <main className="px-8 py-8 space-y-8">
+
+        {/* ======================== */}
+        {/*       HERO SECTION       */}
+        {/* ======================== */}
+        <section className="rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 to-indigo-50 p-6 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+          <div className="flex items-center gap-4">
+            {/* Avatar */}
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-900 text-xl font-semibold text-white shadow">
+              {employee.firstName[0]}
+              {employee.lastName[0]}
+            </div>
+
+            <div className="space-y-1">
+              <h1 className="text-3xl font-semibold text-slate-900">
+                {fullName}
+              </h1>
+              <p className="text-sm text-slate-600">
+                {employee.title || "No title"} • {employee.department || "No department"}
+                {employee.location ? ` • ${employee.location}` : ""}
+              </p>
+
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                {/* Email */}
+                {employee.email && (
+                  <span className="rounded-full bg-white border border-slate-200 px-3 py-1 text-xs text-slate-700">
+                    {employee.email}
+                  </span>
+                )}
+
+                {/* Manager */}
+                {employee.manager && (
+                  <span className="rounded-full bg-white border border-slate-200 px-3 py-1 text-xs text-slate-700">
+                    Reports to {employee.manager.firstName} {employee.manager.lastName}
+                  </span>
+                )}
+
+                {/* Status */}
+                <span
+                  className={[
+                    "inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-medium",
+                    statusClass(employee.status),
+                  ].join(" ")}
+                >
+                  {statusLabel(employee.status)}
                 </span>
-              )}
-              {employee.manager && (
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">
-                  Reports to {employee.manager.firstName}{" "}
-                  {employee.manager.lastName}
-                </span>
-              )}
-              <span
-                className={[
-                  "inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-medium",
-                  statusClass(employee.status ?? null),
-                ].join(" ")}
-              >
-                {statusLabel(employee.status ?? null)}
-              </span>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Timelines */}
-      <section className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
-          <h2 className="mb-2 text-sm font-semibold text-slate-900">
-            Activity timeline
-          </h2>
-          <EventsTimeline events={events} />
-        </div>
+        {/* ======================== */}
+        {/*  MAIN TWO-COLUMN LAYOUT  */}
+        {/* ======================== */}
+        <section className="grid gap-8 lg:grid-cols-[320px_minmax(0,1fr)]">
 
-        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
-          <h2 className="mb-2 text-sm font-semibold text-slate-900">
-            AI summary
-          </h2>
-          <AiPeopleTimeline employeeId={employee.id} />
-        </div>
-      </section>
-    </main>
+          {/* LEFT SIDEBAR */}
+          <div className="space-y-6">
+
+            {/* Job details */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h2 className="text-sm font-semibold text-slate-900 mb-3">
+                Job details
+              </h2>
+
+              <ul className="space-y-2 text-sm text-slate-700">
+                <li>
+                  <span className="font-medium">Title: </span>
+                  {employee.title || "Not set"}
+                </li>
+                <li>
+                  <span className="font-medium">Department: </span>
+                  {employee.department || "Not set"}
+                </li>
+                <li>
+                  <span className="font-medium">Location: </span>
+                  {employee.location || "Not set"}
+                </li>
+                <li>
+                  <span className="font-medium">Employee status: </span>
+                  {statusLabel(employee.status)}
+                </li>
+              </ul>
+            </div>
+
+            {/* Contact */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h2 className="text-sm font-semibold text-slate-900 mb-3">
+                Contact
+              </h2>
+
+              <ul className="space-y-2 text-sm text-slate-700">
+                <li>
+                  <span className="font-medium">Email: </span>
+                  {employee.email || "Not set"}
+                </li>
+                <li>
+                  <span className="font-medium">Manager: </span>
+                  {employee.manager
+                    ? `${employee.manager.firstName} ${employee.manager.lastName}`
+                    : "None"}
+                </li>
+              </ul>
+            </div>
+
+            {/* Org details */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h2 className="text-sm font-semibold text-slate-900 mb-3">
+                Org details
+              </h2>
+
+              <ul className="space-y-2 text-sm text-slate-700">
+                <li>
+                  <span className="font-medium">Employee ID: </span>
+                  {employee.id}
+                </li>
+                <li>
+                  <span className="font-medium">Joined: </span>
+                  {employee.createdAt
+                    ? new Date(employee.createdAt).toLocaleDateString()
+                    : "Unknown"}
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          {/* RIGHT SIDE — TIMELINES */}
+          <div className="space-y-6">
+            {/* Activity timeline */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h2 className="text-sm font-semibold text-slate-900 mb-3">
+                Activity timeline
+              </h2>
+              <EventsTimeline events={events} />
+            </div>
+
+            {/* AI summary */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h2 className="text-sm font-semibold text-slate-900 mb-3">
+                AI insights
+              </h2>
+              <AiPeopleTimeline employeeId={employee.id} />
+            </div>
+          </div>
+        </section>
+      </main>
+    </AuthGate>
   );
 }
