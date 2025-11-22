@@ -58,7 +58,7 @@ export default function NewPersonPage() {
     }
   }, [teamId, teams, department]);
 
-  async function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
 
@@ -76,6 +76,9 @@ export default function NewPersonPage() {
           title: title.trim() || undefined,
           // For now, department drives "team membership" (teams controller counts by department)
           department: department.trim() || undefined,
+          // make sure backend gets an explicit value
+          teamId: teamId || null,
+          status: "ACTIVE" as const,
         };
 
         await api.post("/employees", body);
@@ -88,119 +91,121 @@ export default function NewPersonPage() {
   }
 
   return (
-    <main className="p-6 max-w-xl mx-auto space-y-6">
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <h1 className="text-2xl font-semibold">Add Person</h1>
-          <p className="text-sm opacity-70">
-            Create a new employee or contractor in Intime.
-          </p>
-        </div>
-        <Link
-          href="/people"
-          className="text-sm text-gray-600 hover:underline"
-        >
-          ← Back to People
-        </Link>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-4 text-sm">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+    <AuthGate>
+      <main className="p-6 max-w-xl mx-auto space-y-6">
+        <div className="flex items-center justify-between gap-2">
           <div>
-            <label className="mb-1 block text-xs font-medium">
-              First name
-            </label>
-            <input
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              className="w-full rounded border px-2 py-1.5"
-              required
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium">
-              Last name
-            </label>
-            <input
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              className="w-full rounded border px-2 py-1.5"
-              required
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-xs font-medium">Email</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="name@company.com"
-            className="w-full rounded border px-2 py-1.5"
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-xs font-medium">Title</label>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Senior Engineer, HR Manager…"
-            className="w-full rounded border px-2 py-1.5"
-          />
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-xs font-medium">Team</label>
-            <select
-              value={teamId}
-              onChange={(e) => setTeamId(e.target.value)}
-              className="w-full rounded border px-2 py-1.5"
-              disabled={loadingTeams}
-            >
-              <option value="">No team</option>
-              {teams.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-[11px] text-gray-500">
-              For now, team membership is inferred from department = team name.
+            <h1 className="text-2xl font-semibold">Add Person</h1>
+            <p className="text-sm opacity-70">
+              Create a new employee or contractor in Intime.
             </p>
           </div>
+          <Link
+            href="/people"
+            className="text-sm text-gray-600 hover:underline"
+          >
+            ← Back to People
+          </Link>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4 text-sm">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium">
+                First name
+              </label>
+              <input
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                className="w-full rounded border px-2 py-1.5"
+                required
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium">
+                Last name
+              </label>
+              <input
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                className="w-full rounded border px-2 py-1.5"
+                required
+              />
+            </div>
+          </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium">
-              Department
-            </label>
+            <label className="mb-1 block text-xs font-medium">Email</label>
             <input
-              value={department}
-              onChange={(e) => setDepartment(e.target.value)}
-              placeholder="Engineering, Sales, People Ops…"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="name@company.com"
               className="w-full rounded border px-2 py-1.5"
             />
           </div>
-        </div>
 
-        {error && (
-          <p className="rounded bg-red-50 px-2 py-1 text-xs text-red-700">
-            {error}
-          </p>
-        )}
+          <div>
+            <label className="mb-1 block text-xs font-medium">Title</label>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Senior Engineer, HR Manager…"
+              className="w-full rounded border px-2 py-1.5"
+            />
+          </div>
 
-        <div className="pt-2">
-          <button
-            type="submit"
-            disabled={saving}
-            className="rounded bg-black px-4 py-2 text-sm font-medium text-white hover:bg-black/90 disabled:opacity-50"
-          >
-            {saving ? "Saving…" : "Create person"}
-          </button>
-        </div>
-      </form>
-    </main>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium">Team</label>
+              <select
+                value={teamId}
+                onChange={(e) => setTeamId(e.target.value)}
+                className="w-full rounded border px-2 py-1.5"
+                disabled={loadingTeams}
+              >
+                <option value="">No team</option>
+                {teams.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[11px] text-gray-500">
+                For now, team membership is inferred from department = team name.
+              </p>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium">
+                Department
+              </label>
+              <input
+                value={department}
+                onChange={(e) => setDepartment(e.target.value)}
+                placeholder="Engineering, Sales, People Ops…"
+                className="w-full rounded border px-2 py-1.5"
+              />
+            </div>
+          </div>
+
+          {error && (
+            <p className="rounded bg-red-50 px-2 py-1 text-xs text-red-700">
+              {error}
+            </p>
+          )}
+
+          <div className="pt-2">
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded bg-black px-4 py-2 text-sm font-medium text-white hover:bg-black/90 disabled:opacity-50"
+            >
+              {saving ? "Saving…" : "Create person"}
+            </button>
+          </div>
+        </form>
+      </main>
+    </AuthGate>
   );
 }
