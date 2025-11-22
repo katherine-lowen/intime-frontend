@@ -9,13 +9,17 @@ import { AuthGate } from "@/components/dev-auth-gate";
 
 export const dynamic = "force-dynamic";
 
-async function getRequests(status?: TimeOffStatus): Promise<TimeOffRequestItem[]> {
+async function getRequests(
+  status?: TimeOffStatus
+): Promise<TimeOffRequestItem[]> {
   const query = status ? `?status=${encodeURIComponent(status)}` : "";
   return api.get(`/timeoff/requests${query}`);
 }
 
-// Safe wrapper so a failing API call doesn't break Server Components render
-async function safeGetRequests(status: TimeOffStatus): Promise<TimeOffRequestItem[]> {
+// Safe wrapper so a failing API call doesn't break the Server Component
+async function safeGetRequests(
+  status: TimeOffStatus
+): Promise<TimeOffRequestItem[]> {
   try {
     return await getRequests(status);
   } catch (err) {
@@ -33,44 +37,67 @@ export default async function TimeOffPage() {
 
   return (
     <AuthGate>
-      <main className="flex flex-col gap-6 p-6">
+      <main className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-8">
+        {/* HEADER */}
         <header className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-50">
+            <h1 className="text-3xl font-semibold text-slate-900">
               Time off
             </h1>
-            <p className="text-sm text-slate-400">
+            <p className="mt-1 text-sm text-slate-500">
               See requests across the org and approve or decline them.
             </p>
           </div>
           <Link
             href="/timeoff/new"
-            className="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-indigo-500"
+            className="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500"
           >
             New request
           </Link>
         </header>
 
-        <section className="space-y-6">
-          <div className="space-y-2">
-            <h2 className="text-sm font-semibold text-slate-200">
+        {/* SECTIONS */}
+        <section className="grid grid-cols-1 gap-6 md:grid-cols-3">
+          {/* Awaiting */}
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-3 text-sm font-semibold text-slate-700">
               Awaiting approval
             </h2>
-            <TimeoffRequestsTable items={requested} showActions />
+            {requested.length === 0 ? (
+              <p className="text-sm text-slate-500">
+                No requests in this bucket.
+              </p>
+            ) : (
+              <TimeoffRequestsTable items={requested} showActions />
+            )}
           </div>
 
-          <div className="space-y-2">
-            <h2 className="text-sm font-semibold text-slate-200">
+          {/* Approved */}
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-3 text-sm font-semibold text-slate-700">
               Approved
             </h2>
-            <TimeoffRequestsTable items={approved} />
+            {approved.length === 0 ? (
+              <p className="text-sm text-slate-500">
+                No requests in this bucket.
+              </p>
+            ) : (
+              <TimeoffRequestsTable items={approved} />
+            )}
           </div>
 
-          <div className="space-y-2">
-            <h2 className="text-sm font-semibold text-slate-200">
+          {/* Denied */}
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-3 text-sm font-semibold text-slate-700">
               Denied
             </h2>
-            <TimeoffRequestsTable items={denied} />
+            {denied.length === 0 ? (
+              <p className="text-sm text-slate-500">
+                No requests in this bucket.
+              </p>
+            ) : (
+              <TimeoffRequestsTable items={denied} />
+            )}
           </div>
         </section>
       </main>
