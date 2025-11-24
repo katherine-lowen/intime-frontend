@@ -3,6 +3,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 
 type NavItem = {
   href: string;
@@ -41,7 +42,6 @@ const SECTIONS: NavSection[] = [
     ],
   },
   {
-    
     label: "Operations",
     items: [
       { href: "/operations", label: "Operations", icon: "⚙️" },
@@ -51,12 +51,68 @@ const SECTIONS: NavSection[] = [
       { href: "#", label: "Settings", comingSoon: true, icon: "⚙︎" },
     ],
   },
-
 ];
 
-export function Sidebar() {
+export function Sidebar({
+  open,
+  onClose,
+}: {
+  open?: boolean;
+  onClose?: () => void;
+}) {
   const pathname = usePathname() ?? "";
 
+  /* -------------------------------
+     DESKTOP VERSION (always visible)
+  --------------------------------*/
+  return (
+    <>
+      <div className="hidden w-64 md:flex md:flex-col">
+        <DesktopSidebar pathname={pathname} />
+      </div>
+
+      {/* -------------------------------------
+          MOBILE SLIDE-IN SIDEBAR (Rippling-style)
+      --------------------------------------*/}
+      <AnimatePresence>
+        {open && (
+          <>
+            {/* Background overlay */}
+            <motion.div
+              className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm md:hidden"
+              onClick={onClose}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            />
+
+            {/* Sliding drawer */}
+            <motion.div
+              className="fixed left-0 top-0 z-50 h-full w-72 md:hidden"
+              initial={{ x: -300 }}
+              animate={{ x: 0 }}
+              exit={{ x: -300 }}
+              transition={{ type: "spring", stiffness: 260, damping: 28 }}
+            >
+              <MobileSidebar pathname={pathname} onClose={onClose} />
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+
+/* ------------------------------
+   SHARED SIDEBAR CONTENT
+------------------------------*/
+function SidebarContent({
+  pathname,
+  onClose,
+}: {
+  pathname: string;
+  onClose?: () => void;
+}) {
   return (
     <div className="flex min-h-full flex-col gap-5 bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900 text-slate-200">
       {/* Brand */}
@@ -99,6 +155,7 @@ export function Sidebar() {
                   <Link
                     key={item.label}
                     href={isRealLink ? item.href : pathname || "/"}
+                    onClick={onClose}
                     aria-disabled={!isRealLink}
                     className={[
                       baseClasses,
@@ -137,4 +194,19 @@ export function Sidebar() {
       </div>
     </div>
   );
+}
+
+/* Desktop and Mobile wrappers */
+function DesktopSidebar({ pathname }: { pathname: string }) {
+  return <SidebarContent pathname={pathname} />;
+}
+
+function MobileSidebar({
+  pathname,
+  onClose,
+}: {
+  pathname: string;
+  onClose?: () => void;
+}) {
+  return <SidebarContent pathname={pathname} onClose={onClose} />;
 }
