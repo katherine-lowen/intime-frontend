@@ -95,22 +95,22 @@ function computeTenure(startDate?: string | null) {
 
 // 🔹 Try /employees/:id first; if that fails, fall back to /employees and find by id.
 // This makes the profile page work as long as the directory works.
+// 🔹 Only use /employees and find by id locally.
+// This avoids any weirdness with /employees/:id on the backend.
 async function getEmployee(id: string): Promise<Employee | null> {
   try {
-    const data = await api.get<Employee>(`/employees/${id}`);
-    if (!data) return null;
-    return data;
-  } catch (err) {
-    console.error("Failed to load employee by id, falling back to list", err);
-    try {
-      const all = await api.get<Employee[]>("/employees");
-      return all.find((e) => e.id === id) ?? null;
-    } catch (err2) {
-      console.error("Fallback /employees list also failed", err2);
-      return null;
+    const all = await api.get<Employee[]>("/employees");
+    const match = all.find((e) => e.id === id);
+    if (!match) {
+      console.warn("No employee found in /employees list for id", id);
     }
+    return match ?? null;
+  } catch (err) {
+    console.error("Failed to load employees list for profile view", err);
+    return null;
   }
 }
+
 
 async function getEmployeeEvents(id: string): Promise<EventItem[]> {
   try {
