@@ -132,14 +132,13 @@ export default async function PersonPage({
 }: {
   params: { id: string };
 }) {
-  // 🔹 Single source of truth: /employees list
-  const [employees, events, timeOff] = await Promise.all([
-    getEmployees(),
-    getEmployeeEvents(params.id),
-    getEmployeeTimeOff(params.id),
-  ]);
+  const employees = await getEmployees();
 
-  const employee = employees.find((e) => e.id === params.id);
+  const index = Number(params.id);
+  const employee =
+    Number.isFinite(index) && index >= 0 && index < employees.length
+      ? employees[index]
+      : undefined;
 
   if (!employee) {
     return (
@@ -150,15 +149,20 @@ export default async function PersonPage({
               Person not found
             </h1>
             <p>
-              We couldn&apos;t load this employee record from the directory.
-              They may have been removed, or there was a temporary issue
-              talking to the backend.
+              We couldn&apos;t find this person in the directory using index{" "}
+              <code>{params.id}</code>. They may have been removed, or the list
+              changed.
             </p>
           </div>
         </main>
       </AuthGate>
     );
   }
+
+  const [events, timeOff] = await Promise.all([
+    getEmployeeEvents(employee.id),
+    getEmployeeTimeOff(employee.id),
+  ]);
 
   const fullName =
     `${employee.firstName ?? ""} ${employee.lastName ?? ""}`.trim() ||
