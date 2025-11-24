@@ -19,6 +19,7 @@ type Employee = {
   status?: EmployeeStatus | null;
   manager?: { id: string; firstName: string; lastName: string } | null;
   createdAt?: string;
+  startDate?: string | null;
 };
 
 type EventItem = {
@@ -29,28 +30,32 @@ type EventItem = {
   createdAt?: string;
 };
 
-async function getEmployee(id: string): Promise<Employee | null> {
-  try {
-    return await api.get<Employee>(`/employees/${id}`);
-  } catch {
-    return null;
-  }
-}
-
-async function getEmployeeEvents(id: string): Promise<EventItem[]> {
-  try {
-    return await api.get<EventItem[]>(`/events?employeeId=${id}`);
-  } catch {
-    return [];
-  }
-}
+const MOCK_EMPLOYEE: Employee = {
+  id: "demo-employee",
+  firstName: "Katherine",
+  lastName: "Soroka",
+  email: "katherine@hireintime.ai",
+  title: "Head of People & Talent",
+  department: "People Operations",
+  location: "Remote, US",
+  status: "ACTIVE",
+  manager: {
+    id: "demo-manager",
+    firstName: "Steven",
+    lastName: "Meoni",
+  },
+  createdAt: new Date().toISOString(),
+  startDate: new Date(
+    new Date().getTime() - 180 * 24 * 60 * 60 * 1000
+  ).toISOString(), // ~6 months ago
+};
 
 function statusLabel(status?: EmployeeStatus | null) {
   switch (status) {
     case "ACTIVE":
       return "Active";
     case "ON_LEAVE":
-      return "On Leave";
+      return "On leave";
     case "CONTRACTOR":
       return "Contractor";
     case "ALUMNI":
@@ -75,46 +80,75 @@ function statusClass(status?: EmployeeStatus | null) {
   }
 }
 
+function formatDate(date?: string | null) {
+  if (!date) return "Unknown";
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return "Unknown";
+  return d.toLocaleDateString();
+}
+
+function computeTenure(startDate?: string | null) {
+  if (!startDate) return "Not set";
+  const start = new Date(startDate);
+  if (Number.isNaN(start.getTime())) return "Not set";
+
+  const now = new Date();
+  const diffMs = now.getTime() - start.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 30) return `${diffDays} day${diffDays === 1 ? "" : "s"}`;
+  const diffMonths = Math.floor(diffDays / 30);
+  if (diffMonths < 12)
+    return `${diffMonths} month${diffMonths === 1 ? "" : "s"}`;
+  const diffYears = Math.floor(diffMonths / 12);
+  return `${diffYears} yr${diffYears === 1 ? "" : "s"}`;
+}
+
+async function getEmployeeOrMock(id: string): Promise<Employee> {
+  try {
+    const emp = await api.get<Employee>(`/employees/${id}`);
+    if (emp) return emp;
+  } catch (err) {
+    console.error("Failed to load employee, using mock", err);
+  }
+  return MOCK_EMPLOYEE;
+}
+
+async function getEmployeeEventsSafe(id: string): Promise<EventItem[]> {
+  try {
+    return await api.get<EventItem[]>(`/events?employeeId=${id}`);
+  } catch (err) {
+    console.error("Failed to load employee events", err);
+    return [];
+  }
+}
+
 export default async function PersonPage({
   params,
 }: {
   params: { id: string };
 }) {
-  const employee = await getEmployee(params.id);
+  const employee = await getEmployeeOrMock(params.id);
+  const events = await getEmployeeEventsSafe(employee.id);
 
-  // 🛑 If backend returns null → clean friendly error
-  if (!employee) {
-    return (
-      <AuthGate>
-        <main className="p-8 max-w-3xl mx-auto space-y-6">
-          <h1 className="text-xl font-semibold">Person not found</h1>
-          <p className="text-sm text-slate-600">
-            We couldn’t find this person in the directory. They may have been
-            removed, or there was an issue loading their record.
-          </p>
-        </main>
-      </AuthGate>
-    );
-  }
-
-  const fullName = `${employee.firstName} ${employee.lastName}`;
-  const events = await getEmployeeEvents(employee.id);
+  const fullName = `${employee.firstName} ${employee.lastName}`.trim();
+  const initials =
+    (employee.firstName?.[0] ?? "").toUpperCase() +
+    (employee.lastName?.[0] ?? "").toUpperCase();
 
   return (
     <AuthGate>
       <main className="px-8 py-8 space-y-8">
-
         {/* HERO */}
-        <section className="rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 to-indigo-50 p-6 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+        <section className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 to-indigo-50 p-6 shadow-sm md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-4">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-900 text-xl font-semibold text-white shadow">
-              {employee.firstName[0]}
-              {employee.lastName[0]}
+              {initials || "?"}
             </div>
 
             <div className="space-y-1">
               <h1 className="text-3xl font-semibold text-slate-900">
-                {fullName}
+                {fullName || "Unnamed person"}
               </h1>
               <p className="text-sm text-slate-600">
                 {employee.title || "No title"} •{" "}
@@ -122,15 +156,15 @@ export default async function PersonPage({
                 {employee.location ? ` • ${employee.location}` : ""}
               </p>
 
-              <div className="flex flex-wrap items-center gap-2 mt-2">
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
                 {employee.email && (
-                  <span className="rounded-full bg-white border border-slate-200 px-3 py-1 text-xs text-slate-700">
+                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-700">
                     {employee.email}
                   </span>
                 )}
 
                 {employee.manager && (
-                  <span className="rounded-full bg-white border border-slate-200 px-3 py-1 text-xs text-slate-700">
+                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-700">
                     Reports to {employee.manager.firstName}{" "}
                     {employee.manager.lastName}
                   </span>
@@ -147,18 +181,34 @@ export default async function PersonPage({
               </div>
             </div>
           </div>
+
+          <div className="space-y-2 rounded-2xl bg-slate-900/90 px-4 py-3 text-xs text-slate-100 shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-slate-100">Tenure</span>
+              <span className="text-slate-300">
+                {computeTenure(employee.startDate)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-slate-300">
+              <span>Start date</span>
+              <span>{formatDate(employee.startDate)}</span>
+            </div>
+            <div className="flex items-center justify-between text-slate-300">
+              <span>Joined Intime</span>
+              <span>{formatDate(employee.createdAt ?? null)}</span>
+            </div>
+          </div>
         </section>
 
-        {/* TWO-COLUMN LAYOUT */}
+        {/* MAIN LAYOUT */}
         <section className="grid gap-8 lg:grid-cols-[320px_minmax(0,1fr)]">
-          {/* LEFT SIDE */}
+          {/* LEFT SIDEBAR */}
           <div className="space-y-6">
             {/* Job details */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-900 mb-3">
+              <h2 className="mb-3 text-sm font-semibold text-slate-900">
                 Job details
               </h2>
-
               <ul className="space-y-2 text-sm text-slate-700">
                 <li>
                   <span className="font-medium">Title: </span>
@@ -181,10 +231,9 @@ export default async function PersonPage({
 
             {/* Contact */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-900 mb-3">
+              <h2 className="mb-3 text-sm font-semibold text-slate-900">
                 Contact
               </h2>
-
               <ul className="space-y-2 text-sm text-slate-700">
                 <li>
                   <span className="font-medium">Email: </span>
@@ -199,12 +248,11 @@ export default async function PersonPage({
               </ul>
             </div>
 
-            {/* Org info */}
+            {/* Org details */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-900 mb-3">
+              <h2 className="mb-3 text-sm font-semibold text-slate-900">
                 Org details
               </h2>
-
               <ul className="space-y-2 text-sm text-slate-700">
                 <li>
                   <span className="font-medium">Employee ID: </span>
@@ -212,25 +260,23 @@ export default async function PersonPage({
                 </li>
                 <li>
                   <span className="font-medium">Joined: </span>
-                  {employee.createdAt
-                    ? new Date(employee.createdAt).toLocaleDateString()
-                    : "Unknown"}
+                  {formatDate(employee.createdAt ?? null)}
                 </li>
               </ul>
             </div>
           </div>
 
-          {/* RIGHT SIDE */}
+          {/* RIGHT SIDE — TIMELINES */}
           <div className="space-y-6">
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-900 mb-3">
+              <h2 className="mb-3 text-sm font-semibold text-slate-900">
                 Activity timeline
               </h2>
               <EventsTimeline events={events} />
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-900 mb-3">
+              <h2 className="mb-3 text-sm font-semibold text-slate-900">
                 AI insights
               </h2>
               <AiPeopleTimeline employeeId={employee.id} />
