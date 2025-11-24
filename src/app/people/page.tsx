@@ -88,11 +88,12 @@ export default async function PeoplePage() {
                   </td>
                 </tr>
               ) : (
-                employees.map((e, index) => {
+                employees.map((e) => {
                   const fullName = `${e.firstName} ${e.lastName}`.trim();
+
                   return (
                     <tr
-                      key={e.id ?? index}
+                      key={e.id}
                       className="border-b last:border-b-0 hover:bg-slate-50/70"
                     >
                       <td className="px-4 py-2">
@@ -113,25 +114,29 @@ export default async function PeoplePage() {
                           </div>
                         </div>
                       </td>
+
                       <td className="px-4 py-2">
                         <span className="text-xs text-slate-700">
                           {e.title || "—"}
                         </span>
                       </td>
+
                       <td className="px-4 py-2">
                         <span className="text-xs text-slate-700">
                           {e.department || "—"}
                         </span>
                       </td>
+
                       <td className="px-4 py-2">
                         <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
                           {statusLabel(e.status)}
                         </span>
                       </td>
+
                       <td className="px-4 py-2 text-right">
-                        {/* 👉 Use index as the URL param */}
+                        {/* FIX: Use employee.id instead of index */}
                         <Link
-                          href={`/people/${index}`}
+                          href={`/people/${e.id}`}
                           className="text-xs font-medium text-indigo-600 hover:underline"
                         >
                           Open profile →
