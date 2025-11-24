@@ -6,6 +6,9 @@ import { AuthGate } from "@/components/dev-auth-gate";
 
 export const dynamic = "force-dynamic";
 
+// -------------------------------
+// Types
+// -------------------------------
 type EmployeeStatus = "ACTIVE" | "ON_LEAVE" | "CONTRACTOR" | "ALUMNI";
 
 type Employee = {
@@ -29,6 +32,19 @@ type EventItem = {
   createdAt?: string;
 };
 
+type TimeOffRequestItem = {
+  id: string;
+  employeeId: string;
+  type: string;
+  status: "REQUESTED" | "APPROVED" | "DENIED" | "CANCELLED";
+  startDate: string;
+  endDate: string;
+  createdAt?: string;
+};
+
+// -------------------------------
+// Fetch functions
+// -------------------------------
 async function getEmployee(id: string): Promise<Employee> {
   return api.get<Employee>(`/employees/${id}`);
 }
@@ -37,12 +53,26 @@ async function getEmployeeEvents(id: string): Promise<EventItem[]> {
   return api.get<EventItem[]>(`/events?employeeId=${id}`);
 }
 
+async function getEmployeeTimeoff(id: string): Promise<TimeOffRequestItem[]> {
+  try {
+    return await api.get<TimeOffRequestItem[]>(
+      `/timeoff/requests?employeeId=${id}`
+    );
+  } catch (err) {
+    console.error("Failed to load employee time off", err);
+    return [];
+  }
+}
+
+// -------------------------------
+// Helpers
+// -------------------------------
 function statusLabel(status?: EmployeeStatus | null) {
   switch (status) {
     case "ACTIVE":
       return "Active";
     case "ON_LEAVE":
-      return "On leave";
+      return "On Leave";
     case "CONTRACTOR":
       return "Contractor";
     case "ALUMNI":
@@ -67,43 +97,58 @@ function statusClass(status?: EmployeeStatus | null) {
   }
 }
 
-function computeTenure(createdAt?: string) {
-  if (!createdAt) return null;
-  const start = new Date(createdAt);
-  if (Number.isNaN(start.getTime())) return null;
-
-  const now = new Date();
-  const years = now.getFullYear() - start.getFullYear();
-  const months = now.getMonth() - start.getMonth() + years * 12;
-  if (months < 1) return "Less than 1 month";
-
-  const y = Math.floor(months / 12);
-  const m = months % 12;
-
-  if (y > 0 && m > 0) return `${y} yr${y > 1 ? "s" : ""} ${m} mo`;
-  if (y > 0) return `${y} yr${y > 1 ? "s" : ""}`;
-  return `${m} mo`;
+function fmt(date?: string) {
+  return date ? new Date(date).toLocaleDateString() : "—";
 }
 
-export default async function PersonPage({ params }: { params: { id: string } }) {
-  const [employee, events] = await Promise.all([
+// -------------------------------
+// Component
+// -------------------------------
+export default async function PersonPage({
+  params,
+}: {
+  params: { id: string };
+}) {
+  const [employee, events, timeoff] = await Promise.all([
     getEmployee(params.id),
     getEmployeeEvents(params.id).catch(() => []),
+    getEmployeeTimeoff(params.id),
   ]);
 
   const fullName = `${employee.firstName} ${employee.lastName}`;
-  const tenure = computeTenure(employee.createdAt);
-  const eventsCount = events.length;
+
+  // PTO logic
+  const approved = timeoff.filter((r) => r.status === "APPROVED");
+  const upcoming = approved.filter(
+    (r) => new Date(r.startDate).getTime() >= Date.now()
+  );
+  const nextUpcoming = upcoming.sort(
+    (a, b) =>
+      new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+  )[0];
+
+  const lastTaken = approved
+    .filter((r) => new Date(r.endDate).getTime() < Date.now())
+    .sort(
+      (a, b) =>
+        new Date(b.endDate).getTime() - new Date(a.endDate).getTime()
+    )[0];
+
+  const tenureMonths = employee.createdAt
+    ? Math.floor(
+        (Date.now() - new Date(employee.createdAt).getTime()) /
+          (1000 * 60 * 60 * 24 * 30)
+      )
+    : null;
 
   return (
     <AuthGate>
-      <main className="px-6 py-8 space-y-8 lg:px-8">
-        {/* ======================== */}
-        {/*       HERO SECTION       */}
-        {/* ======================== */}
-        <section className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 to-indigo-50 p-6 shadow-sm md:flex-row md:items-center md:justify-between">
+      <main className="px-8 py-8 space-y-8">
+        {/* ================================= */}
+        {/* HERO */}
+        {/* ================================= */}
+        <section className="rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 to-indigo-50 p-6 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div className="flex items-center gap-4">
-            {/* Avatar */}
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-900 text-xl font-semibold text-white shadow">
               {employee.firstName[0]}
               {employee.lastName[0]}
@@ -119,87 +164,59 @@ export default async function PersonPage({ params }: { params: { id: string } })
                 {employee.location ? ` • ${employee.location}` : ""}
               </p>
 
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                {/* Email */}
+              <div className="flex flex-wrap items-center gap-2 mt-2">
                 {employee.email && (
                   <span className="rounded-full bg-white border border-slate-200 px-3 py-1 text-xs text-slate-700">
                     {employee.email}
                   </span>
                 )}
 
-                {/* Manager */}
                 {employee.manager && (
                   <span className="rounded-full bg-white border border-slate-200 px-3 py-1 text-xs text-slate-700">
-                    Reports to {employee.manager.firstName}{" "}
+                    Reports to{" "}
+                    {employee.manager.firstName}{" "}
                     {employee.manager.lastName}
                   </span>
                 )}
 
-                {/* Status */}
                 <span
-                  className={[
-                    "inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-medium",
-                    statusClass(employee.status),
-                  ].join(" ")}
+                  className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-medium ${statusClass(
+                    employee.status
+                  )}`}
                 >
                   {statusLabel(employee.status)}
                 </span>
-
-                {/* Tenure */}
-                {tenure && (
-                  <span className="inline-flex items-center rounded-full bg-slate-900/80 px-3 py-1 text-[11px] font-medium text-slate-50">
-                    Tenure: {tenure}
-                  </span>
-                )}
               </div>
             </div>
           </div>
-
-          {/* Hero right meta */}
-          <div className="flex flex-col items-start gap-2 text-xs text-slate-600 md:items-end">
-            <div className="rounded-full bg-white/70 px-3 py-1 shadow-sm">
-              <span className="font-medium text-slate-800">
-                People profile
-              </span>{" "}
-              ·{" "}
-              <span className="text-slate-500">
-                {eventsCount} event{eventsCount === 1 ? "" : "s"} in Intime
-              </span>
-            </div>
-            <p className="max-w-xs text-right text-[11px] text-slate-500 hidden md:block">
-              This page will become the source of truth for this person:
-              compensation, time off, performance, and their time-aware history
-              across Intime.
-            </p>
-          </div>
         </section>
 
-        {/* ======================== */}
-        {/*  MAIN TWO-COLUMN LAYOUT  */}
-        {/* ======================== */}
+        {/* ================================= */}
+        {/* TWO-COLUMN LAYOUT */}
+        {/* ================================= */}
         <section className="grid gap-8 lg:grid-cols-[320px_minmax(0,1fr)]">
           {/* LEFT SIDEBAR */}
           <div className="space-y-6">
             {/* Job details */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-3 text-sm font-semibold text-slate-900">
+              <h2 className="text-sm font-semibold text-slate-900 mb-3">
                 Job details
               </h2>
               <ul className="space-y-2 text-sm text-slate-700">
                 <li>
-                  <span className="font-medium">Title: </span>
+                  <span className="font-medium">Title:</span>{" "}
                   {employee.title || "Not set"}
                 </li>
                 <li>
-                  <span className="font-medium">Department: </span>
+                  <span className="font-medium">Department:</span>{" "}
                   {employee.department || "Not set"}
                 </li>
                 <li>
-                  <span className="font-medium">Location: </span>
+                  <span className="font-medium">Location:</span>{" "}
                   {employee.location || "Not set"}
                 </li>
                 <li>
-                  <span className="font-medium">Employee status: </span>
+                  <span className="font-medium">Status:</span>{" "}
                   {statusLabel(employee.status)}
                 </li>
               </ul>
@@ -207,16 +224,16 @@ export default async function PersonPage({ params }: { params: { id: string } })
 
             {/* Contact */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-3 text-sm font-semibold text-slate-900">
+              <h2 className="text-sm font-semibold text-slate-900 mb-3">
                 Contact
               </h2>
               <ul className="space-y-2 text-sm text-slate-700">
                 <li>
-                  <span className="font-medium">Email: </span>
+                  <span className="font-medium">Email:</span>{" "}
                   {employee.email || "Not set"}
                 </li>
                 <li>
-                  <span className="font-medium">Manager: </span>
+                  <span className="font-medium">Manager:</span>{" "}
                   {employee.manager
                     ? `${employee.manager.firstName} ${employee.manager.lastName}`
                     : "None"}
@@ -226,164 +243,153 @@ export default async function PersonPage({ params }: { params: { id: string } })
 
             {/* Org details */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-3 text-sm font-semibold text-slate-900">
+              <h2 className="text-sm font-semibold text-slate-900 mb-3">
                 Org details
               </h2>
               <ul className="space-y-2 text-sm text-slate-700">
                 <li>
-                  <span className="font-medium">Employee ID: </span>
+                  <span className="font-medium">Employee ID:</span>{" "}
                   {employee.id}
                 </li>
                 <li>
-                  <span className="font-medium">Joined: </span>
-                  {employee.createdAt
-                    ? new Date(employee.createdAt).toLocaleDateString()
-                    : "Unknown"}
+                  <span className="font-medium">Joined:</span>{" "}
+                  {fmt(employee.createdAt)}
                 </li>
                 <li>
-                  <span className="font-medium">Tenure: </span>
-                  {tenure ?? "Unknown"}
+                  <span className="font-medium">Tenure:</span>{" "}
+                  {tenureMonths !== null ? `${tenureMonths} months` : "—"}
                 </li>
               </ul>
             </div>
           </div>
 
-          {/* RIGHT SIDE — SUMMARY PANELS + TIMELINES */}
+          {/* RIGHT COLUMN */}
           <div className="space-y-6">
-            {/* SUMMARY PANELS GRID */}
+            {/* GRID OF SUMMARY CARDS */}
             <section className="grid gap-4 md:grid-cols-2">
-              {/* Time & PTO */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <h2 className="text-sm font-semibold text-slate-900">
+              {/* TIME & PTO */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <h2 className="text-sm font-semibold text-slate-900 mb-1">
                   Time & PTO
                 </h2>
-                <p className="mt-1 text-xs text-slate-600">
-                  High-level view of this person&apos;s time away from work.
-                </p>
-                <div className="mt-3 space-y-1.5 text-xs text-slate-500">
-                  <div className="flex items-center justify-between">
-                    <span>Assigned policy</span>
-                    <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[11px] text-slate-700">
-                      Not connected yet
+
+                <ul className="space-y-1.5 text-xs text-slate-700 mt-2">
+                  <li className="flex justify-between">
+                    <span className="text-slate-500">Upcoming PTO</span>
+                    <span className="font-medium">
+                      {nextUpcoming
+                        ? `${fmt(nextUpcoming.startDate)} → ${fmt(
+                            nextUpcoming.endDate
+                          )}`
+                        : "None"}
                     </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Upcoming time off</span>
-                    <span className="text-slate-700">0 days scheduled</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Last approved request</span>
-                    <span className="text-slate-400">No history yet</span>
-                  </div>
-                </div>
-                <p className="mt-3 text-[11px] text-slate-500">
-                  As you approve PTO and leave in Intime, this panel will show
-                  balance, upcoming days, and trends over time.
-                </p>
+                  </li>
+
+                  <li className="flex justify-between">
+                    <span className="text-slate-500">Last PTO taken</span>
+                    <span className="font-medium">
+                      {lastTaken
+                        ? `${fmt(lastTaken.startDate)} → ${fmt(
+                            lastTaken.endDate
+                          )}`
+                        : "Never"}
+                    </span>
+                  </li>
+
+                  <li className="flex justify-between">
+                    <span className="text-slate-500">Total requests</span>
+                    <span className="font-medium">{timeoff.length}</span>
+                  </li>
+
+                  <li className="flex justify-between">
+                    <span className="text-slate-500">Approved</span>
+                    <span className="font-medium">{approved.length}</span>
+                  </li>
+                </ul>
               </div>
 
-              {/* Compensation */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <h2 className="text-sm font-semibold text-slate-900">
+              {/* COMPENSATION */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <h2 className="text-sm font-semibold text-slate-900 mb-1">
                   Compensation
                 </h2>
-                <p className="mt-1 text-xs text-slate-600">
-                  Summary of how this employee is paid.
-                </p>
-                <div className="mt-3 space-y-1.5 text-xs text-slate-500">
-                  <div className="flex items-center justify-between">
-                    <span>Base compensation</span>
-                    <span className="text-slate-700">Not set</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Pay type</span>
-                    <span className="text-slate-700">Salary / hourly</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Effective date</span>
-                    <span className="text-slate-400">Not recorded</span>
-                  </div>
-                </div>
-                <p className="mt-3 text-[11px] text-slate-500">
-                  Later, this will link to your HRIS or payroll system so
-                  Intime can overlay compensation trends with time and
-                  performance.
-                </p>
+
+                <ul className="space-y-1.5 text-xs text-slate-700 mt-2">
+                  <li className="flex justify-between">
+                    <span className="text-slate-500">Base pay</span>
+                    <span className="font-medium">Not set</span>
+                  </li>
+                  <li className="flex justify-between">
+                    <span className="text-slate-500">Pay type</span>
+                    <span className="font-medium">Salary / Hourly</span>
+                  </li>
+                  <li className="flex justify-between">
+                    <span className="text-slate-500">Effective date</span>
+                    <span className="text-slate-400">—</span>
+                  </li>
+                </ul>
               </div>
 
-              {/* Hiring & onboarding */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <h2 className="text-sm font-semibold text-slate-900">
+              {/* HIRING & ONBOARDING */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <h2 className="text-sm font-semibold text-slate-900 mb-1">
                   Hiring & onboarding
                 </h2>
-                <p className="mt-1 text-xs text-slate-600">
-                  How this person joined the company and their onboarding state.
-                </p>
-                <div className="mt-3 space-y-1.5 text-xs text-slate-500">
-                  <div className="flex items-center justify-between">
-                    <span>Source</span>
-                    <span className="text-slate-700">Not linked to ATS yet</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Role hired for</span>
-                    <span className="text-slate-700">
+
+                <ul className="space-y-1.5 text-xs text-slate-700 mt-2">
+                  <li className="flex justify-between">
+                    <span className="text-slate-500">Source</span>
+                    <span className="font-medium">Not linked</span>
+                  </li>
+                  <li className="flex justify-between">
+                    <span className="text-slate-500">Role hired into</span>
+                    <span className="font-medium">
                       {employee.title || "Not set"}
                     </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Onboarding status</span>
-                    <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[11px] text-slate-700">
+                  </li>
+                  <li className="flex justify-between">
+                    <span className="text-slate-500">Onboarding</span>
+                    <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-700">
                       Coming soon
                     </span>
-                  </div>
-                </div>
-                <p className="mt-3 text-[11px] text-slate-500">
-                  In the full Intime workflow, this panel will pull directly
-                  from Jobs, Candidates, and Onboarding to give you the complete
-                  hiring story for this person.
-                </p>
+                  </li>
+                </ul>
               </div>
 
-              {/* Performance snapshot */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <h2 className="text-sm font-semibold text-slate-900">
+              {/* PERFORMANCE */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <h2 className="text-sm font-semibold text-slate-900 mb-1">
                   Performance snapshot
                 </h2>
-                <p className="mt-1 text-xs text-slate-600">
-                  A quick view into reviews, goals, and manager feedback.
-                </p>
-                <div className="mt-3 space-y-1.5 text-xs text-slate-500">
-                  <div className="flex items-center justify-between">
-                    <span>Last review</span>
+
+                <ul className="space-y-1.5 text-xs text-slate-700 mt-2">
+                  <li className="flex justify-between">
+                    <span className="text-slate-500">Last review</span>
                     <span className="text-slate-400">Not recorded</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Next planned review</span>
+                  </li>
+                  <li className="flex justify-between">
+                    <span className="text-slate-500">Next review</span>
                     <span className="text-slate-400">Not scheduled</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Goals</span>
-                    <span className="text-slate-700">No goals added yet</span>
-                  </div>
-                </div>
-                <p className="mt-3 text-[11px] text-slate-500">
-                  As you log performance reviews and goals, Intime will use this
-                  panel to surface patterns, risks, and growth areas over time.
-                </p>
+                  </li>
+                  <li className="flex justify-between">
+                    <span className="text-slate-500">Goals</span>
+                    <span className="font-medium">No goals</span>
+                  </li>
+                </ul>
               </div>
             </section>
 
-            {/* Activity timeline */}
+            {/* ACTIVITY TIMELINE */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-3 text-sm font-semibold text-slate-900">
+              <h2 className="text-sm font-semibold text-slate-900 mb-3">
                 Activity timeline
               </h2>
               <EventsTimeline events={events} />
             </div>
 
-            {/* AI summary */}
+            {/* AI INSIGHTS */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-3 text-sm font-semibold text-slate-900">
+              <h2 className="text-sm font-semibold text-slate-900 mb-3">
                 AI insights
               </h2>
               <AiPeopleTimeline employeeId={employee.id} />
