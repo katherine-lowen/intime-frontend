@@ -6,7 +6,7 @@ import { AuthGate } from "@/components/dev-auth-gate";
 
 export const dynamic = "force-dynamic";
 
-type EmployeeStatus = "ACTIVE" | "ON_LEAVE" | "CONTRACTOR" | "ALUMNI";
+type EmployeeStatus = "ACTIVE" | "ON_LEAVE" | "CONTRACTOR" | "ALUMNI" | string;
 
 type Employee = {
   id: string;
@@ -93,24 +93,19 @@ function computeTenure(startDate?: string | null) {
   return `${diffYears} yr${diffYears === 1 ? "" : "s"}`;
 }
 
-// 🔹 Try /employees/:id first; if that fails, fall back to /employees and find by id.
-// This makes the profile page work as long as the directory works.
-// 🔹 Only use /employees and find by id locally.
-// This avoids any weirdness with /employees/:id on the backend.
-async function getEmployee(id: string): Promise<Employee | null> {
+async function getEmployees(): Promise<Employee[]> {
   try {
-    const all = await api.get<Employee[]>("/employees");
-    const match = all.find((e) => e.id === id);
-    if (!match) {
-      console.warn("No employee found in /employees list for id", id);
+    const data = await api.get<Employee[]>("/employees");
+    if (!Array.isArray(data)) {
+      console.error("Expected array from /employees, got:", data);
+      return [];
     }
-    return match ?? null;
+    return data;
   } catch (err) {
     console.error("Failed to load employees list for profile view", err);
-    return null;
+    return [];
   }
 }
-
 
 async function getEmployeeEvents(id: string): Promise<EventItem[]> {
   try {
@@ -137,11 +132,14 @@ export default async function PersonPage({
 }: {
   params: { id: string };
 }) {
-  const [employee, events, timeOff] = await Promise.all([
-    getEmployee(params.id),
+  // 🔹 Single source of truth: /employees list
+  const [employees, events, timeOff] = await Promise.all([
+    getEmployees(),
     getEmployeeEvents(params.id),
     getEmployeeTimeOff(params.id),
   ]);
+
+  const employee = employees.find((e) => e.id === params.id);
 
   if (!employee) {
     return (
@@ -152,8 +150,9 @@ export default async function PersonPage({
               Person not found
             </h1>
             <p>
-              We couldn&apos;t load this employee record. They may have been
-              removed, or there was a temporary issue talking to the backend.
+              We couldn&apos;t load this employee record from the directory.
+              They may have been removed, or there was a temporary issue
+              talking to the backend.
             </p>
           </div>
         </main>
