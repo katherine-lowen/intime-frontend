@@ -6,11 +6,10 @@ import { AuthGate } from "@/components/dev-auth-gate";
 
 export const dynamic = "force-dynamic";
 
-type EmployeeStatus = "ACTIVE" | "ON_LEAVE" | "CONTRACTOR" | "ALUMNI" | string;
+type EmployeeStatus = "ACTIVE" | "ON_LEAVE" | "CONTRACTOR" | "ALUMNI";
 
 type Employee = {
   id: string;
-  orgId?: string;
   firstName: string;
   lastName: string;
   email?: string | null;
@@ -20,7 +19,6 @@ type Employee = {
   status?: EmployeeStatus | null;
   manager?: { id: string; firstName: string; lastName: string } | null;
   createdAt?: string;
-  startDate?: string | null;
 };
 
 type EventItem = {
@@ -31,20 +29,28 @@ type EventItem = {
   createdAt?: string;
 };
 
-type TimeOffRequest = {
-  id: string;
-  type: string;
-  status: "REQUESTED" | "APPROVED" | "DENIED" | "CANCELLED";
-  startDate: string;
-  endDate: string;
-};
+async function getEmployee(id: string): Promise<Employee | null> {
+  try {
+    return await api.get<Employee>(`/employees/${id}`);
+  } catch {
+    return null;
+  }
+}
+
+async function getEmployeeEvents(id: string): Promise<EventItem[]> {
+  try {
+    return await api.get<EventItem[]>(`/events?employeeId=${id}`);
+  } catch {
+    return [];
+  }
+}
 
 function statusLabel(status?: EmployeeStatus | null) {
   switch (status) {
     case "ACTIVE":
       return "Active";
     case "ON_LEAVE":
-      return "On leave";
+      return "On Leave";
     case "CONTRACTOR":
       return "Contractor";
     case "ALUMNI":
@@ -69,124 +75,41 @@ function statusClass(status?: EmployeeStatus | null) {
   }
 }
 
-function formatDate(date?: string | null) {
-  if (!date) return "Unknown";
-  const d = new Date(date);
-  if (Number.isNaN(d.getTime())) return "Unknown";
-  return d.toLocaleDateString();
-}
-
-function computeTenure(startDate?: string | null) {
-  if (!startDate) return "Not set";
-  const start = new Date(startDate);
-  if (Number.isNaN(start.getTime())) return "Not set";
-
-  const now = new Date();
-  const diffMs = now.getTime() - start.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffDays < 30) return `${diffDays} day${diffDays === 1 ? "" : "s"}`;
-  const diffMonths = Math.floor(diffDays / 30);
-  if (diffMonths < 12)
-    return `${diffMonths} month${diffMonths === 1 ? "" : "s"}`;
-  const diffYears = Math.floor(diffMonths / 12);
-  return `${diffYears} yr${diffYears === 1 ? "" : "s"}`;
-}
-
-async function getEmployees(): Promise<Employee[]> {
-  try {
-    const data = await api.get<Employee[]>("/employees");
-    if (!Array.isArray(data)) {
-      console.error("Expected array from /employees, got:", data);
-      return [];
-    }
-    return data;
-  } catch (err) {
-    console.error("Failed to load employees list for profile view", err);
-    return [];
-  }
-}
-
-async function getEmployeeEvents(id: string): Promise<EventItem[]> {
-  try {
-    return await api.get<EventItem[]>(`/events?employeeId=${id}`);
-  } catch (err) {
-    console.error("Failed to load employee events", id, err);
-    return [];
-  }
-}
-
-async function getEmployeeTimeOff(id: string): Promise<TimeOffRequest[]> {
-  try {
-    return await api.get<TimeOffRequest[]>(
-      `/timeoff/requests?employeeId=${id}`
-    );
-  } catch (err) {
-    console.error("Failed to load employee time off", id, err);
-    return [];
-  }
-}
-
 export default async function PersonPage({
   params,
 }: {
   params: { id: string };
 }) {
-  const employees = await getEmployees();
+  const employee = await getEmployee(params.id);
 
-  const index = Number(params.id);
-  const employee =
-    Number.isFinite(index) && index >= 0 && index < employees.length
-      ? employees[index]
-      : undefined;
-
+  // 🛑 If backend returns null → clean friendly error
   if (!employee) {
     return (
       <AuthGate>
-        <main className="px-8 py-16">
-          <div className="mx-auto max-w-lg rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-800">
-            <h1 className="mb-2 text-base font-semibold text-rose-900">
-              Person not found
-            </h1>
-            <p>
-              We couldn&apos;t find this person in the directory using index{" "}
-              <code>{params.id}</code>. They may have been removed, or the list
-              changed.
-            </p>
-          </div>
+        <main className="p-8 max-w-3xl mx-auto space-y-6">
+          <h1 className="text-xl font-semibold">Person not found</h1>
+          <p className="text-sm text-slate-600">
+            We couldn’t find this person in the directory. They may have been
+            removed, or there was an issue loading their record.
+          </p>
         </main>
       </AuthGate>
     );
   }
 
-  const [events, timeOff] = await Promise.all([
-    getEmployeeEvents(employee.id),
-    getEmployeeTimeOff(employee.id),
-  ]);
-
-  const fullName =
-    `${employee.firstName ?? ""} ${employee.lastName ?? ""}`.trim() ||
-    "Unnamed person";
-  const initials =
-    (employee.firstName?.[0] ?? "").toUpperCase() +
-    (employee.lastName?.[0] ?? "").toUpperCase();
-
-  const upcomingTimeOff = timeOff
-    .filter((t) => t.status === "APPROVED")
-    .filter((t) => new Date(t.endDate).getTime() >= Date.now())
-    .sort(
-      (a, b) =>
-        new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
-    );
+  const fullName = `${employee.firstName} ${employee.lastName}`;
+  const events = await getEmployeeEvents(employee.id);
 
   return (
     <AuthGate>
       <main className="px-8 py-8 space-y-8">
+
         {/* HERO */}
-        <section className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 to-indigo-50 p-6 shadow-sm md:flex-row md:items-center md:justify-between">
+        <section className="rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 to-indigo-50 p-6 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div className="flex items-center gap-4">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-900 text-xl font-semibold text-white shadow">
-              {initials || "?"}
+              {employee.firstName[0]}
+              {employee.lastName[0]}
             </div>
 
             <div className="space-y-1">
@@ -199,15 +122,15 @@ export default async function PersonPage({
                 {employee.location ? ` • ${employee.location}` : ""}
               </p>
 
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+              <div className="flex flex-wrap items-center gap-2 mt-2">
                 {employee.email && (
-                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-700">
+                  <span className="rounded-full bg-white border border-slate-200 px-3 py-1 text-xs text-slate-700">
                     {employee.email}
                   </span>
                 )}
 
                 {employee.manager && (
-                  <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-700">
+                  <span className="rounded-full bg-white border border-slate-200 px-3 py-1 text-xs text-slate-700">
                     Reports to {employee.manager.firstName}{" "}
                     {employee.manager.lastName}
                   </span>
@@ -224,34 +147,18 @@ export default async function PersonPage({
               </div>
             </div>
           </div>
-
-          <div className="space-y-2 rounded-2xl bg-slate-900/90 px-4 py-3 text-xs text-slate-100 shadow-sm">
-            <div className="flex items-center justify-between">
-              <span className="font-medium text-slate-100">Tenure</span>
-              <span className="text-slate-300">
-                {computeTenure(employee.startDate)}
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-slate-300">
-              <span>Start date</span>
-              <span>{formatDate(employee.startDate)}</span>
-            </div>
-            <div className="flex items-center justify-between text-slate-300">
-              <span>Joined Intime</span>
-              <span>{formatDate(employee.createdAt ?? null)}</span>
-            </div>
-          </div>
         </section>
 
-        {/* MAIN LAYOUT */}
+        {/* TWO-COLUMN LAYOUT */}
         <section className="grid gap-8 lg:grid-cols-[320px_minmax(0,1fr)]">
-          {/* LEFT SIDEBAR */}
+          {/* LEFT SIDE */}
           <div className="space-y-6">
             {/* Job details */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-3 text-sm font-semibold text-slate-900">
+              <h2 className="text-sm font-semibold text-slate-900 mb-3">
                 Job details
               </h2>
+
               <ul className="space-y-2 text-sm text-slate-700">
                 <li>
                   <span className="font-medium">Title: </span>
@@ -274,9 +181,10 @@ export default async function PersonPage({
 
             {/* Contact */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-3 text-sm font-semibold text-slate-900">
+              <h2 className="text-sm font-semibold text-slate-900 mb-3">
                 Contact
               </h2>
+
               <ul className="space-y-2 text-sm text-slate-700">
                 <li>
                   <span className="font-medium">Email: </span>
@@ -291,49 +199,38 @@ export default async function PersonPage({
               </ul>
             </div>
 
-            {/* Upcoming time off */}
+            {/* Org info */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-3 text-sm font-semibold text-slate-900">
-                Time off
+              <h2 className="text-sm font-semibold text-slate-900 mb-3">
+                Org details
               </h2>
-              {upcomingTimeOff.length === 0 ? (
-                <p className="text-xs text-slate-500">
-                  No upcoming approved time off on the books.
-                </p>
-              ) : (
-                <ul className="space-y-2 text-xs text-slate-700">
-                  {upcomingTimeOff.slice(0, 3).map((t) => (
-                    <li
-                      key={t.id}
-                      className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-3 py-2"
-                    >
-                      <div>
-                        <div className="font-medium">{t.type}</div>
-                        <div className="text-[11px] text-slate-500">
-                          {formatDate(t.startDate)} – {formatDate(t.endDate)}
-                        </div>
-                      </div>
-                      <span className="text-[11px] text-emerald-700">
-                        {t.status.toLowerCase()}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
+
+              <ul className="space-y-2 text-sm text-slate-700">
+                <li>
+                  <span className="font-medium">Employee ID: </span>
+                  {employee.id}
+                </li>
+                <li>
+                  <span className="font-medium">Joined: </span>
+                  {employee.createdAt
+                    ? new Date(employee.createdAt).toLocaleDateString()
+                    : "Unknown"}
+                </li>
+              </ul>
             </div>
           </div>
 
-          {/* RIGHT SIDE — TIMELINES */}
+          {/* RIGHT SIDE */}
           <div className="space-y-6">
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-3 text-sm font-semibold text-slate-900">
+              <h2 className="text-sm font-semibold text-slate-900 mb-3">
                 Activity timeline
               </h2>
               <EventsTimeline events={events} />
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-3 text-sm font-semibold text-slate-900">
+              <h2 className="text-sm font-semibold text-slate-900 mb-3">
                 AI insights
               </h2>
               <AiPeopleTimeline employeeId={employee.id} />
