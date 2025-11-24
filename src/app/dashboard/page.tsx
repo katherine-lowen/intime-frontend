@@ -2,8 +2,14 @@
 import Link from "next/link";
 import api from "@/lib/api";
 import EventsFeed from "@/components/events-feed";
-import AiInsightsCard from "@/components/ai-insights-card";
 import { AuthGate } from "@/components/dev-auth-gate";
+import {
+  Users,
+  Briefcase,
+  CalendarClock,
+  Sparkles,
+  ArrowRight,
+} from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -94,24 +100,23 @@ export default async function DashboardPage() {
           {/* Hero */}
           <section>
             <div className="rounded-2xl border border-slate-200 bg-white/80 p-6 shadow-sm backdrop-blur">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-700">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                     Intime dashboard
                     <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-slate-50">
-                      Live data
+                      Live
                     </span>
                   </div>
                   <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
                     One place for people, time, and hiring health.
                   </h1>
                   <p className="mt-1 text-sm text-slate-600">
-                    This view combines your HRIS headcount, hiring pipeline, and
-                    time-aware events so you can see what&apos;s happening in
-                    the company today.
+                    Your headcount, hiring pipeline, and time-aware events in a
+                    single snapshot. See what needs your attention today.
                   </p>
-                  <div className="mt-4 flex flex-wrap gap-2 text-[11px] text-slate-500">
+                  <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-slate-500">
                     <span className="rounded-full bg-slate-100 px-2 py-1">
                       HRIS · Employees &amp; teams
                     </span>
@@ -124,21 +129,21 @@ export default async function DashboardPage() {
                   </div>
                 </div>
 
-                <div className="flex gap-2">
+                {/* Customer-facing quick actions */}
+                <div className="flex flex-wrap items-center gap-2">
                   <Link
-                    href="/analytics"
-                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-900 shadow-sm hover:bg-slate-50"
+                    href="/people/new"
+                    className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-slate-50 shadow-sm hover:bg-slate-800"
                   >
-                    Open analytics
+                    Add first employee
+                    <ArrowRight className="h-4 w-4" />
                   </Link>
-                  <a
-                    href={`${process.env.NEXT_PUBLIC_API_URL}/healthz`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-900 shadow-sm hover:bg-slate-50"
+                  <Link
+                    href="/jobs/new"
+                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50"
                   >
-                    API health
-                  </a>
+                    Create a role
+                  </Link>
                 </div>
               </div>
             </div>
@@ -148,43 +153,33 @@ export default async function DashboardPage() {
           <section className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.6fr)]">
             {/* Core numbers */}
             <div className="grid gap-4 sm:grid-cols-3">
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="text-xs text-slate-500">Headcount</div>
-                <div className="mt-1 text-2xl font-semibold text-slate-900">
-                  {employees}
-                </div>
-                <div className="mt-2 text-[11px] text-slate-500">
-                  Across {teams || 1} team{teams === 1 ? "" : "s"} ·
-                  <span className="ml-1 font-medium text-slate-700">
-                    avg {avgTeamSize || 0} people per team
-                  </span>
-                </div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="text-xs text-slate-500">Hiring load</div>
-                <div className="mt-1 text-2xl font-semibold text-slate-900">
-                  {openRoles}
-                </div>
-                <div className="mt-2 text-[11px] text-slate-500">
-                  That&apos;s approximately{" "}
-                  <span className="font-medium text-slate-700">
-                    {openRolesPer100 || 0} roles / 100 people
-                  </span>
-                  . Use this to sanity-check recruiting capacity.
-                </div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="text-xs text-slate-500">Engagement</div>
-                <div className="mt-1 text-2xl font-semibold text-slate-900">
-                  {eventsTotal}
-                </div>
-                <div className="mt-2 text-[11px] text-slate-500">
-                  Historical events in Intime ·
-                  <span className="ml-1 font-medium text-slate-700">
-                    ~{eventsPerEmployee || 0} events / employee
-                  </span>
-                </div>
-              </div>
+              <MetricCard
+                icon={<Users className="h-4 w-4" />}
+                label="Headcount"
+                value={employees}
+                helper={`Across ${teams || 1} team${
+                  teams === 1 ? "" : "s"
+                } · avg ${avgTeamSize || 0} people per team`}
+                state={employees === 0 ? "Getting started" : "Live"}
+              />
+              <MetricCard
+                icon={<Briefcase className="h-4 w-4" />}
+                label="Hiring load"
+                value={openRoles}
+                helper={`≈ ${openRolesPer100 || 0} roles / 100 people`}
+                state={openRoles === 0 ? "No open roles" : "Actively hiring"}
+              />
+              <MetricCard
+                icon={<CalendarClock className="h-4 w-4" />}
+                label="Engagement"
+                value={eventsTotal}
+                helper={
+                  employees > 0
+                    ? `~${eventsPerEmployee || 0} events / employee`
+                    : "Events logged in Intime"
+                }
+                state={eventsTotal === 0 ? "No events yet" : "In motion"}
+              />
             </div>
 
             {/* Today / this week from events */}
@@ -200,9 +195,9 @@ export default async function DashboardPage() {
 
               {recent.length === 0 ? (
                 <p className="text-sm text-slate-500">
-                  No recorded events in the last week yet. As you start logging
-                  hires, time off, and changes, this panel will highlight where
-                  activity is happening.
+                  No events in the last 7 days. As you start logging hires, time
+                  off, and changes, this panel shows where activity is picking
+                  up.
                 </p>
               ) : (
                 <div className="space-y-3">
@@ -225,13 +220,12 @@ export default async function DashboardPage() {
                       </span>
                     )}
                   </div>
-
                   <div className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-500">
-                    Use this to spot patterns: spikes in{" "}
+                    Spikes in{" "}
                     <span className="font-medium text-slate-700">
                       time off, new hires, or performance events
                     </span>{" "}
-                    will show up here as your team uses Intime.
+                    will stand out here as your team uses Intime.
                   </div>
                 </div>
               )}
@@ -239,55 +233,42 @@ export default async function DashboardPage() {
           </section>
 
           {/* Workspaces + AI + activity */}
-          <section className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1.5fr)]">
-            {/* Left column: AI + workspace links */}
+          <section className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1.6fr)]">
+            {/* Left column: workspaces + AI card */}
             <div className="space-y-4">
+              {/* Workspaces */}
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Workspaces
                 </div>
                 <div className="grid gap-2 text-xs">
-                  <Link
+                  <WorkspaceLink
                     href="/people"
-                    className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 hover:bg-slate-100"
-                  >
-                    <div>
-                      <div className="font-medium text-slate-900">People</div>
-                      <div className="text-[11px] text-slate-500">
-                        Directory, teams, reporting lines.
-                      </div>
-                    </div>
-                    <span className="text-[11px] text-slate-500">Open →</span>
-                  </Link>
-                  <Link
-                    href="/hiring"
-                    className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 hover:bg-slate-100"
-                  >
-                    <div>
-                      <div className="font-medium text-slate-900">Hiring</div>
-                      <div className="text-[11px] text-slate-500">
-                        Jobs, candidates, and AI Studio.
-                      </div>
-                    </div>
-                    <span className="text-[11px] text-slate-500">Open →</span>
-                  </Link>
-                  <Link
+                    title="People"
+                    description="Directory, teams, reporting lines."
+                    meta={`${employees} employees · ${teams} teams`}
+                  />
+                  <WorkspaceLink
+                    href="/jobs"
+                    title="Hiring"
+                    description="Jobs, candidates, and AI Studio."
+                    meta={`${openRoles} open roles`}
+                  />
+                  <WorkspaceLink
                     href="/timeoff"
-                    className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 hover:bg-slate-100"
-                  >
-                    <div>
-                      <div className="font-medium text-slate-900">Time off</div>
-                      <div className="text-[11px] text-slate-500">
-                        Policies, requests, and upcoming PTO.
-                      </div>
-                    </div>
-                    <span className="text-[11px] text-slate-500">Open →</span>
-                  </Link>
+                    title="Time off"
+                    description="Policies, requests, and upcoming PTO."
+                    meta="Time off policies"
+                  />
                 </div>
               </div>
 
-              {/* AI narrative card from your existing component */}
-              <AiInsightsCard />
+              {/* New AI Org Time Insights card */}
+              <AiOrgTimeInsights
+                employees={employees}
+                openRoles={openRoles}
+                eventsLast7Days={recent.length}
+              />
             </div>
 
             {/* Right column: recent activity */}
@@ -306,5 +287,150 @@ export default async function DashboardPage() {
         </main>
       </div>
     </AuthGate>
+  );
+}
+
+type MetricCardProps = {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  helper: string;
+  state: string;
+};
+
+function MetricCard({ icon, label, value, helper, state }: MetricCardProps) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-2 flex items-center justify-between">
+        <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-slate-700">
+            {icon}
+          </span>
+          {label}
+        </div>
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+          {state}
+        </span>
+      </div>
+      <div className="text-2xl font-semibold text-slate-900">{value}</div>
+      <p className="mt-1 text-[11px] text-slate-500">{helper}</p>
+    </div>
+  );
+}
+
+type WorkspaceLinkProps = {
+  href: string;
+  title: string;
+  description: string;
+  meta?: string;
+};
+
+function WorkspaceLink({
+  href,
+  title,
+  description,
+  meta,
+}: WorkspaceLinkProps) {
+  return (
+    <Link
+      href={href}
+      className="group flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 hover:bg-slate-100"
+    >
+      <div>
+        <div className="text-xs font-medium text-slate-900">{title}</div>
+        <div className="text-[11px] text-slate-500">{description}</div>
+        {meta && (
+          <div className="mt-0.5 text-[11px] text-slate-400">{meta}</div>
+        )}
+      </div>
+      <span className="text-[11px] font-medium text-slate-500 group-hover:text-slate-800">
+        Open →
+      </span>
+    </Link>
+  );
+}
+
+type AiOrgTimeInsightsProps = {
+  employees: number;
+  openRoles: number;
+  eventsLast7Days: number;
+};
+
+function AiOrgTimeInsights({
+  employees,
+  openRoles,
+  eventsLast7Days,
+}: AiOrgTimeInsightsProps) {
+  const hasActivity =
+    (employees ?? 0) > 0 || (openRoles ?? 0) > 0 || (eventsLast7Days ?? 0) > 0;
+
+  const headline = hasActivity
+    ? "Early activity across your org"
+    : "Quiet, pre-hiring phase";
+
+  const summary = hasActivity
+    ? "You’ve started to move. Intime highlights the next few actions so momentum doesn’t stall."
+    : "Nothing is in motion yet. Use this calm period to design your first hiring and onboarding motion.";
+
+  return (
+    <section className="relative overflow-hidden rounded-2xl bg-slate-900 p-4 text-slate-50 shadow-sm">
+      <div className="pointer-events-none absolute inset-0 opacity-40">
+        <div className="absolute -left-10 top-0 h-40 w-40 rounded-full bg-indigo-500 blur-3xl" />
+        <div className="absolute bottom-0 right-0 h-40 w-40 rounded-full bg-sky-400 blur-3xl" />
+      </div>
+
+      <div className="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="max-w-sm space-y-2">
+          <div className="inline-flex items-center gap-1 rounded-full bg-slate-800/80 px-2 py-1 text-[10px] font-medium">
+            <Sparkles className="h-3 w-3" />
+            AI org time insights
+          </div>
+          <h2 className="text-sm font-semibold">{headline}</h2>
+          <p className="text-xs text-slate-200/90">{summary}</p>
+          <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] text-slate-200/80">
+            <span className="rounded-full bg-slate-800/70 px-2 py-0.5">
+              {employees} people
+            </span>
+            <span className="rounded-full bg-slate-800/70 px-2 py-0.5">
+              {openRoles} open roles
+            </span>
+            <span className="rounded-full bg-slate-800/70 px-2 py-0.5">
+              {eventsLast7Days} events this week
+            </span>
+          </div>
+        </div>
+
+        <div className="relative mt-2 w-full max-w-xs rounded-xl bg-slate-950/40 p-3 text-[11px] sm:mt-0">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-300">
+              Suggested next steps
+            </span>
+          </div>
+          <ul className="space-y-1.5">
+            <InsightRow label="Define your first 3 roles." />
+            <InsightRow label="Draft a simple onboarding checklist." />
+            <InsightRow label="Decide on a basic PTO policy." />
+          </ul>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+type InsightRowProps = {
+  label: string;
+};
+
+function InsightRow({ label }: InsightRowProps) {
+  return (
+    <li className="flex items-center justify-between gap-2">
+      <span className="text-slate-100">{label}</span>
+      <button
+        type="button"
+        className="shrink-0 rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-50 hover:bg-slate-700"
+      >
+        Add as event
+      </button>
+    </li>
   );
 }
