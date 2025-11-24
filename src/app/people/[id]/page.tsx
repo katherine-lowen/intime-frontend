@@ -10,6 +10,7 @@ type EmployeeStatus = "ACTIVE" | "ON_LEAVE" | "CONTRACTOR" | "ALUMNI";
 
 type Employee = {
   id: string;
+  orgId?: string;
   firstName: string;
   lastName: string;
   email?: string | null;
@@ -92,15 +93,22 @@ function computeTenure(startDate?: string | null) {
   return `${diffYears} yr${diffYears === 1 ? "" : "s"}`;
 }
 
+// 🔹 Try /employees/:id first; if that fails, fall back to /employees and find by id.
+// This makes the profile page work as long as the directory works.
 async function getEmployee(id: string): Promise<Employee | null> {
   try {
     const data = await api.get<Employee>(`/employees/${id}`);
-    // backend might return null; guard against that
     if (!data) return null;
     return data;
   } catch (err) {
-    console.error("Failed to load employee", id, err);
-    return null;
+    console.error("Failed to load employee by id, falling back to list", err);
+    try {
+      const all = await api.get<Employee[]>("/employees");
+      return all.find((e) => e.id === id) ?? null;
+    } catch (err2) {
+      console.error("Fallback /employees list also failed", err2);
+      return null;
+    }
   }
 }
 
@@ -136,7 +144,6 @@ export default async function PersonPage({
   ]);
 
   if (!employee) {
-    // Defensive: never crash the whole app if employee is missing
     return (
       <AuthGate>
         <main className="px-8 py-16">
