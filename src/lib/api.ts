@@ -1,6 +1,5 @@
 // src/lib/api.ts
 
-// Normalize API_URL so it NEVER ends with a trailing slash
 const RAW_API_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8080";
 
@@ -9,70 +8,38 @@ export const API_URL = RAW_API_URL.replace(/\/+$/, "");
 export const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
 export const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "";
 
-console.log("[api.ts] Using API_URL:", API_URL);
-console.log("[api.ts] Using ORG_ID:", ORG_ID || "(none)");
-console.log("[api.ts] Has API_KEY:", API_KEY ? "yes" : "no");
-
-type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
-
-// Always joins paths safely → `/jobs` becomes `https://backend/jobs`
-function buildUrl(path: string) {
-  return `${API_URL}${path.startsWith("/") ? path : `/${path}`}`;
-}
-
-async function request<T>(
-  method: HttpMethod,
+export async function apiFetch<T>(
   path: string,
-  body?: unknown
+  method: "GET" | "POST" | "PATCH" | "DELETE" = "GET",
+  body?: any
 ): Promise<T> {
-  const url = buildUrl(path);
+  const url = `${API_URL}${path.startsWith("/") ? path : `/${path}`}`;
 
-  try {
-    const res = await fetch(url, {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        "X-Org-Id": ORG_ID,
-        "X-Api-Key": API_KEY,
-      },
-      body: body ? JSON.stringify(body) : undefined,
-      cache: "no-store",
-    });
+  const res = await fetch(url, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      "X-Org-Id": ORG_ID,
+      "X-Api-Key": API_KEY,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+    cache: "no-store",
+  });
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      console.error(
-        `[api.ts] API error`,
-        method,
-        url,
-        "status:",
-        res.status,
-        "body:",
-        text
-      );
-      throw new Error(`API ${method} ${path} failed: ${res.status}`);
-    }
-
-    return (await res.json()) as T;
-  } catch (err) {
-    console.error(`[api.ts] Fetch failed`, method, url, err);
-    throw err;
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("[api.ts] Error", method, url, "→", res.status, text);
+    throw new Error(`API ${method} ${path} failed: ${res.status}`);
   }
+
+  return (await res.json()) as T;
 }
 
 const api = {
-  get<T = any>(path: string) {
-    return request<T>("GET", path);
-  },
-  post<T = any>(path: string, body?: unknown) {
-    return request<T>("POST", path, body);
-  },
-  patch<T = any>(path: string, body?: unknown) {
-    return request<T>("PATCH", path, body);
-  },
-  del<T = any>(path: string) {
-    return request<T>("DELETE", path);
-  },
+  get: <T = any>(path: string) => apiFetch<T>(path, "GET"),
+  post: <T = any>(path: string, body?: any) => apiFetch<T>(path, "POST", body),
+  patch: <T = any>(path: string, body?: any) => apiFetch<T>(path, "PATCH", body),
+  del: <T = any>(path: string) => apiFetch<T>(path, "DELETE"),
 };
 
 export default api;
