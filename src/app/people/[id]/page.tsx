@@ -1,8 +1,8 @@
 // src/app/people/[id]/page.tsx
 import api from "@/lib/api";
-import { AuthGate } from "@/components/dev-auth-gate";
+import EventsTimeline from "@/components/events-timeline";
 import AiPeopleTimeline from "@/components/ai-people-timeline";
-import EmployeeTimeline from "@/components/employee-timeline";
+import { AuthGate } from "@/components/dev-auth-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,6 @@ type Employee = {
   location?: string | null;
   status?: EmployeeStatus | null;
   manager?: { id: string; firstName: string; lastName: string } | null;
-  startDate?: string | null;
   createdAt?: string;
 };
 
@@ -30,40 +29,23 @@ type EventItem = {
   createdAt?: string;
 };
 
-type TimeOffStatus = "REQUESTED" | "APPROVED" | "DENIED" | "CANCELLED";
-
-type TimeOffRequest = {
-  id: string;
-  type: string;
-  status: TimeOffStatus;
-  startDate: string;
-  endDate: string;
-};
-
 async function getEmployee(id: string): Promise<Employee | null> {
+  if (!id) return null;
+
   try {
     return await api.get<Employee>(`/employees/${id}`);
   } catch (err) {
-    console.error("Failed to load employee", err);
+    console.error(`[people/[id]] Failed to load employee ${id}`, err);
     return null;
   }
 }
 
 async function getEmployeeEvents(id: string): Promise<EventItem[]> {
+  if (!id) return [];
   try {
     return await api.get<EventItem[]>(`/events?employeeId=${id}`);
   } catch (err) {
-    console.error("Failed to load employee events", err);
-    return [];
-  }
-}
-
-async function getEmployeeTimeOff(id: string): Promise<TimeOffRequest[]> {
-  try {
-    // backend should support this filter; if not, it will just safely fail
-    return await api.get<TimeOffRequest[]>(`/timeoff/requests?employeeId=${id}`);
-  } catch (err) {
-    console.error("Failed to load employee time off", err);
+    console.error(`[people/[id]] Failed to load events for employee ${id}`, err);
     return [];
   }
 }
@@ -98,87 +80,47 @@ function statusClass(status?: EmployeeStatus | null) {
   }
 }
 
-function computeTenure(startDate?: string | null, createdAt?: string) {
-  const source = startDate ?? createdAt;
-  if (!source) return null;
+export default async function PersonPage({
+  params,
+}: {
+  // 👇 Next 16: params is a Promise, so we type it that way
+  params: Promise<{ id: string }>;
+}) {
+  // 👇 unwrap the promise
+  const { id } = await params;
 
-  const start = new Date(source);
-  if (Number.isNaN(start.getTime())) return null;
-
-  const now = new Date();
-  let months =
-    (now.getFullYear() - start.getFullYear()) * 12 +
-    (now.getMonth() - start.getMonth());
-
-  if (months < 0) months = 0;
-
-  const years = Math.floor(months / 12);
-  const remMonths = months % 12;
-
-  if (years === 0) {
-    return remMonths === 1 ? "1 month" : `${remMonths} months`;
+  // If somehow still missing, bail gracefully
+  if (!id) {
+    return (
+      <AuthGate>
+        <main className="mx-auto max-w-5xl px-6 py-8">
+          <h1 className="text-xl font-semibold text-slate-900">
+            Person not found
+          </h1>
+          <p className="mt-2 text-sm text-slate-600">
+            We couldn&apos;t find this person in the directory. The profile URL
+            is missing an employee id.
+          </p>
+        </main>
+      </AuthGate>
+    );
   }
 
-  if (remMonths === 0) {
-    return years === 1 ? "1 year" : `${years} years`;
-  }
-
-  const yearPart = years === 1 ? "1 year" : `${years} years`;
-  const monthPart = remMonths === 1 ? "1 month" : `${remMonths} months`;
-  return `${yearPart} ${monthPart}`;
-}
-
-function summarizeTimeOff(requests: TimeOffRequest[]) {
-  if (!requests.length) {
-    return {
-      upcoming: 0,
-      approvedThisYear: 0,
-      pending: 0,
-    };
-  }
-
-  const now = new Date();
-  const currentYear = now.getFullYear();
-
-  let upcoming = 0;
-  let approvedThisYear = 0;
-  let pending = 0;
-
-  for (const r of requests) {
-    const start = new Date(r.startDate);
-    if (r.status === "REQUESTED") {
-      pending += 1;
-    }
-    if (r.status === "APPROVED") {
-      if (start >= now) {
-        upcoming += 1;
-      }
-      if (start.getFullYear() === currentYear) {
-        approvedThisYear += 1;
-      }
-    }
-  }
-
-  return { upcoming, approvedThisYear, pending };
-}
-
-export default async function PersonPage({ params }: { params: { id: string } }) {
-  const { id } = params;
-
-  const [employee, events, timeoff] = await Promise.all([
+  const [employee, events] = await Promise.all([
     getEmployee(id),
     getEmployeeEvents(id),
-    getEmployeeTimeOff(id),
   ]);
 
   if (!employee) {
     return (
       <AuthGate>
-        <main className="mx-auto max-w-6xl px-8 py-10">
-          <h1 className="text-xl font-semibold text-slate-900">Person not found</h1>
+        <main className="mx-auto max-w-5xl px-6 py-8">
+          <h1 className="text-xl font-semibold text-slate-900">
+            Person not found
+          </h1>
           <p className="mt-2 text-sm text-slate-600">
-            We couldn&apos;t find this person in the directory. They may have been removed,
-            or there was an issue loading their record.
+            We couldn&apos;t find this person in the directory. They may have
+            been removed, or there was an issue loading their record.
           </p>
         </main>
       </AuthGate>
@@ -186,45 +128,41 @@ export default async function PersonPage({ params }: { params: { id: string } })
   }
 
   const fullName = `${employee.firstName} ${employee.lastName}`.trim();
-  const tenureLabel = computeTenure(employee.startDate, employee.createdAt);
-  const timeoffSummary = summarizeTimeOff(timeoff);
 
   return (
     <AuthGate>
-      <main className="mx-auto max-w-6xl space-y-8 px-6 py-8">
+      <main className="px-6 py-8 mx-auto max-w-5xl space-y-8">
         {/* HERO */}
-        <section className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-6 py-5 text-slate-50 shadow-sm md:flex-row md:items-center md:justify-between">
+        <section className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 to-indigo-50 p-6 shadow-sm md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-4">
-            {/* Avatar */}
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-700 text-lg font-semibold">
-              {employee.firstName?.[0]}
-              {employee.lastName?.[0]}
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-900 text-xl font-semibold text-white shadow">
+              {employee.firstName[0]}
+              {employee.lastName[0]}
             </div>
-
             <div className="space-y-1">
-              <h1 className="text-2xl font-semibold tracking-tight">
-                {fullName || "Unnamed person"}
+              <h1 className="text-3xl font-semibold text-slate-900">
+                {fullName}
               </h1>
-              <p className="text-xs text-slate-200/80">
+              <p className="text-sm text-slate-600">
                 {employee.title || "No title"}{" "}
-                {employee.department && <>· {employee.department}</>}{" "}
-                {employee.location && <>· {employee.location}</>}
+                {employee.department && <>• {employee.department}</>}{" "}
+                {employee.location && <>• {employee.location}</>}
               </p>
-
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 {employee.email && (
-                  <span className="rounded-full bg-slate-50/10 px-3 py-1 text-slate-100">
+                  <span className="rounded-full bg-white border border-slate-200 px-3 py-1 text-xs text-slate-700">
                     {employee.email}
                   </span>
                 )}
                 {employee.manager && (
-                  <span className="rounded-full bg-slate-50/10 px-3 py-1 text-slate-100">
-                    Reports to {employee.manager.firstName} {employee.manager.lastName}
+                  <span className="rounded-full bg-white border border-slate-200 px-3 py-1 text-xs text-slate-700">
+                    Reports to {employee.manager.firstName}{" "}
+                    {employee.manager.lastName}
                   </span>
                 )}
                 <span
                   className={[
-                    "inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-medium bg-slate-900/60",
+                    "inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-medium",
                     statusClass(employee.status),
                   ].join(" ")}
                 >
@@ -234,295 +172,105 @@ export default async function PersonPage({ params }: { params: { id: string } })
             </div>
           </div>
 
-          {/* Tenure pill */}
-          <div className="flex flex-col items-start gap-2 rounded-2xl bg-slate-950/40 px-4 py-3 text-xs text-slate-100 ring-1 ring-slate-700/60 md:items-end">
-            <div className="font-semibold">Tenure</div>
-            <div className="text-sm font-semibold">
-              {tenureLabel ?? "New to Intime"}
+          {/* Tenure card */}
+          <div className="rounded-2xl bg-slate-900 text-slate-50 px-4 py-3 text-xs w-full max-w-xs">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold">Tenure</span>
+              <span className="opacity-70">Demo data</span>
             </div>
-            <div className="space-y-0.5 text-[11px] text-slate-300">
-              {employee.startDate && (
-                <div>
-                  Start date:{" "}
-                  {new Date(employee.startDate).toLocaleDateString(undefined, {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
-                </div>
-              )}
-              {employee.createdAt && (
-                <div>
-                  Joined Intime:{" "}
-                  {new Date(employee.createdAt).toLocaleDateString(undefined, {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
-                </div>
-              )}
+            <div className="mt-1 text-lg font-semibold">6 months</div>
+            <div className="mt-2 space-y-0.5 opacity-80">
+              <div>Start date: 5/28/2025</div>
+              <div>
+                Joined Intime:{" "}
+                {employee.createdAt
+                  ? new Date(employee.createdAt).toLocaleDateString()
+                  : "Unknown"}
+              </div>
             </div>
           </div>
         </section>
 
-        {/* BODY LAYOUT: side menu + content */}
-        <section className="grid gap-8 md:grid-cols-[220px_minmax(0,1fr)]">
-          {/* LEFT: role information menu (Rippling-style) */}
-          <aside className="space-y-3 rounded-2xl border border-slate-200 bg-white px-3 py-4 text-sm text-slate-800 shadow-sm">
-            <div className="border-l-2 border-slate-900 pl-3 text-xs font-semibold uppercase tracking-wide text-slate-900">
-              Role information
+        {/* MAIN GRID */}
+        <section className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
+          {/* LEFT COLUMN */}
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h2 className="mb-3 text-sm font-semibold text-slate-900">
+                Job details
+              </h2>
+              <ul className="space-y-2 text-sm text-slate-700">
+                <li>
+                  <span className="font-medium">Title: </span>
+                  {employee.title || "Not set"}
+                </li>
+                <li>
+                  <span className="font-medium">Department: </span>
+                  {employee.department || "Not set"}
+                </li>
+                <li>
+                  <span className="font-medium">Location: </span>
+                  {employee.location || "Not set"}
+                </li>
+                <li>
+                  <span className="font-medium">Employee status: </span>
+                  {statusLabel(employee.status)}
+                </li>
+              </ul>
             </div>
 
-            <nav className="mt-2 space-y-1 text-xs text-slate-700">
-              <a href="#job" className="block rounded-md px-3 py-1 hover:bg-slate-50">
-                Personal & job info
-              </a>
-              <a href="#performance" className="block rounded-md px-3 py-1 hover:bg-slate-50">
-                Performance & review cycles
-              </a>
-              <a href="#timeoff" className="block rounded-md px-3 py-1 hover:bg-slate-50">
-                Time off & PTO
-              </a>
-              <a href="#docs" className="block rounded-md px-3 py-1 hover:bg-slate-50">
-                Documents & onboarding
-              </a>
-              <a href="#comp" className="block rounded-md px-3 py-1 hover:bg-slate-50">
-                Compensation snapshot
-              </a>
-              <a href="#systems" className="block rounded-md px-3 py-1 hover:bg-slate-50">
-                Systems & access
-              </a>
-              <a href="#timeline" className="block rounded-md px-3 py-1 hover:bg-slate-50">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h2 className="mb-3 text-sm font-semibold text-slate-900">
+                Contact
+              </h2>
+              <ul className="space-y-2 text-sm text-slate-700">
+                <li>
+                  <span className="font-medium">Email: </span>
+                  {employee.email || "Not set"}
+                </li>
+                <li>
+                  <span className="font-medium">Manager: </span>
+                  {employee.manager
+                    ? `${employee.manager.firstName} ${employee.manager.lastName}`
+                    : "None"}
+                </li>
+              </ul>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h2 className="mb-3 text-sm font-semibold text-slate-900">
+                Org details
+              </h2>
+              <ul className="space-y-2 text-sm text-slate-700">
+                <li>
+                  <span className="font-medium">Employee ID: </span>
+                  {employee.id}
+                </li>
+                <li>
+                  <span className="font-medium">Joined: </span>
+                  {employee.createdAt
+                    ? new Date(employee.createdAt).toLocaleDateString()
+                    : "Unknown"}
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          {/* RIGHT COLUMN */}
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h2 className="mb-3 text-sm font-semibold text-slate-900">
                 Activity timeline
-              </a>
-              <a href="#ai" className="block rounded-md px-3 py-1 hover:bg-slate-50">
+              </h2>
+              <EventsTimeline events={events} />
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h2 className="mb-3 text-sm font-semibold text-slate-900">
                 AI insights
-              </a>
-            </nav>
-          </aside>
-
-          {/* RIGHT: content sections */}
-          <div className="space-y-6">
-            {/* Job + personal info */}
-            <section
-              id="job"
-              className="grid gap-4 md:grid-cols-2"
-            >
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h2 className="text-sm font-semibold text-slate-900">
-                  Job & employment
-                </h2>
-                <dl className="mt-3 space-y-2 text-sm text-slate-700">
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-slate-500">Title</dt>
-                    <dd className="font-medium">
-                      {employee.title || "Not set"}
-                    </dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-slate-500">Department</dt>
-                    <dd className="font-medium">
-                      {employee.department || "Not set"}
-                    </dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-slate-500">Location</dt>
-                    <dd className="font-medium">
-                      {employee.location || "Not set"}
-                    </dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-slate-500">Employment status</dt>
-                    <dd className="font-medium">
-                      {statusLabel(employee.status)}
-                    </dd>
-                  </div>
-                </dl>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h2 className="text-sm font-semibold text-slate-900">
-                  Contact & reporting
-                </h2>
-                <dl className="mt-3 space-y-2 text-sm text-slate-700">
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-slate-500">Email</dt>
-                    <dd className="font-medium break-all">
-                      {employee.email || "Not set"}
-                    </dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-slate-500">Manager</dt>
-                    <dd className="font-medium">
-                      {employee.manager
-                        ? `${employee.manager.firstName} ${employee.manager.lastName}`
-                        : "None"}
-                    </dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-slate-500">Employee ID</dt>
-                    <dd className="font-medium">
-                      {employee.id}
-                    </dd>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-slate-500">Joined</dt>
-                    <dd className="font-medium">
-                      {employee.createdAt
-                        ? new Date(employee.createdAt).toLocaleDateString()
-                        : "Unknown"}
-                    </dd>
-                  </div>
-                </dl>
-              </div>
-            </section>
-
-            {/* Time off & PTO */}
-            <section
-              id="timeoff"
-              className="grid gap-4 md:grid-cols-2"
-            >
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h2 className="text-sm font-semibold text-slate-900">
-                  Time off & PTO
-                </h2>
-                <p className="mt-2 text-xs text-slate-500">
-                  High-level view of this person&apos;s time away from work.
-                </p>
-                <div className="mt-4 grid grid-cols-3 gap-3 text-center text-xs">
-                  <div className="rounded-xl border border-slate-100 bg-slate-50 px-2 py-3">
-                    <div className="text-[10px] text-slate-500">
-                      Upcoming trips
-                    </div>
-                    <div className="mt-1 text-lg font-semibold text-slate-900">
-                      {timeoffSummary.upcoming}
-                    </div>
-                  </div>
-                  <div className="rounded-xl border border-slate-100 bg-slate-50 px-2 py-3">
-                    <div className="text-[10px] text-slate-500">
-                      Approved this year
-                    </div>
-                    <div className="mt-1 text-lg font-semibold text-slate-900">
-                      {timeoffSummary.approvedThisYear}
-                    </div>
-                  </div>
-                  <div className="rounded-xl border border-slate-100 bg-slate-50 px-2 py-3">
-                    <div className="text-[10px] text-slate-500">
-                      Pending requests
-                    </div>
-                    <div className="mt-1 text-lg font-semibold text-slate-900">
-                      {timeoffSummary.pending}
-                    </div>
-                  </div>
-                </div>
-                {timeoff.length === 0 && (
-                  <p className="mt-3 text-xs text-slate-500">
-                    No time off requests on record yet for this person.
-                  </p>
-                )}
-              </div>
-
-              {/* Performance snapshot */}
-              <section
-                id="performance"
-                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-              >
-                <h2 className="text-sm font-semibold text-slate-900">
-                  Performance & review cycles
-                </h2>
-                <p className="mt-2 text-xs text-slate-500">
-                  Quick view of reviews, cycles, and feedback. You&apos;ll wire this
-                  to the performance module later.
-                </p>
-                <ul className="mt-3 space-y-1.5 text-xs text-slate-700">
-                  <li>• No performance reviews logged yet.</li>
-                  <li>• No active review cycles assigned.</li>
-                  <li>• Feedback and calibration will appear here over time.</li>
-                </ul>
-              </section>
-            </section>
-
-            {/* Docs, comp, systems */}
-            <section
-              id="docs"
-              className="grid gap-4 md:grid-cols-3"
-            >
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h2 className="text-sm font-semibold text-slate-900">
-                  Documents & onboarding
-                </h2>
-                <p className="mt-2 text-xs text-slate-500">
-                  Offer letters, NDAs, and onboarding paperwork will live here.
-                </p>
-                <p className="mt-3 text-xs text-slate-600">
-                  No employee documents attached yet.
-                </p>
-              </div>
-
-              <div
-                id="comp"
-                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-              >
-                <h2 className="text-sm font-semibold text-slate-900">
-                  Compensation snapshot
-                </h2>
-                <p className="mt-2 text-xs text-slate-500">
-                  High-level compensation info and ranges. This will eventually
-                  read from your payroll / comp connectors.
-                </p>
-                <p className="mt-3 text-xs text-slate-600">
-                  Compensation data not yet connected.
-                </p>
-              </div>
-
-              <div
-                id="systems"
-                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-              >
-                <h2 className="text-sm font-semibold text-slate-900">
-                  Systems & access
-                </h2>
-                <p className="mt-2 text-xs text-slate-500">
-                  Future home for app access, devices, and security settings.
-                </p>
-                <p className="mt-3 text-xs text-slate-600">
-                  No connected systems or devices yet.
-                </p>
-              </div>
-            </section>
-
-            {/* Timeline + AI insights */}
-            <section
-              id="timeline"
-              className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]"
-            >
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <h2 className="text-sm font-semibold text-slate-900">
-                  Activity timeline
-                </h2>
-                <p className="mt-1 text-xs text-slate-500">
-                  Events from hiring, time off, performance, and system activity.
-                </p>
-                <div className="mt-4">
-                  <EmployeeTimeline events={events} />
-                </div>
-              </div>
-
-              <div
-                id="ai"
-                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-              >
-                <h2 className="text-sm font-semibold text-slate-900">
-                  AI insights
-                </h2>
-                <p className="mt-1 text-xs text-slate-500">
-                  Narrative view of this person&apos;s role, workload, and risks.
-                </p>
-                <div className="mt-4">
-                  <AiPeopleTimeline employeeId={employee.id} />
-                </div>
-              </div>
-            </section>
+              </h2>
+              <AiPeopleTimeline employeeId={employee.id} />
+            </div>
           </div>
         </section>
       </main>
