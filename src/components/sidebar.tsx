@@ -18,10 +18,21 @@ type NavSection = {
 };
 
 const SECTIONS: NavSection[] = [
+  // ⭐ Favorites — inspired by Rippling
+  {
+    label: "Favorites",
+    items: [
+      { href: "/talent", label: "Talent overview", icon: "⭐" },
+      { href: "/hiring", label: "Recruiting workspace", icon: "📌" },
+      { href: "/timeoff", label: "Time off / PTO", icon: "🏝️" },
+    ],
+  },
+
   {
     label: "Overview",
     items: [{ href: "/dashboard", label: "Dashboard", icon: "🏠" }],
   },
+
   {
     label: "People",
     items: [
@@ -31,18 +42,33 @@ const SECTIONS: NavSection[] = [
       { href: "#", label: "Org chart", comingSoon: true, icon: "🗺️" },
     ],
   },
+
+  // TALENT becomes the full talent suite: recruiting + planning + reviews, etc.
   {
-    label: "Hiring",
+    label: "Talent",
     items: [
-      { href: "/hiring", label: "Hiring", icon: "📌" },
+      { href: "/talent", label: "Talent overview", icon: "⭐" },
+
+      // Recruiting stack
+      { href: "/hiring", label: "Recruiting", icon: "📌" },
       { href: "/jobs", label: "Jobs", icon: "📋" },
       { href: "/candidates", label: "Candidates", icon: "🧑‍💼" },
       { href: "/hiring/ai-studio", label: "AI Studio", icon: "✨" },
-      { href: "#", label: "Interview plans", comingSoon: true, icon: "📝" },
+
+      // Planning & performance 
+      { href: "/talent/headcount", label: "Headcount planning", icon: "👥" },
+      { href: "/talent/review-cycles", label: "Review cycles", icon: "📆" },
+      { href: "#", label: "1:1s", comingSoon: true, icon: "🤝" },
+      { href: "#", label: "Goals", comingSoon: true, icon: "🎯" },
+      { href: "#", label: "Learning management", comingSoon: true, icon: "🎓" },
+      { href: "#", label: "Surveys", comingSoon: true, icon: "😊" },
+      { href: "#", label: "Compensation bands", comingSoon: true, icon: "💰" },
     ],
   },
+
+  // Platform / operations-y stuff
   {
-    label: "Operations",
+    label: "Platform",
     items: [
       { href: "/operations", label: "Operations", icon: "⚙️" },
       { href: "/employee-documents", label: "Documents", icon: "📂" },
@@ -72,7 +98,7 @@ export function Sidebar({
       </div>
 
       {/* -------------------------------------
-          MOBILE SLIDE-IN SIDEBAR (Rippling-style)
+          MOBILE SLIDE-IN SIDEBAR
       --------------------------------------*/}
       <AnimatePresence>
         {open && (

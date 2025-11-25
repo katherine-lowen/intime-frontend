@@ -1,14 +1,22 @@
 // src/components/top-nav.tsx
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Menu, X } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  Menu,
+  X,
+  Search,
+  Bell,
+  HelpCircle,
+  Keyboard,
+  ArrowRight,
+} from "lucide-react";
 import ProfileMenu from "@/components/profile-menu";
 
 /* --------------------------------------
-   EXISTING LABEL META + CRUMB LOGIC
+   LABEL META + CRUMBS (same logic as before)
 --------------------------------------- */
 
 type LabelMeta = {
@@ -24,23 +32,37 @@ const BASE_LABELS: Record<string, LabelMeta> = {
   "/people": { title: "Directory", section: "People", subtitle: "Everyone in your org" },
   "/people/new": { title: "Add employee", section: "People", subtitle: "Create a new profile" },
 
-  "/jobs": { title: "Jobs", section: "Hiring", subtitle: "Open roles & pipelines" },
-  "/candidates": { title: "Candidates", section: "Hiring", subtitle: "Applicants & interviews" },
-  "/hiring": { title: "Hiring home", section: "Hiring", subtitle: "Hiring overview & AI tools" },
+  "/jobs": { title: "Jobs", section: "Talent", subtitle: "Open roles & pipelines" },
+  "/candidates": { title: "Candidates", section: "Talent", subtitle: "Applicants & interviews" },
+  "/hiring": { title: "Hiring home", section: "Talent", subtitle: "Recruiting workspace" },
+
   "/hiring/ai-studio": {
     title: "AI Studio",
-    section: "Hiring",
-    subtitle: "AI-native workflows for hiring",
+    section: "Talent",
+    subtitle: "AI-native workflows",
+  },
+
+  "/talent": {
+    title: "Talent overview",
+    section: "Talent",
+    subtitle: "Org-wide talent programs",
   },
 
   "/operations": {
     title: "Operations",
-    section: "Operations",
+    section: "Platform",
     subtitle: "Analytics & configuration",
   },
+
+  "/employee-documents": {
+    title: "Documents",
+    section: "Platform",
+    subtitle: "Employee files & records",
+  },
+
   "/settings": {
     title: "Settings",
-    section: "Operations",
+    section: "Platform",
     subtitle: "Org & workspace settings",
   },
 
@@ -53,28 +75,18 @@ type Crumb = { label: string; href?: string };
 function getMeta(pathname: string): LabelMeta {
   const basePath = pathname.split("?")[0];
 
-  if (BASE_LABELS[basePath]) {
-    return BASE_LABELS[basePath];
-  }
+  if (BASE_LABELS[basePath]) return BASE_LABELS[basePath];
 
   if (basePath.startsWith("/people/")) {
     return { title: "Person", section: "People", subtitle: "Employee profile" };
   }
 
-  if (basePath.startsWith("/hiring/ai-studio/")) {
-    return {
-      title: "AI Studio tool",
-      section: "Hiring",
-      subtitle: "AI workflow detail",
-    };
-  }
-
   if (basePath.startsWith("/jobs/")) {
-    return { title: "Job", section: "Hiring", subtitle: "Job detail" };
+    return { title: "Job", section: "Talent", subtitle: "Job detail" };
   }
 
   if (basePath.startsWith("/candidates/")) {
-    return { title: "Candidate", section: "Hiring", subtitle: "Candidate detail" };
+    return { title: "Candidate", section: "Talent", subtitle: "Candidate detail" };
   }
 
   return { title: "Workspace", section: "Intime", subtitle: "HR platform" };
@@ -84,199 +96,287 @@ function getCrumbs(pathname: string): Crumb[] {
   const path = pathname.split("?")[0];
   const segments = path.split("/").filter(Boolean);
 
-  // Root / dashboard
   if (segments.length === 0 || segments[0] === "dashboard") {
     return [{ label: "Overview", href: "/dashboard" }, { label: "Dashboard" }];
   }
 
-  const [first, second, third] = segments;
+  const [first] = segments;
 
-  // People
   if (first === "people") {
-    const crumbs: Crumb[] = [{ label: "People", href: "/people" }];
-    if (!second) {
-      crumbs.push({ label: "Directory" });
-    } else if (second === "new") {
-      crumbs.push({ label: "Add employee" });
-    } else {
-      crumbs.push({ label: "Person" });
-    }
-    return crumbs;
+    return [{ label: "People", href: "/people" }, { label: "Directory" }];
   }
 
-  // Hiring + AI Studio
   if (first === "hiring") {
-    const crumbs: Crumb[] = [{ label: "Hiring", href: "/hiring" }];
-
-    if (!second) {
-      return [...crumbs, { label: "Overview" }];
-    }
-
-    if (second === "ai-studio") {
-      crumbs.push({ label: "AI Studio", href: "/hiring/ai-studio" });
-
-      if (third === "job-intake") {
-        crumbs.push({ label: "Job intake" });
-      } else if (third === "job-description") {
-        crumbs.push({ label: "Job description" });
-      } else if (third === "candidate-summary") {
-        crumbs.push({ label: "Candidate summary" });
-      } else if (third === "performance-review") {
-        crumbs.push({ label: "Performance review" });
-      } else if (third === "onboarding-plan") {
-        crumbs.push({ label: "Onboarding plan" });
-      } else if (third === "resume-match") {
-        crumbs.push({ label: "Resume match" });
-      }
-
-      return crumbs;
-    }
-
-    return [...crumbs, { label: "Hiring" }];
+    return [{ label: "Talent", href: "/talent" }, { label: "Hiring" }];
   }
 
-  // Jobs
   if (first === "jobs") {
-    const crumbs: Crumb[] = [{ label: "Hiring", href: "/hiring" }];
-    if (!second) {
-      crumbs.push({ label: "Jobs" });
-    } else {
-      crumbs.push({ label: "Jobs", href: "/jobs" }, { label: "Job" });
-    }
-    return crumbs;
+    return [{ label: "Talent", href: "/talent" }, { label: "Jobs" }];
   }
 
-  // Candidates
   if (first === "candidates") {
-    const crumbs: Crumb[] = [{ label: "Hiring", href: "/hiring" }];
-    if (!second) {
-      crumbs.push({ label: "Candidates" });
-    } else {
-      crumbs.push({ label: "Candidates", href: "/candidates" }, { label: "Candidate" });
-    }
-    return crumbs;
+    return [{ label: "Talent", href: "/talent" }, { label: "Candidates" }];
   }
 
-  // Operations / Settings
-  if (first === "operations") {
-    return [{ label: "Operations", href: "/operations" }];
-  }
+  if (first === "talent") return [{ label: "Talent overview" }];
 
-  if (first === "settings") {
-    return [
-      { label: "Operations", href: "/operations" },
-      { label: "Settings" },
-    ];
-  }
+  if (first === "operations") return [{ label: "Operations" }];
 
-  // Fallback: just show segment name
-  return [{ label: "Workspace" }, { label: segments.join(" / ") }];
+  return [{ label: "Workspace" }];
 }
 
 /* --------------------------------------
-   MOBILE NAV SECTIONS (mirrors sidebar)
+   COMMAND PALETTE DATA
 --------------------------------------- */
 
-type NavItem = { href: string; label: string; comingSoon?: boolean; icon?: string };
-type NavSection = { label: string; items: NavItem[] };
+type CommandItem = {
+  label: string;
+  href: string;
+  group: string;
+  description?: string;
+  shortcut?: string;
+  icon?: string;
+  keywords?: string;
+};
 
-const MOBILE_SECTIONS: NavSection[] = [
+const COMMANDS: CommandItem[] = [
+  // Overview
   {
-    label: "Overview",
-    items: [{ href: "/dashboard", label: "Dashboard", icon: "🏠" }],
+    label: "Dashboard",
+    href: "/dashboard",
+    group: "Overview",
+    description: "Org-wide snapshot of people, jobs, and time",
+    icon: "🏠",
+    keywords: "home overview",
+  },
+
+  // People
+  {
+    label: "People directory",
+    href: "/people",
+    group: "People",
+    description: "View everyone in your org",
+    icon: "👥",
+    keywords: "employees staff directory",
   },
   {
-    label: "People",
-    items: [
-      { href: "/people", label: "Directory", icon: "👥" },
-      { href: "/timeoff", label: "Time off / PTO", icon: "🏝️" },
-    ],
+    label: "Time off / PTO",
+    href: "/timeoff",
+    group: "People",
+    description: "Policies, balances, and requests",
+    icon: "🏝️",
+    keywords: "pto vacation leave",
+  },
+
+  // Talent
+  {
+    label: "Talent overview",
+    href: "/talent",
+    group: "Talent",
+    description: "High-level view of talent programs",
+    icon: "⭐",
+    keywords: "talent hub",
   },
   {
-    label: "Hiring",
-    items: [
-      { href: "/hiring", label: "Hiring", icon: "📌" },
-      { href: "/jobs", label: "Jobs", icon: "📋" },
-      { href: "/candidates", label: "Candidates", icon: "🧑‍💼" },
-      { href: "/hiring/ai-studio", label: "AI Studio", icon: "✨" },
-    ],
+    label: "Recruiting workspace",
+    href: "/hiring",
+    group: "Talent",
+    description: "Jobs, pipelines, and interview flows",
+    icon: "📌",
+    keywords: "hiring ats",
   },
+  {
+    label: "Jobs",
+    href: "/jobs",
+    group: "Talent",
+    description: "Manage open roles and drafts",
+    icon: "📋",
+  },
+  {
+    label: "Candidates",
+    href: "/candidates",
+    group: "Talent",
+    description: "All applicants and their status",
+    icon: "🧑‍💼",
+  },
+  {
+    label: "AI Studio",
+    href: "/hiring/ai-studio",
+    group: "Talent",
+    description: "AI tools for job intake, summaries, and more",
+    icon: "✨",
+    keywords: "ai tools studio",
+  },
+  {
+    label: "Headcount planning",
+    href: "/talent/headcount",
+    group: "Talent",
+    description: "Forecast roles by team",
+    icon: "👥",
+  },
+  {
+    label: "Review cycles",
+    href: "/talent/review-cycles",
+    group: "Talent",
+    description: "Design performance review waves",
+    icon: "📆",
+  },
+
+  // Platform
   {
     label: "Operations",
-    items: [
-      { href: "/operations", label: "Operations", icon: "⚙️" },
-      { href: "/employee-documents", label: "Documents", icon: "📂" },
-      { href: "/settings", label: "Settings", icon: "⚙︎" },
-    ],
+    href: "/operations",
+    group: "Platform",
+    description: "HR operations & workflows",
+    icon: "⚙️",
+  },
+  {
+    label: "Employee documents",
+    href: "/employee-documents",
+    group: "Platform",
+    description: "Contracts, paperwork, and files",
+    icon: "📂",
+  },
+  {
+    label: "Settings",
+    href: "/settings",
+    group: "Platform",
+    description: "Org & workspace configuration",
+    icon: "⚙️",
   },
 ];
 
+/* --------------------------------------
+   TOP NAV + GLOBAL COMMAND PALETTE
+--------------------------------------- */
+
 export default function TopNav() {
+  const router = useRouter();
   const rawPath = usePathname();
   const pathname = rawPath ?? "/";
   const meta = getMeta(pathname);
   const crumbs = getCrumbs(pathname);
-  const [open, setOpen] = useState(false);
+
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // command palette state
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // keyboard shortcuts: ⌘K / Ctrl+K + Esc
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const isK = e.key.toLowerCase() === "k";
+      const isMeta = e.metaKey || e.ctrlKey;
+
+      if (isMeta && isK) {
+        e.preventDefault();
+        setPaletteOpen((prev) => !prev);
+        setQuery("");
+      }
+
+      if (e.key === "Escape") {
+        setPaletteOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  // focus input when palette opens
+  useEffect(() => {
+    if (paletteOpen && inputRef.current) {
+      setTimeout(() => inputRef.current?.focus(), 0);
+    }
+  }, [paletteOpen]);
+
+  const filteredCommands = useMemo(() => {
+    const q = query.toLowerCase().trim();
+    if (!q) return COMMANDS;
+    return COMMANDS.filter((cmd) => {
+      return (
+        cmd.label.toLowerCase().includes(q) ||
+        cmd.group.toLowerCase().includes(q) ||
+        (cmd.keywords && cmd.keywords.toLowerCase().includes(q))
+      );
+    });
+  }, [query]);
+
+  const handleSelect = (cmd: CommandItem) => {
+    setPaletteOpen(false);
+    setQuery("");
+    router.push(cmd.href);
+  };
 
   return (
     <>
-      <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 md:px-6">
-          {/* Left: mobile menu + breadcrumbs + title */}
-          <div className="flex items-center gap-3">
+      {/* TOP BAR */}
+      <header className="sticky top-0 z-40 bg-slate-900/90 backdrop-blur border-b border-slate-800">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 gap-4 md:gap-6">
+          {/* LEFT: MENU + BREADCRUMBS */}
+          <div className="flex items-center gap-3 flex-shrink-0">
             {/* Mobile hamburger */}
             <button
               type="button"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 md:hidden"
-              onClick={() => setOpen((prev) => !prev)}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800 md:hidden"
+              onClick={() => setMobileOpen((prev) => !prev)}
               aria-label="Toggle navigation"
             >
-              {open ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+              {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
             </button>
 
-            {/* Intime pill (desktop only) */}
-            <div className="hidden items-center gap-2 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold text-slate-50 shadow-sm md:flex">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              Intime
-              <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-300">
-                HRIS
-              </span>
-            </div>
-
-            {/* Breadcrumbs + title */}
-            <div className="flex flex-col">
-              <div className="flex flex-wrap items-center gap-1 text-[11px] text-slate-400">
-                {crumbs.map((crumb, idx) => (
-                  <span
-                    key={`${crumb.label}-${idx}`}
-                    className="inline-flex items-center gap-1"
-                  >
-                    <span>{crumb.label}</span>
-                    {idx < crumbs.length - 1 && (
-                      <span className="text-slate-300">/</span>
+            {/* Breadcrumbs + current title (desktop) */}
+            <div className="hidden md:flex flex-col">
+              <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                {crumbs.map((c, i) => (
+                  <span key={i} className="inline-flex items-center gap-1">
+                    {c.href ? (
+                      <Link href={c.href} className="hover:text-slate-300">
+                        {c.label}
+                      </Link>
+                    ) : (
+                      <span>{c.label}</span>
+                    )}
+                    {i < crumbs.length - 1 && (
+                      <span className="text-slate-600">/</span>
                     )}
                   </span>
                 ))}
               </div>
-
-              <div className="flex items-baseline gap-2">
-                <span className="text-sm font-semibold text-slate-900">
-                  {meta.title}
-                </span>
-                {meta.subtitle && (
-                  <span className="text-[11px] text-slate-400">
-                    · {meta.subtitle}
-                  </span>
-                )}
-              </div>
+              <span className="text-sm font-semibold text-white">
+                {meta.title}
+              </span>
             </div>
           </div>
 
-          {/* Right: tagline + profile */}
-          <div className="flex items-center gap-3">
-            <span className="hidden text-xs text-slate-400 md:inline">
-              Early access · Designed for modern HR teams
-            </span>
+          {/* CENTER: SEARCH TRIGGER (desktop) */}
+          <div className="hidden md:flex flex-1 justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                setPaletteOpen(true);
+                setQuery("");
+              }}
+              className="group relative flex w-full max-w-lg items-center gap-2 rounded-xl bg-slate-800/60 border border-slate-700 px-3 py-2 text-left text-sm text-slate-200 hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+            >
+              <Search className="h-4 w-4 text-slate-400" />
+              <span className="flex-1 text-xs text-slate-400 group-hover:text-slate-300">
+                Search or jump to…
+              </span>
+              <span className="hidden items-center gap-1 rounded-md border border-slate-600 px-1.5 py-0.5 text-[10px] text-slate-300 md:inline-flex">
+                ⌘K
+              </span>
+            </button>
+          </div>
+
+          {/* RIGHT: ICONS + PROFILE */}
+          <div className="flex items-center gap-4 flex-shrink-0">
+            <HelpCircle className="text-slate-300 h-4 w-4 hover:text-white cursor-pointer hidden md:block" />
+            <Keyboard className="text-slate-300 h-4 w-4 hover:text-white cursor-pointer hidden md:block" />
+            <Bell className="text-slate-300 h-4 w-4 hover:text-white cursor-pointer hidden md:block" />
+
             <ProfileMenu
               name="Katherine Soroka"
               email="katherine@hireintime.ai"
@@ -285,81 +385,89 @@ export default function TopNav() {
         </div>
       </header>
 
-      {/* Mobile slide-in nav (Rippling-ish) */}
-      {open && (
-        <>
-          {/* Overlay */}
-          <div
-            className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm md:hidden"
-            onClick={() => setOpen(false)}
-          />
-          {/* Drawer */}
-          <div className="fixed inset-y-0 left-0 z-50 w-72 bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900 text-slate-200 shadow-xl md:hidden">
-            <div className="flex items-center justify-between px-4 pt-4 pb-3">
-              <div className="inline-flex items-center gap-2 rounded-full bg-slate-800/80 px-3 py-1 text-[11px] font-semibold text-slate-100 shadow-sm">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                Intime
-                <span className="rounded-full bg-slate-900/80 px-2 py-0.5 text-[10px] font-medium text-slate-300">
-                  HR Platform
-                </span>
-              </div>
-              <button
-                type="button"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
-                onClick={() => setOpen(false)}
-                aria-label="Close navigation"
-              >
-                <X className="h-4 w-4" />
-              </button>
+      {/* GLOBAL COMMAND PALETTE OVERLAY */}
+      {paletteOpen && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 backdrop-blur-sm pt-24 px-4">
+          <div className="w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
+            {/* Input row */}
+            <div className="flex items-center gap-2 border-b border-slate-800 px-3 py-2.5">
+              <Search className="h-4 w-4 text-slate-400" />
+              <input
+                ref={inputRef}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search people, jobs, or workspaces…"
+                className="flex-1 bg-transparent text-sm text-slate-100 placeholder-slate-500 focus:outline-none"
+              />
+              <span className="hidden items-center gap-1 rounded-md border border-slate-600 px-1.5 py-0.5 text-[10px] text-slate-300 md:inline-flex">
+                Esc
+              </span>
             </div>
 
-            <nav className="flex h-[calc(100%-3.5rem)] flex-col gap-4 overflow-y-auto px-2 pb-4">
-              {MOBILE_SECTIONS.map((section) => (
-                <div key={section.label} className="space-y-1">
-                  <div className="px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    {section.label}
-                  </div>
-                  <div className="space-y-0.5">
-                    {section.items.map((item) => {
-                      const active =
-                        pathname === item.href ||
-                        pathname.startsWith(item.href + "/");
-
-                      const baseClasses =
-                        "group flex items-center justify-between rounded-xl px-3 py-2 text-sm transition";
-
-                      const stateClasses = active
-                        ? "bg-gradient-to-r from-indigo-500 to-sky-500 text-white shadow-sm"
-                        : "text-slate-300 hover:bg-slate-800/80 hover:text-white";
-
-                      return (
-                        <Link
-                          key={item.label}
-                          href={item.href}
-                          onClick={() => setOpen(false)}
-                          className={`${baseClasses} ${stateClasses}`}
-                        >
-                          <div className="flex items-center gap-2">
-                            {item.icon && (
-                              <span className="text-[15px] leading-none">
-                                {item.icon}
-                              </span>
-                            )}
-                            <span className="truncate">{item.label}</span>
-                          </div>
-                          <span className="text-[10px] text-slate-300">
-                            →
-                          </span>
-                        </Link>
-                      );
-                    })}
-                  </div>
+            {/* Results */}
+            <div className="max-h-80 overflow-y-auto px-2 py-2 text-xs">
+              {filteredCommands.length === 0 && (
+                <div className="px-3 py-4 text-slate-500">
+                  No matches yet. Try “jobs”, “talent”, or “time off”.
                 </div>
-              ))}
-            </nav>
+              )}
+
+              {filteredCommands.length > 0 && (
+                <div className="space-y-2">
+                  {["Overview", "People", "Talent", "Platform"].map((group) => {
+                    const groupItems = filteredCommands.filter(
+                      (c) => c.group === group
+                    );
+                    if (!groupItems.length) return null;
+
+                    return (
+                      <div key={group}>
+                        <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                          {group}
+                        </div>
+                        <ul className="space-y-1">
+                          {groupItems.map((cmd) => (
+                            <li key={cmd.href}>
+                              <button
+                                type="button"
+                                onClick={() => handleSelect(cmd)}
+                                className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs text-slate-100 hover:bg-slate-800/80"
+                              >
+                                <div className="flex items-center gap-3">
+                                  {cmd.icon && (
+                                    <span className="text-base leading-none">
+                                      {cmd.icon}
+                                    </span>
+                                  )}
+                                  <div className="flex flex-col">
+                                    <span className="font-medium">
+                                      {cmd.label}
+                                    </span>
+                                    {cmd.description && (
+                                      <span className="text-[11px] text-slate-400">
+                                        {cmd.description}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <ArrowRight className="h-3 w-3 text-slate-500" />
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
-        </>
+        </div>
       )}
+
+      {/* NOTE: mobile sidebar itself is still handled by the Sidebar component;
+          this file just keeps track of the hamburger's "open" state if you ever
+          want to wire it in. */}
     </>
   );
 }
