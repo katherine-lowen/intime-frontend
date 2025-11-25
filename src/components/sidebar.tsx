@@ -18,12 +18,39 @@ type NavSection = {
   items: NavItem[];
 };
 
+type FlyoutKey = "people" | "talent" | "platform" | null;
+
 type FlyoutItem = {
   href: string;
   label: string;
   description: string;
   icon: string;
 };
+
+/* -----------------------
+   Flyout contents
+------------------------ */
+
+const PEOPLE_FLYOUT_ITEMS: FlyoutItem[] = [
+  {
+    href: "/people",
+    label: "Directory",
+    description: "Everyone in your org, in one place.",
+    icon: "👥",
+  },
+  {
+    href: "/timeoff",
+    label: "Time off / PTO",
+    description: "Policies, balances, and requests.",
+    icon: "🏝️",
+  },
+  {
+    href: "#",
+    label: "Org chart",
+    description: "Visualize reporting lines. (Coming soon)",
+    icon: "🗺️",
+  },
+];
 
 const TALENT_FLYOUT_ITEMS: FlyoutItem[] = [
   {
@@ -64,6 +91,43 @@ const TALENT_FLYOUT_ITEMS: FlyoutItem[] = [
   },
 ];
 
+const PLATFORM_FLYOUT_ITEMS: FlyoutItem[] = [
+  {
+    href: "/operations",
+    label: "Operations",
+    description: "HR operations & workflows.",
+    icon: "⚙️",
+  },
+  {
+    href: "/employee-documents",
+    label: "Employee documents",
+    description: "Contracts, paperwork, and files.",
+    icon: "📂",
+  },
+  {
+    href: "/settings",
+    label: "Company settings",
+    description: "Org & workspace configuration.",
+    icon: "⚙︎",
+  },
+  {
+    href: "#",
+    label: "Analytics",
+    description: "Org-wide reporting and insights. (Coming soon)",
+    icon: "📈",
+  },
+  {
+    href: "#",
+    label: "Help",
+    description: "Guides, FAQs, and support. (Coming soon)",
+    icon: "❓",
+  },
+];
+
+/* -----------------------
+   Sidebar sections
+------------------------ */
+
 const SECTIONS: NavSection[] = [
   {
     label: "Favorites",
@@ -79,7 +143,7 @@ const SECTIONS: NavSection[] = [
     label: "Workspace",
     items: [
       { href: "/dashboard", label: "Home", icon: "🏠" },
-      { href: "/people", label: "People", icon: "👥" },
+      { href: "/people", label: "People", icon: "👥" }, // People flyout anchor
       { href: "/hiring", label: "Hire", icon: "📌" },
       { href: "#", label: "Org chart", comingSoon: true, icon: "🗺️" },
     ],
@@ -97,7 +161,7 @@ const SECTIONS: NavSection[] = [
   {
     label: "Talent",
     items: [
-      { href: "/talent", label: "Talent hub", icon: "⭐" }, // flyout lives on this
+      { href: "/talent", label: "Talent hub", icon: "⭐" }, // Talent flyout anchor
       { href: "/hiring", label: "Recruiting workspace", icon: "📌" },
     ],
   },
@@ -105,12 +169,16 @@ const SECTIONS: NavSection[] = [
   {
     label: "Platform",
     items: [
-      { href: "/operations", label: "Operations", icon: "⚙️" },
+      { href: "/operations", label: "Operations", icon: "⚙️" }, // Platform flyout anchor
       { href: "/settings", label: "Company settings", icon: "⚙︎" },
       { href: "#", label: "Help", comingSoon: true, icon: "❓" },
     ],
   },
 ];
+
+/* -----------------------
+   Sidebar root
+------------------------ */
 
 export function Sidebar({
   open,
@@ -168,7 +236,12 @@ function SidebarContent({
   pathname: string;
   onClose?: () => void;
 }) {
-  const [hoveredFlyout, setHoveredFlyout] = useState<null | "talent">(null);
+  const [hoveredFlyout, setHoveredFlyout] = useState<FlyoutKey>(null);
+
+  const openFlyout = (key: FlyoutKey) => setHoveredFlyout(key);
+  const closeFlyout = (key: FlyoutKey) => {
+    if (hoveredFlyout === key) setHoveredFlyout(null);
+  };
 
   return (
     <div className="flex min-h-full flex-col gap-5 bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900 text-slate-200">
@@ -201,7 +274,9 @@ function SidebarContent({
                   (pathname === item.href ||
                     pathname.startsWith(item.href + "/"));
 
+                const isPeopleHub = item.href === "/people";
                 const isTalentHub = item.href === "/talent";
+                const isPlatformHub = item.href === "/operations";
 
                 const baseClasses =
                   "group flex items-center justify-between rounded-xl px-3 py-2 text-sm transition";
@@ -210,15 +285,23 @@ function SidebarContent({
                   ? "bg-gradient-to-r from-indigo-500 to-sky-500 text-white shadow-sm"
                   : "text-slate-300 hover:bg-slate-800/80 hover:text-white";
 
+                const flyoutKey: FlyoutKey = isPeopleHub
+                  ? "people"
+                  : isTalentHub
+                  ? "talent"
+                  : isPlatformHub
+                  ? "platform"
+                  : null;
+
                 return (
                   <div
                     key={item.label}
                     className="relative"
                     onMouseEnter={() => {
-                      if (isTalentHub) setHoveredFlyout("talent");
+                      if (flyoutKey) openFlyout(flyoutKey);
                     }}
                     onMouseLeave={() => {
-                      if (isTalentHub) setHoveredFlyout(null);
+                      if (flyoutKey) closeFlyout(flyoutKey);
                     }}
                   >
                     <Link
@@ -250,43 +333,18 @@ function SidebarContent({
                       )}
                     </Link>
 
-                    {/* Talent flyout (desktop only) */}
-                    {isTalentHub && hoveredFlyout === "talent" && (
-                      <div className="pointer-events-none absolute left-full top-0 hidden h-full md:block">
-                        <div className="pointer-events-auto ml-2 w-72 rounded-2xl border border-slate-700 bg-slate-950/95 p-3 text-xs text-slate-100 shadow-2xl">
-                          <div className="mb-2 flex items-center justify-between">
-                            <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-                              Talent workspace
-                            </span>
-                            <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] text-slate-300">
-                              Apps
-                            </span>
-                          </div>
-                          <div className="space-y-1">
-                            {TALENT_FLYOUT_ITEMS.map((fly) => (
-                              <Link
-                                key={fly.href}
-                                href={fly.href}
-                                className="flex items-start justify-between gap-2 rounded-xl px-2 py-1.5 text-left hover:bg-slate-800/80"
-                              >
-                                <div className="flex items-start gap-2">
-                                  <span className="mt-0.5 text-base">
-                                    {fly.icon}
-                                  </span>
-                                  <div className="flex flex-col">
-                                    <span className="text-[11px] font-medium text-slate-50">
-                                      {fly.label}
-                                    </span>
-                                    <span className="text-[11px] text-slate-400">
-                                      {fly.description}
-                                    </span>
-                                  </div>
-                                </div>
-                              </Link>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
+                    {/* Desktop flyouts */}
+                    {flyoutKey && hoveredFlyout === flyoutKey && (
+                      <Flyout
+                        kind={flyoutKey}
+                        items={
+                          flyoutKey === "people"
+                            ? PEOPLE_FLYOUT_ITEMS
+                            : flyoutKey === "talent"
+                            ? TALENT_FLYOUT_ITEMS
+                            : PLATFORM_FLYOUT_ITEMS
+                        }
+                      />
                     )}
                   </div>
                 );
@@ -304,7 +362,61 @@ function SidebarContent({
   );
 }
 
+/* -----------------------
+   Flyout component
+------------------------ */
+
+function Flyout({
+  kind,
+  items,
+}: {
+  kind: Exclude<FlyoutKey, null>;
+  items: FlyoutItem[];
+}) {
+  const title =
+    kind === "people"
+      ? "People"
+      : kind === "talent"
+      ? "Talent workspace"
+      : "Platform";
+
+  return (
+    <div className="pointer-events-none absolute left-full top-0 hidden h-full md:block">
+      <div className="pointer-events-auto ml-2 w-72 rounded-2xl border border-slate-700 bg-slate-950/95 p-3 text-xs text-slate-100 shadow-2xl">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+            {title}
+          </span>
+          <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] text-slate-300">
+            Apps
+          </span>
+        </div>
+        <div className="space-y-1">
+          {items.map((fly) => (
+            <Link
+              key={fly.href + fly.label}
+              href={fly.href}
+              className="flex items-start gap-2 rounded-xl px-2 py-1.5 text-left hover:bg-slate-800/80"
+            >
+              <span className="mt-0.5 text-base">{fly.icon}</span>
+              <div className="flex flex-col">
+                <span className="text-[11px] font-medium text-slate-50">
+                  {fly.label}
+                </span>
+                <span className="text-[11px] text-slate-400">
+                  {fly.description}
+                </span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* Desktop and Mobile wrappers */
+
 function DesktopSidebar({ pathname }: { pathname: string }) {
   return <SidebarContent pathname={pathname} />;
 }
