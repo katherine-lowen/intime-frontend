@@ -1,6 +1,7 @@
 // src/components/sidebar.tsx
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -17,64 +18,96 @@ type NavSection = {
   items: NavItem[];
 };
 
+type FlyoutItem = {
+  href: string;
+  label: string;
+  description: string;
+  icon: string;
+};
+
+const TALENT_FLYOUT_ITEMS: FlyoutItem[] = [
+  {
+    href: "/hiring",
+    label: "Recruiting workspace",
+    description: "Jobs, pipelines, and interview flows.",
+    icon: "📌",
+  },
+  {
+    href: "/jobs",
+    label: "Jobs",
+    description: "Manage open roles and drafts.",
+    icon: "📋",
+  },
+  {
+    href: "/candidates",
+    label: "Candidates",
+    description: "Track applicants and interview progress.",
+    icon: "🧑‍💼",
+  },
+  {
+    href: "/talent/headcount",
+    label: "Headcount planning",
+    description: "Forecast roles by team.",
+    icon: "👥",
+  },
+  {
+    href: "/talent/review-cycles",
+    label: "Review cycles",
+    description: "Design and run performance waves.",
+    icon: "📆",
+  },
+  {
+    href: "/hiring/ai-studio",
+    label: "AI Studio",
+    description: "AI tools for intake, JDs, and summaries.",
+    icon: "✨",
+  },
+];
+
 const SECTIONS: NavSection[] = [
-  // ⭐ Favorites — inspired by Rippling
   {
     label: "Favorites",
     items: [
-      { href: "/talent", label: "Talent overview", icon: "⭐" },
-      { href: "/hiring", label: "Recruiting workspace", icon: "📌" },
-      { href: "/timeoff", label: "Time off / PTO", icon: "🏝️" },
+      { href: "/dashboard", label: "Home", icon: "🏠" },
+      { href: "/talent", label: "Talent", icon: "⭐" },
+      { href: "/hiring", label: "Recruiting", icon: "📌" },
+      { href: "/timeoff", label: "Time off", icon: "🏝️" },
     ],
   },
 
   {
-    label: "Overview",
-    items: [{ href: "/dashboard", label: "Dashboard", icon: "🏠" }],
-  },
-
-  {
-    label: "People",
+    label: "Workspace",
     items: [
-      { href: "/people", label: "Directory", icon: "👥" },
-      { href: "#", label: "Performance", comingSoon: true, icon: "📊" },
-      { href: "/timeoff", label: "Time off / PTO", icon: "🏝️" },
+      { href: "/dashboard", label: "Home", icon: "🏠" },
+      { href: "/people", label: "People", icon: "👥" },
+      { href: "/hiring", label: "Hire", icon: "📌" },
       { href: "#", label: "Org chart", comingSoon: true, icon: "🗺️" },
     ],
   },
 
-  // TALENT becomes the full talent suite: recruiting + planning + reviews, etc.
   {
-    label: "Talent",
+    label: "People products",
     items: [
-      { href: "/talent", label: "Talent overview", icon: "⭐" },
-
-      // Recruiting stack
-      { href: "/hiring", label: "Recruiting", icon: "📌" },
-      { href: "/jobs", label: "Jobs", icon: "📋" },
-      { href: "/candidates", label: "Candidates", icon: "🧑‍💼" },
-      { href: "/hiring/ai-studio", label: "AI Studio", icon: "✨" },
-
-      // Planning & performance 
-      { href: "/talent/headcount", label: "Headcount planning", icon: "👥" },
-      { href: "/talent/review-cycles", label: "Review cycles", icon: "📆" },
-      { href: "#", label: "1:1s", comingSoon: true, icon: "🤝" },
-      { href: "#", label: "Goals", comingSoon: true, icon: "🎯" },
-      { href: "#", label: "Learning management", comingSoon: true, icon: "🎓" },
-      { href: "#", label: "Surveys", comingSoon: true, icon: "😊" },
-      { href: "#", label: "Compensation bands", comingSoon: true, icon: "💰" },
+      { href: "/timeoff", label: "Time", icon: "🏝️" },
+      { href: "/employee-documents", label: "Documents", icon: "📂" },
+      { href: "#", label: "Analytics", comingSoon: true, icon: "📈" },
     ],
   },
 
-  // Platform / operations-y stuff
+  {
+    label: "Talent",
+    items: [
+      { href: "/talent", label: "Talent hub", icon: "⭐" }, // flyout lives on this
+      { href: "/hiring", label: "Recruiting workspace", icon: "📌" },
+    ],
+  },
+
   {
     label: "Platform",
     items: [
       { href: "/operations", label: "Operations", icon: "⚙️" },
-      { href: "/employee-documents", label: "Documents", icon: "📂" },
-      { href: "#", label: "Analytics", comingSoon: true, icon: "📈" },
-      { href: "#", label: "Payroll", comingSoon: true, icon: "💸" },
-      { href: "#", label: "Settings", comingSoon: true, icon: "⚙︎" },
+      { href: "/settings", label: "Company settings", icon: "⚙︎" },
+      { href: "#", label: "Help", comingSoon: true, icon: "❓" },
     ],
   },
 ];
@@ -88,22 +121,18 @@ export function Sidebar({
 }) {
   const pathname = usePathname() ?? "";
 
-  /* -------------------------------
-     DESKTOP VERSION (always visible)
-  --------------------------------*/
   return (
     <>
+      {/* Desktop sidebar */}
       <div className="hidden w-64 md:flex md:flex-col">
         <DesktopSidebar pathname={pathname} />
       </div>
 
-      {/* -------------------------------------
-          MOBILE SLIDE-IN SIDEBAR
-      --------------------------------------*/}
+      {/* Mobile slide-in sidebar */}
       <AnimatePresence>
         {open && (
           <>
-            {/* Background overlay */}
+            {/* Overlay */}
             <motion.div
               className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm md:hidden"
               onClick={onClose}
@@ -112,7 +141,7 @@ export function Sidebar({
               exit={{ opacity: 0 }}
             />
 
-            {/* Sliding drawer */}
+            {/* Drawer */}
             <motion.div
               className="fixed left-0 top-0 z-50 h-full w-72 md:hidden"
               initial={{ x: -300 }}
@@ -139,6 +168,8 @@ function SidebarContent({
   pathname: string;
   onClose?: () => void;
 }) {
+  const [hoveredFlyout, setHoveredFlyout] = useState<null | "talent">(null);
+
   return (
     <div className="flex min-h-full flex-col gap-5 bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900 text-slate-200">
       {/* Brand */}
@@ -170,6 +201,8 @@ function SidebarContent({
                   (pathname === item.href ||
                     pathname.startsWith(item.href + "/"));
 
+                const isTalentHub = item.href === "/talent";
+
                 const baseClasses =
                   "group flex items-center justify-between rounded-xl px-3 py-2 text-sm transition";
 
@@ -178,35 +211,84 @@ function SidebarContent({
                   : "text-slate-300 hover:bg-slate-800/80 hover:text-white";
 
                 return (
-                  <Link
+                  <div
                     key={item.label}
-                    href={isRealLink ? item.href : pathname || "/"}
-                    onClick={onClose}
-                    aria-disabled={!isRealLink}
-                    className={[
-                      baseClasses,
-                      stateClasses,
-                      !isRealLink &&
-                        "cursor-default opacity-60 hover:bg-transparent",
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
+                    className="relative"
+                    onMouseEnter={() => {
+                      if (isTalentHub) setHoveredFlyout("talent");
+                    }}
+                    onMouseLeave={() => {
+                      if (isTalentHub) setHoveredFlyout(null);
+                    }}
                   >
-                    <div className="flex items-center gap-2">
-                      {item.icon && (
-                        <span className="text-[15px] leading-none">
-                          {item.icon}
+                    <Link
+                      href={isRealLink ? item.href : pathname || "/"}
+                      onClick={onClose}
+                      aria-disabled={!isRealLink}
+                      className={[
+                        baseClasses,
+                        stateClasses,
+                        !isRealLink &&
+                          "cursor-default opacity-60 hover:bg-transparent",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                    >
+                      <div className="flex items-center gap-2">
+                        {item.icon && (
+                          <span className="text-[15px] leading-none">
+                            {item.icon}
+                          </span>
+                        )}
+                        <span className="truncate">{item.label}</span>
+                      </div>
+
+                      {item.comingSoon && (
+                        <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-200">
+                          Coming soon
                         </span>
                       )}
-                      <span className="truncate">{item.label}</span>
-                    </div>
+                    </Link>
 
-                    {item.comingSoon && (
-                      <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-200">
-                        Coming soon
-                      </span>
+                    {/* Talent flyout (desktop only) */}
+                    {isTalentHub && hoveredFlyout === "talent" && (
+                      <div className="pointer-events-none absolute left-full top-0 hidden h-full md:block">
+                        <div className="pointer-events-auto ml-2 w-72 rounded-2xl border border-slate-700 bg-slate-950/95 p-3 text-xs text-slate-100 shadow-2xl">
+                          <div className="mb-2 flex items-center justify-between">
+                            <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                              Talent workspace
+                            </span>
+                            <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] text-slate-300">
+                              Apps
+                            </span>
+                          </div>
+                          <div className="space-y-1">
+                            {TALENT_FLYOUT_ITEMS.map((fly) => (
+                              <Link
+                                key={fly.href}
+                                href={fly.href}
+                                className="flex items-start justify-between gap-2 rounded-xl px-2 py-1.5 text-left hover:bg-slate-800/80"
+                              >
+                                <div className="flex items-start gap-2">
+                                  <span className="mt-0.5 text-base">
+                                    {fly.icon}
+                                  </span>
+                                  <div className="flex flex-col">
+                                    <span className="text-[11px] font-medium text-slate-50">
+                                      {fly.label}
+                                    </span>
+                                    <span className="text-[11px] text-slate-400">
+                                      {fly.description}
+                                    </span>
+                                  </div>
+                                </div>
+                              </Link>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
                     )}
-                  </Link>
+                  </div>
                 );
               })}
             </div>
