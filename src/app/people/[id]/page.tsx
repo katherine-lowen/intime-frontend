@@ -2,9 +2,8 @@
 import api from "@/lib/api";
 import EventsTimeline from "@/components/events-timeline";
 import AiPeopleTimeline from "@/components/ai-people-timeline";
+import Link from "next/link";
 import { AuthGate } from "@/components/dev-auth-gate";
-
-export const dynamic = "force-dynamic";
 
 type EmployeeStatus = "ACTIVE" | "ON_LEAVE" | "CONTRACTOR" | "ALUMNI";
 
@@ -15,10 +14,8 @@ type Employee = {
   email?: string | null;
   title?: string | null;
   department?: string | null;
-  location?: string | null;
-  status?: EmployeeStatus | null;
+  status?: EmployeeStatus;
   manager?: { id: string; firstName: string; lastName: string } | null;
-  createdAt?: string;
 };
 
 type EventItem = {
@@ -29,250 +26,291 @@ type EventItem = {
   createdAt?: string;
 };
 
-async function getEmployee(id: string): Promise<Employee | null> {
-  if (!id) return null;
+type OnboardingFlowStatus = "DRAFT" | "ACTIVE" | "COMPLETE" | "ARCHIVED";
 
-  try {
-    return await api.get<Employee>(`/employees/${id}`);
-  } catch (err) {
-    console.error(`[people/[id]] Failed to load employee ${id}`, err);
-    return null;
-  }
+type OnboardingTaskStatus = "PENDING" | "IN_PROGRESS" | "DONE" | "SKIPPED";
+
+type OnboardingTask = {
+  id: string;
+  title: string;
+  status: OnboardingTaskStatus;
+};
+
+type OnboardingFlow = {
+  id: string;
+  status: OnboardingFlowStatus;
+  startDate?: string | null;
+  targetDate?: string | null;
+  employee: Employee;
+  tasks: OnboardingTask[];
+};
+
+async function getEmployee(id: string): Promise<Employee> {
+  return api.get<Employee>(`/employees/${id}`);
 }
 
 async function getEmployeeEvents(id: string): Promise<EventItem[]> {
-  if (!id) return [];
-  try {
-    return await api.get<EventItem[]>(`/events?employeeId=${id}`);
-  } catch (err) {
-    console.error(`[people/[id]] Failed to load events for employee ${id}`, err);
-    return [];
+  return api.get<EventItem[]>(`/events?employeeId=${id}`);
+}
+
+async function getEmployeeOnboardingFlow(
+  employeeId: string,
+): Promise<OnboardingFlow | null> {
+  // Simple approach: fetch all flows and find the one for this employee
+  const flows = await api.get<OnboardingFlow[]>("/onboarding/flows");
+  return flows.find((f) => f.employee?.id === employeeId) ?? null;
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString();
+}
+
+function flowStatusLabel(status: OnboardingFlowStatus) {
+  switch (status) {
+    case "DRAFT":
+      return "Draft";
+    case "ACTIVE":
+      return "In progress";
+    case "COMPLETE":
+      return "Completed";
+    case "ARCHIVED":
+      return "Archived";
+    default:
+      return status;
   }
 }
 
-function statusLabel(status?: EmployeeStatus | null) {
+function flowStatusClasses(status: OnboardingFlowStatus) {
   switch (status) {
+    case "DRAFT":
+      return "bg-slate-100 text-slate-700";
     case "ACTIVE":
-      return "Active";
-    case "ON_LEAVE":
-      return "On leave";
-    case "CONTRACTOR":
-      return "Contractor";
-    case "ALUMNI":
-      return "Alumni";
-    default:
-      return "Unknown";
+      return "bg-emerald-100 text-emerald-700";
+    case "COMPLETE":
+      return "bg-indigo-100 text-indigo-700";
+    case "ARCHIVED":
+      return "bg-slate-100 text-slate-500";
   }
 }
 
-function statusClass(status?: EmployeeStatus | null) {
-  switch (status) {
-    case "ACTIVE":
-      return "bg-emerald-50 text-emerald-700 border-emerald-200";
-    case "ON_LEAVE":
-      return "bg-amber-50 text-amber-700 border-amber-200";
-    case "CONTRACTOR":
-      return "bg-sky-50 text-sky-700 border-sky-200";
-    case "ALUMNI":
-      return "bg-slate-50 text-slate-600 border-slate-200";
-    default:
-      return "bg-slate-50 text-slate-500 border-slate-200";
-  }
-}
+export const dynamic = "force-dynamic";
 
 export default async function PersonPage({
   params,
 }: {
-  // 👇 Next 16: params is a Promise, so we type it that way
-  params: Promise<{ id: string }>;
+  params: { id: string };
 }) {
-  // 👇 unwrap the promise
-  const { id } = await params;
+  const { id } = params;
 
-  // If somehow still missing, bail gracefully
-  if (!id) {
-    return (
-      <AuthGate>
-        <main className="mx-auto max-w-5xl px-6 py-8">
-          <h1 className="text-xl font-semibold text-slate-900">
-            Person not found
-          </h1>
-          <p className="mt-2 text-sm text-slate-600">
-            We couldn&apos;t find this person in the directory. The profile URL
-            is missing an employee id.
-          </p>
-        </main>
-      </AuthGate>
-    );
-  }
-
-  const [employee, events] = await Promise.all([
+  const [employee, events, flow] = await Promise.all([
     getEmployee(id),
     getEmployeeEvents(id),
+    getEmployeeOnboardingFlow(id),
   ]);
 
-  if (!employee) {
-    return (
-      <AuthGate>
-        <main className="mx-auto max-w-5xl px-6 py-8">
-          <h1 className="text-xl font-semibold text-slate-900">
-            Person not found
-          </h1>
-          <p className="mt-2 text-sm text-slate-600">
-            We couldn&apos;t find this person in the directory. They may have
-            been removed, or there was an issue loading their record.
-          </p>
-        </main>
-      </AuthGate>
-    );
-  }
+  const fullName = `${employee.firstName} ${employee.lastName}`;
+  const subtitleParts: string[] = [];
+  if (employee.title) subtitleParts.push(employee.title);
+  if (employee.department) subtitleParts.push(employee.department);
+  const subtitle = subtitleParts.join(" • ");
 
-  const fullName = `${employee.firstName} ${employee.lastName}`.trim();
+  let onboardingProgress: { done: number; total: number; percent: number } = {
+    done: 0,
+    total: 0,
+    percent: 0,
+  };
+
+  if (flow) {
+    const total = flow.tasks.length;
+    const done = flow.tasks.filter((t) => t.status === "DONE").length;
+    onboardingProgress = {
+      done,
+      total,
+      percent: total > 0 ? Math.round((done / total) * 100) : 0,
+    };
+  }
 
   return (
     <AuthGate>
-      <main className="px-6 py-8 mx-auto max-w-5xl space-y-8">
-        {/* HERO */}
-        <section className="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 to-indigo-50 p-6 shadow-sm md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-900 text-xl font-semibold text-white shadow">
-              {employee.firstName[0]}
-              {employee.lastName[0]}
-            </div>
-            <div className="space-y-1">
-              <h1 className="text-3xl font-semibold text-slate-900">
-                {fullName}
-              </h1>
-              <p className="text-sm text-slate-600">
-                {employee.title || "No title"}{" "}
-                {employee.department && <>• {employee.department}</>}{" "}
-                {employee.location && <>• {employee.location}</>}
-              </p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                {employee.email && (
-                  <span className="rounded-full bg-white border border-slate-200 px-3 py-1 text-xs text-slate-700">
-                    {employee.email}
-                  </span>
-                )}
-                {employee.manager && (
-                  <span className="rounded-full bg-white border border-slate-200 px-3 py-1 text-xs text-slate-700">
-                    Reports to {employee.manager.firstName}{" "}
-                    {employee.manager.lastName}
-                  </span>
-                )}
-                <span
-                  className={[
-                    "inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-medium",
-                    statusClass(employee.status),
-                  ].join(" ")}
-                >
-                  {statusLabel(employee.status)}
+      <main className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-8">
+        {/* Header */}
+        <header className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <Link
+              href="/people"
+              className="text-xs text-indigo-600 hover:underline"
+            >
+              ← Back to Directory
+            </Link>
+
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">
+              {fullName}
+            </h1>
+            <p className="text-sm text-slate-600">
+              {subtitle || "Team member"}
+            </p>
+
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+              {employee.status && (
+                <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-700">
+                  {employee.status.toLowerCase().replace("_", " ")}
                 </span>
+              )}
+              {employee.manager && (
+                <span>
+                  Manager:{" "}
+                  <Link
+                    href={`/people/${employee.manager.id}`}
+                    className="text-indigo-600 hover:underline"
+                  >
+                    {employee.manager.firstName} {employee.manager.lastName}
+                  </Link>
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col items-end gap-2 text-xs">
+            {employee.email && (
+              <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] text-slate-700">
+                {employee.email}
+              </div>
+            )}
+            <Link
+              href={`/onboarding/new?employeeId=${employee.id}`}
+              className="inline-flex items-center rounded-full border border-slate-200 bg-slate-900 px-3 py-1 text-[11px] font-semibold text-slate-50 shadow-sm hover:bg-black"
+            >
+              Start onboarding
+            </Link>
+          </div>
+        </header>
+
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1.4fr)]">
+          {/* Left: events + AI timeline */}
+          <section className="space-y-4">
+            <div className="rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-sm">
+              <h2 className="text-sm font-semibold text-slate-900">
+                Timeline
+              </h2>
+              <p className="text-xs text-slate-500">
+                Key events, changes, and activity for this employee.
+              </p>
+              <div className="mt-3">
+                <EventsTimeline events={events as any[]} />
               </div>
             </div>
-          </div>
 
-          {/* Tenure card */}
-          <div className="rounded-2xl bg-slate-900 text-slate-50 px-4 py-3 text-xs w-full max-w-xs">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold">Tenure</span>
-              <span className="opacity-70">Demo data</span>
-            </div>
-            <div className="mt-1 text-lg font-semibold">6 months</div>
-            <div className="mt-2 space-y-0.5 opacity-80">
-              <div>Start date: 5/28/2025</div>
-              <div>
-                Joined Intime:{" "}
-                {employee.createdAt
-                  ? new Date(employee.createdAt).toLocaleDateString()
-                  : "Unknown"}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* MAIN GRID */}
-        <section className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
-          {/* LEFT COLUMN */}
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-3 text-sm font-semibold text-slate-900">
-                Job details
-              </h2>
-              <ul className="space-y-2 text-sm text-slate-700">
-                <li>
-                  <span className="font-medium">Title: </span>
-                  {employee.title || "Not set"}
-                </li>
-                <li>
-                  <span className="font-medium">Department: </span>
-                  {employee.department || "Not set"}
-                </li>
-                <li>
-                  <span className="font-medium">Location: </span>
-                  {employee.location || "Not set"}
-                </li>
-                <li>
-                  <span className="font-medium">Employee status: </span>
-                  {statusLabel(employee.status)}
-                </li>
-              </ul>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-3 text-sm font-semibold text-slate-900">
-                Contact
-              </h2>
-              <ul className="space-y-2 text-sm text-slate-700">
-                <li>
-                  <span className="font-medium">Email: </span>
-                  {employee.email || "Not set"}
-                </li>
-                <li>
-                  <span className="font-medium">Manager: </span>
-                  {employee.manager
-                    ? `${employee.manager.firstName} ${employee.manager.lastName}`
-                    : "None"}
-                </li>
-              </ul>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-3 text-sm font-semibold text-slate-900">
-                Org details
-              </h2>
-              <ul className="space-y-2 text-sm text-slate-700">
-                <li>
-                  <span className="font-medium">Employee ID: </span>
-                  {employee.id}
-                </li>
-                <li>
-                  <span className="font-medium">Joined: </span>
-                  {employee.createdAt
-                    ? new Date(employee.createdAt).toLocaleDateString()
-                    : "Unknown"}
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          {/* RIGHT COLUMN */}
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-3 text-sm font-semibold text-slate-900">
-                Activity timeline
-              </h2>
-              <EventsTimeline events={events} />
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-3 text-sm font-semibold text-slate-900">
-                AI insights
-              </h2>
+             <div className="rounded-2xl border border-slate-200 bg-white/95 p-4 text-xs shadow-sm">
               <AiPeopleTimeline employeeId={employee.id} />
             </div>
-          </div>
-        </section>
+
+          </section>
+
+          {/* Right: onboarding panel + quick info */}
+          <section className="space-y-4">
+            <div className="rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-sm">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-900">
+                    Onboarding
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    First 30–90 days view for this employee.
+                  </p>
+                </div>
+                {flow && (
+                  <span
+                    className={[
+                      "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                      flowStatusClasses(flow.status),
+                    ].join(" ")}
+                  >
+                    {flowStatusLabel(flow.status)}
+                  </span>
+                )}
+              </div>
+
+              {!flow ? (
+                <div className="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50/80 px-3 py-3 text-xs text-slate-600">
+                  <p>
+                    No onboarding flow exists yet for {fullName}. Start one to
+                    keep their first weeks structured.
+                  </p>
+                  <Link
+                    href={`/onboarding/new?employeeId=${employee.id}`}
+                    className="mt-2 inline-flex items-center text-[11px] font-medium text-indigo-600 hover:underline"
+                  >
+                    Start onboarding flow →
+                  </Link>
+                </div>
+              ) : (
+                <div className="mt-4 space-y-3 text-xs text-slate-600">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="text-[11px] font-medium text-slate-600">
+                        Progress
+                      </div>
+                      <div className="text-xs text-slate-700">
+                        {onboardingProgress.done}/{onboardingProgress.total}{" "}
+                        tasks ({onboardingProgress.percent}%)
+                      </div>
+                    </div>
+                    <div className="h-1.5 w-32 overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className="h-full rounded-full bg-indigo-500 transition-all"
+                        style={{ width: `${onboardingProgress.percent}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <div className="text-[11px] font-medium text-slate-600">
+                        Start date
+                      </div>
+                      <div className="text-xs text-slate-700">
+                        {formatDate(flow.startDate)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-medium text-slate-600">
+                        Target date
+                      </div>
+                      <div className="text-xs text-slate-700">
+                        {formatDate(flow.targetDate)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <Link
+                    href={`/onboarding/${flow.id}`}
+                    className="mt-2 inline-flex items-center text-[11px] font-medium text-indigo-600 hover:underline"
+                  >
+                    Open onboarding checklist →
+                  </Link>
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-4 text-[11px] text-slate-600">
+              <div className="font-semibold text-slate-900">People data</div>
+              <ul className="mt-1 list-disc space-y-1 pl-4">
+                <li>Connect this profile to payroll and time off policies.</li>
+                <li>
+                  Use events and reviews to highlight promotion readiness and
+                  risk.
+                </li>
+                <li>
+                  Soon: link onboarding, reviews, and goals for full lifecycle
+                  insights.
+                </li>
+              </ul>
+            </div>
+          </section>
+        </div>
       </main>
     </AuthGate>
   );
