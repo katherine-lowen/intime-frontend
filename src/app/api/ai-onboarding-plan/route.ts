@@ -1,139 +1,154 @@
 // src/app/api/ai-onboarding-plan/route.ts
-import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-type AnyRecord = Record<string, any>;
+type EmployeeInput = {
+  firstName: string;
+  lastName: string;
+  title?: string | null;
+  department?: string | null;
+};
 
-type OnboardingPlan = {
-  headline: string;
-  startDateHint?: string;
-  phases: {
-    label: string;
-    timeframe?: string;
-    goals?: string[];
-    tasks?: string[];
-  }[];
+type ExistingTaskInput = {
+  label: string;
+  status: string;
 };
 
 type RequestBody = {
-  employee: AnyRecord;
-  roleContext?: string;
-  events?: AnyRecord[];
+  employee?: EmployeeInput;
+  tasks?: ExistingTaskInput[];
+  mode?: "suggestions" | "flowTemplate";
 };
 
 export async function POST(req: Request) {
-  if (!process.env.OPENAI_API_KEY) {
-    return NextResponse.json(
-      { error: "Missing OPENAI_API_KEY in environment" },
-      { status: 500 }
-    );
-  }
-
-  let body: RequestBody;
   try {
-    body = (await req.json()) as RequestBody;
-  } catch {
-    return NextResponse.json(
-      { error: "Invalid JSON body" },
-      { status: 400 }
-    );
-  }
+    const body = (await req.json()) as RequestBody;
 
-  const { employee, roleContext, events } = body || {};
+    const { employee, tasks = [], mode = "flowTemplate" } = body;
 
-  if (!employee) {
-    return NextResponse.json(
-      { error: "Field 'employee' is required" },
-      { status: 400 }
-    );
-  }
+    const existingTasksBlock =
+      tasks.length === 0
+        ? "- (none yet)"
+        : tasks
+            .map((t, i) => `- ${i + 1}. ${t.label} [${t.status}]`)
+            .join("\n");
 
-  const prompt = `
-You are an HR business partner at a mid-market B2B SaaS company.
+    const persona =
+      mode === "flowTemplate"
+        ? "You are an HRIS assistant designing a concrete onboarding PLAN with relative due dates."
+        : "You are an HRIS assistant suggesting additional onboarding tasks.";
 
-You will receive:
-- An employee record as JSON (name, title, department, status, manager, start date, etc.)
-- Optional role / team context
-- Optional prior events (onboarding actions already taken)
+    const instruction =
+      mode === "flowTemplate"
+        ? `
+Return a JSON object with a single property "suggestions" which is an array of tasks.
 
-Your job is to create a clear, pragmatic onboarding plan for this employee with:
-- Day 1 checklist
-- First week (Days 2–5)
-- First 30 days
-- Days 31–60
-- Days 61–90
+Each task must be an object with:
+- "title": short task name
+- "description": one-sentence practical description
+- "assigneeType": one of "EMPLOYEE", "MANAGER", "HR", "OTHER"
+- "when": short phrase like "Day 1", "Week 1", "First month"
+- "dueRelativeDays": integer, number of days relative to the employee's start date
+  (0 = start date, positive = days after start, negative = days before)
 
-Focus on:
-- What the EMPLOYEE should do
-- What their MANAGER should do
-- What HR / People Ops should do
-- Meetings, docs to review, tools to get access to, people to meet, early wins
+Only output valid JSON. Do not include any explanatory text.`
+        : `
+Return a JSON object with a single property "suggestions" which is an array of tasks.
 
-Return ONLY a JSON object in this exact shape:
+Each task should be an object with:
+- "title": short task name
+- "description": one-sentence practical description
+- "assigneeType": one of "EMPLOYEE", "MANAGER", "HR", "OTHER"
+- "when": short phrase like "Day 1", "Week 1", "First month"
+- "dueRelativeDays": integer days relative to start date (if you can infer it; otherwise use 0–10).`;
 
-{
-  "headline": "short 1-sentence summary of the onboarding focus",
-  "startDateHint": "if possible, a short suggestion about ideal start day / ramp expectations",
-  "phases": [
-    {
-      "label": "Day 1",
-      "timeframe": "First day",
-      "goals": ["goal", "goal"],
-      "tasks": ["Employee: ...", "Manager: ...", "People Ops: ..."]
-    }
-  ]
-}
+    const prompt = `
+${persona}
 
-Make sure tasks are concrete, not fluffy. Assume this is a modern remote-friendly company.
+Employee (if known):
+- Name: ${employee ? `${employee.firstName} ${employee.lastName}` : "Unknown"}
+- Title: ${employee?.title ?? "Unknown"}
+- Department: ${employee?.department ?? "Unknown"}
 
-Employee JSON:
-${JSON.stringify(employee, null, 2)}
+Existing tasks:
+${existingTasksBlock}
 
-Role context (optional):
-${roleContext || "None provided"}
-
-Existing events (optional, may be empty):
-${JSON.stringify((events || []).slice(0, 40), null, 2)}
+${instruction}
 `;
 
-  try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      response_format: { type: "json_object" },
-      temperature: 0.4,
+      model: "gpt-4.1-mini",
       messages: [
         {
           role: "system",
           content:
-            "You are a pragmatic, non-fluffy HR business partner. You always respond with a single valid JSON object as specified.",
+            "You are an HRIS assistant creating onboarding suggestions in JSON only.",
         },
-        {
-          role: "user",
-          content: prompt,
-        },
+        { role: "user", content: prompt },
       ],
+      response_format: { type: "json_object" },
     });
 
-    const content = completion.choices[0]?.message?.content ?? "{}";
-    const parsed = JSON.parse(content) as OnboardingPlan;
+    const raw = completion.choices[0]?.message?.content ?? "{}";
 
-    return NextResponse.json(
+    let parsed: any = {};
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      // if model returns an array directly
+      if (raw.trim().startsWith("[")) {
+        parsed = { suggestions: JSON.parse(raw) };
+      } else {
+        parsed = { suggestions: [] };
+      }
+    }
+
+    const suggestions = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray(parsed.suggestions)
+      ? parsed.suggestions
+      : [];
+
+    const normalized = suggestions.map((s: any) => ({
+      title: String(s.title ?? "").slice(0, 200),
+      description:
+        typeof s.description === "string" ? s.description.slice(0, 500) : "",
+      assigneeType:
+        s.assigneeType === "MANAGER" ||
+        s.assigneeType === "HR" ||
+        s.assigneeType === "OTHER"
+          ? s.assigneeType
+          : "EMPLOYEE",
+      when: typeof s.when === "string" ? s.when : undefined,
+      dueRelativeDays:
+        typeof s.dueRelativeDays === "number"
+          ? Math.round(s.dueRelativeDays)
+          : 0,
+    }));
+
+    return new Response(
+      JSON.stringify({
+        suggestions: normalized,
+      }),
       {
-        headline: parsed.headline ?? "",
-        startDateHint: parsed.startDateHint ?? "",
-        phases: Array.isArray(parsed.phases) ? parsed.phases : [],
+        status: 200,
+        headers: { "Content-Type": "application/json" },
       },
-      { status: 200 }
     );
   } catch (err) {
     console.error("AI onboarding plan error", err);
-    return NextResponse.json(
-      { error: "Failed to generate onboarding plan" },
-      { status: 500 }
+    return new Response(
+      JSON.stringify({
+        suggestions: [],
+        error: "AI onboarding plan failed",
+      }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      },
     );
   }
 }

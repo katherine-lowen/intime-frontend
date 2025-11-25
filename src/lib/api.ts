@@ -1,45 +1,60 @@
 // src/lib/api.ts
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
 
-const RAW_API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8080";
+const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID || "demo-org";
 
-export const API_URL = RAW_API_URL.replace(/\/+$/, "");
-
-export const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
-export const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "";
-
-export async function apiFetch<T>(
+async function apiFetch<T>(
   path: string,
-  method: "GET" | "POST" | "PATCH" | "DELETE" = "GET",
-  body?: any
+  options: RequestInit & { jsonBody?: unknown } = {}
 ): Promise<T> {
-  const url = `${API_URL}${path.startsWith("/") ? path : `/${path}`}`;
+  const base = API_BASE_URL.replace(/\/$/, "");
+  const url = `${base}${path.startsWith("/") ? path : `/${path}`}`;
+
+  const { jsonBody, headers, ...rest } = options;
+
+  const finalHeaders: HeadersInit = {
+    "Content-Type": "application/json",
+    "x-org-id": ORG_ID,
+    ...(headers || {}),
+  };
 
   const res = await fetch(url, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      "X-Org-Id": ORG_ID,
-      "X-Api-Key": API_KEY,
-    },
-    body: body ? JSON.stringify(body) : undefined,
+    ...rest,
+    headers: finalHeaders,
+    body:
+      jsonBody !== undefined
+        ? JSON.stringify(jsonBody)
+        : (rest.body as BodyInit | null | undefined),
     cache: "no-store",
   });
 
   if (!res.ok) {
     const text = await res.text();
-    console.error("[api.ts] Error", method, url, "→", res.status, text);
-    throw new Error(`API ${method} ${path} failed: ${res.status}`);
+    console.error("[api.ts] Error", options.method || "GET", url, "→", res.status, text);
+    throw new Error(`API ${options.method || "GET"} ${path} failed: ${res.status}`);
+  }
+
+  // Handle 204 No Content
+  if (res.status === 204) {
+    return undefined as T;
   }
 
   return (await res.json()) as T;
 }
 
 const api = {
-  get: <T = any>(path: string) => apiFetch<T>(path, "GET"),
-  post: <T = any>(path: string, body?: any) => apiFetch<T>(path, "POST", body),
-  patch: <T = any>(path: string, body?: any) => apiFetch<T>(path, "PATCH", body),
-  del: <T = any>(path: string) => apiFetch<T>(path, "DELETE"),
+  get: <T>(path: string) =>
+    apiFetch<T>(path, { method: "GET" }),
+
+  post: <T>(path: string, body?: unknown) =>
+    apiFetch<T>(path, { method: "POST", jsonBody: body }),
+
+  patch: <T>(path: string, body?: unknown) =>
+    apiFetch<T>(path, { method: "PATCH", jsonBody: body }),
+
+  del: <T>(path: string) =>
+    apiFetch<T>(path, { method: "DELETE" }),
 };
 
 export default api;

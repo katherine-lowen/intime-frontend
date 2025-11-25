@@ -31,12 +31,19 @@ type FlyoutItem = {
    Flyout contents
 ------------------------ */
 
+// People hub: directory, onboarding, PTO, org chart, performance
 const PEOPLE_FLYOUT_ITEMS: FlyoutItem[] = [
   {
     href: "/people",
     label: "Directory",
     description: "Everyone in your org, in one place.",
     icon: "👥",
+  },
+  {
+    href: "/onboarding",
+    label: "Onboarding",
+    description: "Track new hire flows and checklists.",
+    icon: "🧭",
   },
   {
     href: "/timeoff",
@@ -50,9 +57,22 @@ const PEOPLE_FLYOUT_ITEMS: FlyoutItem[] = [
     description: "Visualize reporting lines. (Coming soon)",
     icon: "🗺️",
   },
+  {
+    href: "#",
+    label: "Performance",
+    description: "Reviews and feedback cycles. (Coming soon)",
+    icon: "📊",
+  },
 ];
 
+// Talent hub: recruiting + planning + templates
 const TALENT_FLYOUT_ITEMS: FlyoutItem[] = [
+  {
+    href: "/talent",
+    label: "Talent overview",
+    description: "Headcount, performance, and engagement in one view.",
+    icon: "⭐",
+  },
   {
     href: "/hiring",
     label: "Recruiting workspace",
@@ -72,15 +92,21 @@ const TALENT_FLYOUT_ITEMS: FlyoutItem[] = [
     icon: "🧑‍💼",
   },
   {
+    href: "/onboarding/templates",
+    label: "Onboarding templates",
+    description: "Reusable checklists for role-based onboarding.",
+    icon: "🧩",
+  },
+  {
     href: "/talent/headcount",
     label: "Headcount planning",
-    description: "Forecast roles by team.",
+    description: "Forecast roles and hiring by team. (Coming soon)",
     icon: "👥",
   },
   {
     href: "/talent/review-cycles",
     label: "Review cycles",
-    description: "Design and run performance waves.",
+    description: "Design and run performance waves. (Coming soon)",
     icon: "📆",
   },
   {
@@ -91,11 +117,12 @@ const TALENT_FLYOUT_ITEMS: FlyoutItem[] = [
   },
 ];
 
+// Platform hub: operations, docs, settings, analytics
 const PLATFORM_FLYOUT_ITEMS: FlyoutItem[] = [
   {
     href: "/operations",
     label: "Operations",
-    description: "HR operations & workflows.",
+    description: "HR operations, workflows, and insights.",
     icon: "⚙️",
   },
   {
@@ -113,7 +140,7 @@ const PLATFORM_FLYOUT_ITEMS: FlyoutItem[] = [
   {
     href: "#",
     label: "Analytics",
-    description: "Org-wide reporting and insights. (Coming soon)",
+    description: "Org-wide reporting and metrics. (Coming soon)",
     icon: "📈",
   },
   {
@@ -126,52 +153,45 @@ const PLATFORM_FLYOUT_ITEMS: FlyoutItem[] = [
 
 /* -----------------------
    Sidebar sections
+   (clean, non-duplicative)
 ------------------------ */
 
 const SECTIONS: NavSection[] = [
   {
-    label: "Favorites",
-    items: [
-      { href: "/dashboard", label: "Home", icon: "🏠" },
-      { href: "/talent", label: "Talent", icon: "⭐" },
-      { href: "/hiring", label: "Recruiting", icon: "📌" },
-      { href: "/timeoff", label: "Time off", icon: "🏝️" },
-    ],
+    label: "Overview",
+    items: [{ href: "/dashboard", label: "Home", icon: "🏠" }],
   },
 
   {
-    label: "Workspace",
+    label: "People",
     items: [
-      { href: "/dashboard", label: "Home", icon: "🏠" },
-      { href: "/people", label: "People", icon: "👥" }, // People flyout anchor
-      { href: "/hiring", label: "Hire", icon: "📌" },
-      { href: "#", label: "Org chart", comingSoon: true, icon: "🗺️" },
-    ],
-  },
-
-  {
-    label: "People products",
-    items: [
-      { href: "/timeoff", label: "Time", icon: "🏝️" },
-      { href: "/employee-documents", label: "Documents", icon: "📂" },
-      { href: "#", label: "Analytics", comingSoon: true, icon: "📈" },
+      // Flyout anchor
+      { href: "/people", label: "People hub", icon: "👥" },
+      // Key quick-links
+      { href: "/onboarding", label: "Onboarding", icon: "🧭" },
+      { href: "/timeoff", label: "Time off / PTO", icon: "🏝️" },
     ],
   },
 
   {
     label: "Talent",
     items: [
-      { href: "/talent", label: "Talent hub", icon: "⭐" }, // Talent flyout anchor
-      { href: "/hiring", label: "Recruiting workspace", icon: "📌" },
+      // Flyout anchor
+      { href: "/talent", label: "Talent hub", icon: "⭐" },
+      // Key quick-links
+      { href: "/hiring", label: "Recruiting", icon: "📌" },
+      { href: "/onboarding/templates", label: "Onboarding templates", icon: "🧩" },
     ],
   },
 
   {
     label: "Platform",
     items: [
-      { href: "/operations", label: "Operations", icon: "⚙️" }, // Platform flyout anchor
-      { href: "/settings", label: "Company settings", icon: "⚙︎" },
-      { href: "#", label: "Help", comingSoon: true, icon: "❓" },
+      // Flyout anchor
+      { href: "/operations", label: "Operations", icon: "⚙️" },
+      // Essentials
+      { href: "/employee-documents", label: "Documents", icon: "📂" },
+      { href: "/settings", label: "Settings", icon: "⚙︎" },
     ],
   },
 ];
