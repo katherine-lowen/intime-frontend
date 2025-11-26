@@ -1,7 +1,8 @@
+// src/components/timeoff-requests-table.tsx
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
 
 export type TimeOffStatus =
   | "REQUESTED"
@@ -9,7 +10,7 @@ export type TimeOffStatus =
   | "DENIED"
   | "CANCELLED";
 
-export type TimeOffType =
+type TimeOffType =
   | "PTO"
   | "SICK"
   | "PERSONAL"
@@ -17,211 +18,239 @@ export type TimeOffType =
   | "JURY_DUTY"
   | "PARENTAL_LEAVE";
 
+type TimeOffPolicyKind = "UNLIMITED" | "FIXED";
+
 export type TimeOffRequestItem = {
   id: string;
-  orgId: string;
-  employeeId: string;
-  policyId?: string | null;
-  type: TimeOffType;
+  type?: TimeOffType | null;
   status: TimeOffStatus;
   startDate: string;
   endDate: string;
   reason?: string | null;
-  managerId?: string | null;
-  createdAt: string;
-  updatedAt: string;
-  employee: {
+  employee?: {
     id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    email?: string | null;
     department?: string | null;
-  };
-  manager?: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
   } | null;
   policy?: {
     id: string;
     name: string;
-    kind: string;
+    kind: TimeOffPolicyKind;
     annualAllowanceDays?: number | null;
   } | null;
 };
 
-function formatDateRange(start: string, end: string) {
-  const s = new Date(start);
-  const e = new Date(end);
-  const sameMonth = s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear();
-  const options: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
-  if (sameMonth) {
-    return `${s.toLocaleDateString(undefined, options)}–${e.getDate()}`;
-  }
-  return `${s.toLocaleDateString(undefined, options)}–${e.toLocaleDateString(
-    undefined,
-    options
-  )}`;
-}
-
-function statusClasses(status: TimeOffStatus) {
-  switch (status) {
-    case "APPROVED":
-      return "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
-    case "DENIED":
-      return "border-rose-500/40 bg-rose-500/10 text-rose-200";
-    case "CANCELLED":
-      return "border-slate-600/60 bg-slate-800/80 text-slate-300";
-    default:
-      return "border-amber-500/40 bg-amber-500/10 text-amber-200";
-  }
-}
-
 type Props = {
   items: TimeOffRequestItem[];
-  showActions?: boolean; // only true for REQUESTED section
+  showActions?: boolean;
 };
+
+function formatDate(value: string) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString();
+}
+
+function formatEmployee(e?: TimeOffRequestItem["employee"]) {
+  if (!e) return "Employee";
+  const name = [e.firstName, e.lastName].filter(Boolean).join(" ");
+  return name || e.email || "Employee";
+}
+
+function statusBadge(status: TimeOffStatus) {
+  const base =
+    "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border";
+  switch (status) {
+    case "REQUESTED":
+      return (
+        <span
+          className={`${base} border-amber-200 bg-amber-50 text-amber-800`}
+        >
+          Requested
+        </span>
+      );
+    case "APPROVED":
+      return (
+        <span
+          className={`${base} border-emerald-200 bg-emerald-50 text-emerald-800`}
+        >
+          Approved
+        </span>
+      );
+    case "DENIED":
+      return (
+        <span
+          className={`${base} border-rose-200 bg-rose-50 text-rose-800`}
+        >
+          Denied
+        </span>
+      );
+    case "CANCELLED":
+      return (
+        <span
+          className={`${base} border-slate-200 bg-slate-50 text-slate-500`}
+        >
+          Cancelled
+        </span>
+      );
+    default:
+      return (
+        <span className={`${base} border-slate-200 bg-slate-50 text-slate-500`}>
+          {status}
+        </span>
+      );
+  }
+}
 
 export default function TimeoffRequestsTable({ items, showActions }: Props) {
   const router = useRouter();
-  const [pendingId, setPendingId] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function updateStatus(id: string, status: TimeOffStatus) {
     setError(null);
-    setPendingId(id);
-
+    setBusyId(id);
     try {
-      const res = await fetch(`/api/timeoff/requests/${id}/status`, {
+      const baseUrl =
+        process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+      const orgId = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
+
+      const res = await fetch(`${baseUrl}/timeoff/requests/${id}/status`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        headers: {
+          "Content-Type": "application/json",
+          "x-org-id": orgId,
+        },
+        body: JSON.stringify({
+          status,
+          // managerId: could be wired later if you have current user id
+        }),
       });
 
       if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        throw new Error(text || `HTTP ${res.status}`);
+        const text = await res.text();
+        console.error("Update time off status failed:", res.status, text);
+        throw new Error(`Update failed: ${res.status}`);
       }
 
-      // refresh server data
-      startTransition(() => {
-        router.refresh();
-      });
-    } catch (err) {
-      console.error("Failed to update time off status", err);
-      setError("Could not update status. Please try again.");
+      // Refresh the server component buckets
+      router.refresh();
+    } catch (e: any) {
+      setError(e?.message || "Failed to update request.");
     } finally {
-      setPendingId(null);
+      setBusyId(null);
     }
   }
 
-  if (items.length === 0) {
-    return (
-      <p className="px-1 py-2 text-xs text-slate-500">
-        No requests in this bucket.
-      </p>
-    );
+  if (!items.length) {
+    return <p className="text-sm text-slate-500">No requests in this bucket.</p>;
   }
 
   return (
     <div className="space-y-2">
       {error && (
-        <div className="rounded-md border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-100">
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700">
           {error}
         </div>
       )}
-
-      <div className="overflow-hidden rounded-lg border border-slate-800 bg-slate-950/40">
-        <table className="min-w-full border-collapse text-xs">
-          <thead className="bg-slate-950/60 text-slate-400">
+      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+        <table className="min-w-full divide-y divide-slate-200">
+          <thead className="bg-slate-50">
             <tr>
-              <th className="px-3 py-2 text-left font-normal">Employee</th>
-              <th className="px-3 py-2 text-left font-normal">Dates</th>
-              <th className="px-3 py-2 text-left font-normal">Type</th>
-              <th className="px-3 py-2 text-left font-normal">Policy</th>
-              <th className="px-3 py-2 text-left font-normal">Reason</th>
-              <th className="px-3 py-2 text-left font-normal">Status</th>
-              <th className="px-3 py-2 text-left font-normal">Manager</th>
+              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Employee
+              </th>
+              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Dates
+              </th>
+              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Type
+              </th>
+              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Status
+              </th>
+              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Policy
+              </th>
               {showActions && (
-                <th className="px-3 py-2 text-right font-normal">Actions</th>
+                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Actions
+                </th>
               )}
             </tr>
           </thead>
-          <tbody>
-            {items.map((req) => {
-              const isRowPending = pendingId === req.id && isPending;
-              const mgr = req.manager;
-
-              return (
-                <tr key={req.id} className="border-t border-slate-800">
-                  <td className="px-3 py-2 align-top">
-                    <div className="flex flex-col">
-                      <span className="font-medium text-slate-100">
-                        {req.employee.firstName} {req.employee.lastName}
-                      </span>
-                      <span className="text-[11px] text-slate-400">
-                        {req.employee.department || "No dept"} ·{" "}
-                        {req.employee.email}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-3 py-2 align-top text-slate-200">
-                    {formatDateRange(req.startDate, req.endDate)}
-                  </td>
-                  <td className="px-3 py-2 align-top text-slate-200">
-                    {req.type}
-                  </td>
-                  <td className="px-3 py-2 align-top text-slate-200">
-                    {req.policy ? req.policy.name : "—"}
-                  </td>
-                  <td className="px-3 py-2 align-top text-slate-300">
-                    {req.reason || "—"}
-                  </td>
-                  <td className="px-3 py-2 align-top">
-                    <span
-                      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] ${statusClasses(
-                        req.status
-                      )}`}
-                    >
-                      {req.status}
+          <tbody className="divide-y divide-slate-100 bg-white">
+            {items.map((item) => (
+              <tr key={item.id} className="hover:bg-slate-50">
+                <td className="px-3 py-3 text-sm text-slate-900">
+                  <div className="flex flex-col">
+                    <span className="font-medium">
+                      {formatEmployee(item.employee)}
                     </span>
-                  </td>
-                  <td className="px-3 py-2 align-top text-slate-300">
-                    {mgr ? (
-                      <>
-                        {mgr.firstName} {mgr.lastName}
-                      </>
-                    ) : (
-                      <span className="text-slate-500">—</span>
+                    {item.employee?.department && (
+                      <span className="text-[11px] text-slate-500">
+                        {item.employee.department}
+                      </span>
                     )}
-                  </td>
-                  {showActions && (
-                    <td className="px-3 py-2 align-top text-right">
-                      <div className="inline-flex gap-1">
+                  </div>
+                </td>
+                <td className="px-3 py-3 text-sm text-slate-700">
+                  <div className="flex flex-col text-[12px]">
+                    <span>{formatDate(item.startDate)}</span>
+                    <span className="text-slate-400">
+                      through {formatDate(item.endDate)}
+                    </span>
+                  </div>
+                </td>
+                <td className="px-3 py-3 text-sm text-slate-700">
+                  <span className="text-[12px] uppercase tracking-wide text-slate-600">
+                    {item.type || "PTO"}
+                  </span>
+                </td>
+                <td className="px-3 py-3 text-sm text-slate-700">
+                  {statusBadge(item.status)}
+                </td>
+                <td className="px-3 py-3 text-sm text-slate-700">
+                  {item.policy ? (
+                    <span className="text-[12px] text-slate-700">
+                      {item.policy.name}
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-slate-400">—</span>
+                  )}
+                </td>
+                {showActions && (
+                  <td className="px-3 py-3 text-right text-sm">
+                    {item.status !== "REQUESTED" ? (
+                      <span className="text-[11px] text-slate-400">
+                        No actions
+                      </span>
+                    ) : (
+                      <div className="inline-flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => updateStatus(req.id, "APPROVED")}
-                          disabled={isRowPending}
-                          className="rounded-full bg-emerald-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={busyId === item.id}
+                          onClick={() => updateStatus(item.id, "APPROVED")}
+                          className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
                         >
-                          {isRowPending ? "…" : "Approve"}
+                          Approve
                         </button>
                         <button
                           type="button"
-                          onClick={() => updateStatus(req.id, "DENIED")}
-                          disabled={isRowPending}
-                          className="rounded-full bg-rose-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={busyId === item.id}
+                          onClick={() => updateStatus(item.id, "DENIED")}
+                          className="rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-medium text-rose-700 hover:bg-rose-100 disabled:opacity-60"
                         >
-                          {isRowPending ? "…" : "Deny"}
+                          Deny
                         </button>
                       </div>
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
+                    )}
+                  </td>
+                )}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>

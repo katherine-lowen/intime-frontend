@@ -1,141 +1,120 @@
-// src/app/api/ai-onboarding-template/route.ts
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import OpenAI from "openai";
-
-export const dynamic = "force-dynamic";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-export async function POST(req: NextRequest) {
-  try {
-    if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json(
-        { error: "Missing OPENAI_API_KEY" },
-        { status: 500 }
-      );
-    }
+type AiTemplateRequest = {
+  role?: string;
+  department?: string;
+  seniority?: string;
+  focus?: string;
+  dayRange?: string; // e.g. "30 days", "60 days"
+};
 
-    const body = await req.json().catch(() => ({}));
+export async function POST(req: Request) {
+  try {
+    const body = (await req.json()) as AiTemplateRequest;
+
     const {
-      roleTitle,
-      department,
-      seniority,
-      location,
-      companyTone,
-    }: {
-      roleTitle?: string;
-      department?: string;
-      seniority?: string;
-      location?: string;
-      companyTone?: string;
-    } = body || {};
+      role = "New hire",
+      department = "General",
+      seniority = "Mid-level",
+      focus = "standard onboarding",
+      dayRange = "30 days",
+    } = body;
 
     const prompt = `
-You are an expert People Ops leader designing onboarding templates.
+You are an HR / People ops specialist. Create a concise onboarding TEMPLATE (not person-specific)
+for a new ${seniority} ${role} in the ${department} team over ${dayRange}.
 
-Generate a 30-day onboarding TEMPLATE (not person-specific) for a new hire.
+Return STRICT JSON ONLY in this shape:
 
-Context:
-- Role title: ${roleTitle || "Software Engineer"}
-- Department: ${department || "Engineering"}
-- Seniority: ${seniority || "Mid-level"}
-- Location: ${location || "Remote / hybrid"}
-- Company tone: ${companyTone || "modern SaaS, friendly, fast-moving"}
-
-Return a JSON object with a single key "tasks", which is an array of 15–20 task objects.
-
-Each task object MUST have:
-- "title": short label for the task
-- "description": 1–2 sentence description
-- "assigneeType": one of ["EMPLOYEE", "MANAGER", "HR", "OTHER"]
-- "dueRelativeDays": an integer number of days relative to day 0 (start date).
-  - Use negative values for pre-start tasks (e.g., -3 means 3 days before start).
-  - Use values between 0 and 30 for the first month.
-
-The JSON MUST be valid and contain ONLY this shape, no extra keys or commentary:
 {
+  "name": string,
+  "description": string,
   "tasks": [
     {
-      "title": "...",
-      "description": "...",
-      "assigneeType": "EMPLOYEE",
-      "dueRelativeDays": 0
+      "title": string,
+      "description": string,
+      "assigneeType": "EMPLOYEE" | "MANAGER" | "HR",
+      "dueRelativeDays": number // days from start date (0 = day 1)
     }
   ]
 }
+
+Keep:
+- 8–15 tasks total
+- Titles short and actionable
+- Descriptions 1–2 sentences
+- dueRelativeDays between 0 and 30
+- Mix assigneeType between EMPLOYEE, MANAGER, and HR.
 `;
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
+      response_format: { type: "json_object" },
       messages: [
         {
           role: "system",
           content:
-            "You respond ONLY with valid JSON that matches the requested schema.",
+            "You output HR onboarding templates as strict JSON only. No markdown, no prose.",
         },
-        { role: "user", content: prompt },
+        {
+          role: "user",
+          content: prompt,
+        },
       ],
-      response_format: { type: "json_object" },
-      temperature: 0.4,
     });
 
-    const raw = completion.choices[0]?.message?.content ?? "{}";
-    let parsed: any;
-    try {
-      parsed = JSON.parse(raw);
-    } catch (err) {
-      console.error("[ai-onboarding-template] JSON parse error", err, raw);
+    const content = completion.choices[0]?.message?.content;
+    if (!content) {
       return NextResponse.json(
-        { error: "Failed to parse AI response", tasks: [] },
+        { error: "No content from AI" },
         { status: 500 }
       );
     }
 
-    const tasksRaw = Array.isArray(parsed.tasks) ? parsed.tasks : [];
+    let parsed: {
+      name: string;
+      description: string;
+      tasks: {
+        title: string;
+        description?: string;
+        assigneeType?: "EMPLOYEE" | "MANAGER" | "HR" | "OTHER";
+        dueRelativeDays?: number | null;
+      }[];
+    };
 
-    const allowedAssignees = ["EMPLOYEE", "MANAGER", "HR", "OTHER"] as const;
+    try {
+      parsed = JSON.parse(content);
+    } catch (e) {
+      console.error("Failed to parse AI JSON:", content);
+      return NextResponse.json(
+        { error: "Failed to parse AI response" },
+        { status: 500 }
+      );
+    }
 
-    const tasks = tasksRaw
-      .map((t: any) => {
-        const title = String(t.title ?? "").trim();
-        if (!title) return null;
+    // Basic sanity defaults
+    if (!Array.isArray(parsed.tasks)) {
+      parsed.tasks = [];
+    }
 
-        const description =
-          t.description === undefined || t.description === null
-            ? null
-            : String(t.description);
+    parsed.tasks = parsed.tasks.map((t, index) => ({
+      title: t.title ?? `Task ${index + 1}`,
+      description: t.description ?? "",
+      assigneeType: t.assigneeType ?? "EMPLOYEE",
+      dueRelativeDays:
+        typeof t.dueRelativeDays === "number" ? t.dueRelativeDays : null,
+    }));
 
-        const assigneeRaw = String(t.assigneeType ?? "EMPLOYEE").toUpperCase();
-        const assigneeType = allowedAssignees.includes(
-          assigneeRaw as (typeof allowedAssignees)[number]
-        )
-          ? assigneeRaw
-          : "EMPLOYEE";
-
-        let dueRelativeDays: number | null = null;
-        if (
-          typeof t.dueRelativeDays === "number" &&
-          Number.isFinite(t.dueRelativeDays)
-        ) {
-          dueRelativeDays = Math.round(t.dueRelativeDays);
-        }
-
-        return {
-          title,
-          description,
-          assigneeType,
-          dueRelativeDays,
-        };
-      })
-      .filter(Boolean);
-
-    return NextResponse.json({ tasks }, { status: 200 });
+    return NextResponse.json(parsed, { status: 200 });
   } catch (err) {
-    console.error("[ai-onboarding-template] Error", err);
+    console.error("AI onboarding-template error:", err);
     return NextResponse.json(
-      { error: "Unexpected error from AI template generator" },
+      { error: "Failed to generate onboarding template" },
       { status: 500 }
     );
   }

@@ -80,8 +80,7 @@ export default function NewOnboardingTemplatePage() {
     try {
       const baseUrl =
         process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
-      const orgId =
-        process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
+      const orgId = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
 
       const res = await fetch(`${baseUrl}/onboarding/templates`, {
         method: "POST",
@@ -105,7 +104,6 @@ export default function NewOnboardingTemplatePage() {
         throw new Error(`Create failed: ${res.status}`);
       }
 
-      // On success, go back to the list
       router.push("/onboarding/templates");
       router.refresh();
     } catch (e: any) {
@@ -117,36 +115,35 @@ export default function NewOnboardingTemplatePage() {
 
   return (
     <div className="px-6 py-6">
-      <form
-        onSubmit={handleSubmit}
-        className="mx-auto max-w-4xl space-y-6"
-      >
+      <form onSubmit={handleSubmit} className="mx-auto max-w-4xl space-y-6">
+        {/* Header */}
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-100">
+            <h1 className="text-2xl font-semibold text-slate-900">
               New onboarding template
             </h1>
-            <p className="mt-1 text-sm text-slate-400">
-              Define a reusable checklist for onboarding new hires in this role or department.
+            <p className="mt-1 text-sm text-slate-600">
+              Define a reusable checklist for onboarding new hires in this role
+              or department.
             </p>
           </div>
         </div>
 
         {error && (
-          <div className="rounded-md border border-red-500/60 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
           </div>
         )}
 
         {/* Template details */}
-        <div className="grid grid-cols-1 gap-4 rounded-xl border border-slate-800 bg-slate-950/60 p-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-2">
           <div className="space-y-3">
             <div>
-              <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">
+              <label className="block text-xs font-medium uppercase tracking-wide text-slate-600">
                 Template name
               </label>
               <input
-                className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 placeholder="New hire – AE, US Remote"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -154,11 +151,11 @@ export default function NewOnboardingTemplatePage() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">
+              <label className="block text-xs font-medium uppercase tracking-wide text-slate-600">
                 Description
               </label>
               <textarea
-                className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 rows={3}
                 placeholder="What is this template used for?"
                 value={description}
@@ -170,22 +167,22 @@ export default function NewOnboardingTemplatePage() {
           <div className="space-y-3">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">
+                <label className="block text-xs font-medium uppercase tracking-wide text-slate-600">
                   Department (optional)
                 </label>
                 <input
-                  className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   placeholder="Sales"
                   value={department}
                   onChange={(e) => setDepartment(e.target.value)}
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">
+                <label className="block text-xs font-medium uppercase tracking-wide text-slate-600">
                   Role / title (optional)
                 </label>
                 <input
-                  className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   placeholder="Account Executive"
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
@@ -193,10 +190,10 @@ export default function NewOnboardingTemplatePage() {
               </div>
             </div>
 
-            <label className="mt-2 inline-flex items-center gap-2 text-sm text-slate-200">
+            <label className="mt-2 inline-flex items-center gap-2 text-sm text-slate-700">
               <input
                 type="checkbox"
-                className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-indigo-500 focus:ring-indigo-500"
+                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                 checked={isDefault}
                 onChange={(e) => setIsDefault(e.target.checked)}
               />
@@ -204,26 +201,25 @@ export default function NewOnboardingTemplatePage() {
             </label>
 
             <p className="text-xs text-slate-500">
-              Default templates can be auto-suggested for new hires in this department or role.
+              Default templates can be auto-suggested for new hires in this
+              department or role.
             </p>
           </div>
         </div>
 
         {/* Steps builder */}
-        <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+        <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <h2 className="text-sm font-semibold text-slate-100">
-                Steps
-              </h2>
-              <p className="mt-1 text-xs text-slate-400">
+              <h2 className="text-sm font-semibold text-slate-900">Steps</h2>
+              <p className="mt-1 text-xs text-slate-600">
                 Define each task required to get a new hire fully onboarded.
               </p>
             </div>
             <button
               type="button"
               onClick={addStep}
-              className="inline-flex items-center rounded-md border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-xs font-medium text-slate-100 hover:bg-slate-900"
+              className="inline-flex items-center rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-50"
             >
               + Add step
             </button>
@@ -233,17 +229,17 @@ export default function NewOnboardingTemplatePage() {
             {steps.map((step, index) => (
               <div
                 key={index}
-                className="rounded-lg border border-slate-800 bg-slate-950/80 p-3 space-y-2"
+                className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Step {index + 1}
                   </span>
                   {steps.length > 1 && (
                     <button
                       type="button"
                       onClick={() => removeStep(index)}
-                      className="text-xs text-slate-400 hover:text-red-300"
+                      className="text-xs text-slate-500 hover:text-red-500"
                     >
                       Remove
                     </button>
@@ -252,11 +248,11 @@ export default function NewOnboardingTemplatePage() {
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
-                    <label className="block text-xs font-medium text-slate-400">
+                    <label className="block text-xs font-medium text-slate-600">
                       Title
                     </label>
                     <input
-                      className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                       placeholder="Welcome email, laptop ordering, system access..."
                       value={step.title}
                       onChange={(e) =>
@@ -265,11 +261,11 @@ export default function NewOnboardingTemplatePage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-400">
+                    <label className="block text-xs font-medium text-slate-600">
                       Assignee
                     </label>
                     <select
-                      className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs text-slate-100 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                       value={step.assigneeType}
                       onChange={(e) =>
                         updateStep(index, {
@@ -287,11 +283,11 @@ export default function NewOnboardingTemplatePage() {
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <div className="sm:col-span-2">
-                    <label className="block text-xs font-medium text-slate-400">
+                    <label className="block text-xs font-medium text-slate-600">
                       Description (optional)
                     </label>
                     <input
-                      className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                       placeholder="Details or links the assignee needs to complete this step."
                       value={step.description}
                       onChange={(e) =>
@@ -300,12 +296,12 @@ export default function NewOnboardingTemplatePage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-400">
+                    <label className="block text-xs font-medium text-slate-600">
                       Due (days after start)
                     </label>
                     <input
                       type="number"
-                      className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                       placeholder="0"
                       value={step.dueRelativeDays}
                       onChange={(e) =>
@@ -319,18 +315,19 @@ export default function NewOnboardingTemplatePage() {
           </div>
         </div>
 
+        {/* Actions */}
         <div className="flex items-center justify-between gap-4 pt-2">
           <button
             type="button"
             onClick={() => router.push("/onboarding/templates")}
-            className="text-sm text-slate-400 hover:text-slate-200"
+            className="text-sm text-slate-500 hover:text-slate-700"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={saving}
-            className="inline-flex items-center rounded-md bg-indigo-500 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-600 disabled:opacity-60"
+            className="inline-flex items-center rounded-full bg-indigo-600 px-5 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60"
           >
             {saving ? "Saving…" : "Create template"}
           </button>
