@@ -1,207 +1,239 @@
-// src/app/people/new/page.tsx
 "use client";
 
-import { useEffect, useState, useTransition, FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import api from "@/lib/api";
+import { useState } from "react";
 import { AuthGate } from "@/components/dev-auth-gate";
 
-type Team = {
-  id: string;
-  name: string;
-};
+type EmployeeStatus = "ACTIVE" | "ON_LEAVE" | "CONTRACTOR" | "ALUMNI";
 
-export default function NewPersonPage() {
+export default function NewEmployeePage() {
   const router = useRouter();
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [loadingTeams, setLoadingTeams] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [saving, startTransition] = useTransition();
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [title, setTitle] = useState("");
   const [department, setDepartment] = useState("");
-  const [teamId, setTeamId] = useState("");
+  const [location, setLocation] = useState("");
+  const [status, setStatus] = useState<EmployeeStatus>("ACTIVE");
+  const [startDate, setStartDate] = useState("");
 
-  // Load teams for the dropdown
-  useEffect(() => {
-    let cancelled = false;
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-    async function loadTeams() {
-      try {
-        const data = await api.get<Team[]>("/teams");
-        if (!cancelled) {
-          setTeams(data);
-        }
-      } catch (err) {
-        console.error("Failed to load teams", err);
-      } finally {
-        if (!cancelled) setLoadingTeams(false);
-      }
-    }
-
-    loadTeams();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // When user picks a team, default department to that team name
-  useEffect(() => {
-    if (!teamId) return;
-    const t = teams.find((t) => t.id === teamId);
-    if (t && !department) {
-      setDepartment(t.name);
-    }
-  }, [teamId, teams, department]);
-
-  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
     if (!firstName.trim() || !lastName.trim()) {
-      setError("First name and last name are required.");
+      setError("First and last name are required.");
+      return;
+    }
+    if (!email.trim()) {
+      setError("Work email is required.");
       return;
     }
 
-    startTransition(async () => {
-      try {
-        const body = {
+    setSaving(true);
+    try {
+      const baseUrl =
+        process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+      const orgId = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
+
+      const res = await fetch(`${baseUrl}/employees`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-org-id": orgId,
+        },
+        body: JSON.stringify({
           firstName: firstName.trim(),
           lastName: lastName.trim(),
-          email: email.trim() || undefined,
-          title: title.trim() || undefined,
-          // For now, department drives "team membership" (teams controller counts by department)
-          department: department.trim() || undefined,
-          // make sure backend gets an explicit value
-          teamId: teamId || null,
-          status: "ACTIVE" as const,
-        };
+          email: email.trim(),
+          title: title.trim() || null,
+          department: department.trim() || null,
+          location: location.trim() || null,
+          status,
+          startDate: startDate ? new Date(startDate).toISOString() : null,
+        }),
+      });
 
-        await api.post("/employees", body);
-        router.push("/people");
-      } catch (err) {
-        console.error("Failed to create employee", err);
-        setError("Something went wrong while saving. Please try again.");
+      if (!res.ok) {
+        const txt = await res.text();
+        console.error("Create employee failed:", res.status, txt);
+        throw new Error(`Create failed: ${res.status}`);
       }
-    });
+
+      // If backend returns the employee, grab id for redirect
+      let id: string | null = null;
+      try {
+        const json = await res.json();
+        if (json && typeof json.id === "string") {
+          id = json.id;
+        }
+      } catch {
+        // ignore, redirect back to people list
+      }
+
+      if (id) {
+        router.push(`/people/${id}`);
+      } else {
+        router.push("/people");
+      }
+      router.refresh();
+    } catch (e: any) {
+      setError(e?.message || "Failed to create employee.");
+      setSaving(false);
+    }
   }
 
   return (
     <AuthGate>
-      <main className="p-6 max-w-xl mx-auto space-y-6">
-        <div className="flex items-center justify-between gap-2">
+      <main className="mx-auto flex max-w-3xl flex-col gap-6 px-6 py-8">
+        <header className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold">Add Person</h1>
-            <p className="text-sm opacity-70">
-              Create a new employee or contractor in Intime.
+            <p className="text-xs text-slate-400">People / New employee</p>
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">
+              Add employee
+            </h1>
+            <p className="text-sm text-slate-600">
+              Create a person in Intime so you can track onboarding, time off,
+              performance, and payroll.
             </p>
           </div>
-          <Link
-            href="/people"
-            className="text-sm text-gray-600 hover:underline"
-          >
-            ← Back to People
-          </Link>
-        </div>
+        </header>
 
-        <form onSubmit={handleSubmit} className="space-y-4 text-sm">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+        >
+          {error && (
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              {error}
+            </div>
+          )}
+
+          {/* Name + Email */}
+          <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <label className="mb-1 block text-xs font-medium">
+              <label className="block text-xs font-medium uppercase tracking-wide text-slate-600">
                 First name
               </label>
               <input
+                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
-                className="w-full rounded border px-2 py-1.5"
                 required
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium">
+              <label className="block text-xs font-medium uppercase tracking-wide text-slate-600">
                 Last name
               </label>
               <input
+                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
-                className="w-full rounded border px-2 py-1.5"
                 required
               />
             </div>
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium">Email</label>
+            <label className="block text-xs font-medium uppercase tracking-wide text-slate-600">
+              Work email
+            </label>
             <input
               type="email"
+              className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@company.com"
-              className="w-full rounded border px-2 py-1.5"
+              required
             />
           </div>
 
-          <div>
-            <label className="mb-1 block text-xs font-medium">Title</label>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Senior Engineer, HR Manager…"
-              className="w-full rounded border px-2 py-1.5"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {/* Role / dept / location */}
+          <div className="grid gap-4 md:grid-cols-3">
             <div>
-              <label className="mb-1 block text-xs font-medium">Team</label>
-              <select
-                value={teamId}
-                onChange={(e) => setTeamId(e.target.value)}
-                className="w-full rounded border px-2 py-1.5"
-                disabled={loadingTeams}
-              >
-                <option value="">No team</option>
-                {teams.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1 text-[11px] text-gray-500">
-                For now, team membership is inferred from department = team name.
-              </p>
+              <label className="block text-xs font-medium uppercase tracking-wide text-slate-600">
+                Title
+              </label>
+              <input
+                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. Senior Engineer"
+              />
             </div>
-
             <div>
-              <label className="mb-1 block text-xs font-medium">
+              <label className="block text-xs font-medium uppercase tracking-wide text-slate-600">
                 Department
               </label>
               <input
+                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
-                placeholder="Engineering, Sales, People Ops…"
-                className="w-full rounded border px-2 py-1.5"
+                placeholder="e.g. Engineering"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium uppercase tracking-wide text-slate-600">
+                Location
+              </label>
+              <input
+                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="e.g. Remote, US"
               />
             </div>
           </div>
 
-          {error && (
-            <p className="rounded bg-red-50 px-2 py-1 text-xs text-red-700">
-              {error}
-            </p>
-          )}
+          {/* Status + start date */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="block text-xs font-medium uppercase tracking-wide text-slate-600">
+                Status
+              </label>
+              <select
+                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                value={status}
+                onChange={(e) => setStatus(e.target.value as EmployeeStatus)}
+              >
+                <option value="ACTIVE">Active</option>
+                <option value="ON_LEAVE">On leave</option>
+                <option value="CONTRACTOR">Contractor</option>
+                <option value="ALUMNI">Alumni</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium uppercase tracking-wide text-slate-600">
+                Start date
+              </label>
+              <input
+                type="date"
+                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
+          </div>
 
-          <div className="pt-2">
+          {/* Actions */}
+          <div className="flex items-center justify-between gap-4 pt-2">
+            <button
+              type="button"
+              onClick={() => router.push("/people")}
+              className="text-sm text-slate-500 hover:text-slate-700"
+            >
+              Cancel
+            </button>
             <button
               type="submit"
               disabled={saving}
-              className="rounded bg-black px-4 py-2 text-sm font-medium text-white hover:bg-black/90 disabled:opacity-50"
+              className="inline-flex items-center rounded-full bg-indigo-600 px-5 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60"
             >
-              {saving ? "Saving…" : "Create person"}
+              {saving ? "Saving…" : "Create employee"}
             </button>
           </div>
         </form>
