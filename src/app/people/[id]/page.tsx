@@ -46,6 +46,15 @@ type OnboardingFlow = {
   tasks: OnboardingTask[];
 };
 
+type EmployeeReviewLite = {
+  id: string;
+  period?: string | null;
+  rating?: string | null;
+  createdAt?: string | null;
+};
+
+// -------- API helpers --------
+
 async function getEmployee(id: string): Promise<Employee> {
   return api.get(`/employees/${id}`);
 }
@@ -57,6 +66,19 @@ async function getEmployeeEvents(id: string): Promise<EventItem[]> {
 async function getOnboardingFlows(): Promise<OnboardingFlow[]> {
   return api.get("/onboarding/flows");
 }
+
+async function getEmployeeReviews(id: string): Promise<EmployeeReviewLite[]> {
+  try {
+    return await api.get<EmployeeReviewLite[]>(
+      `/performance/reviews?employeeId=${id}`
+    );
+  } catch (err) {
+    console.error("Failed to load performance reviews for employee", err);
+    return [];
+  }
+}
+
+// -------- Formatting helpers --------
 
 function formatStatus(status?: EmployeeStatus) {
   switch (status) {
@@ -98,6 +120,13 @@ function computeProgress(tasks: OnboardingTask[] | undefined) {
   return { done, total, percent };
 }
 
+function formatDate(value?: string | null) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString();
+}
+
 export const dynamic = "force-dynamic";
 
 export default async function PersonPage({
@@ -107,10 +136,11 @@ export default async function PersonPage({
 }) {
   const employeeId = params.id;
 
-  const [employee, events, flows] = await Promise.all([
+  const [employee, events, flows, reviews] = await Promise.all([
     getEmployee(employeeId),
     getEmployeeEvents(employeeId),
     getOnboardingFlows(),
+    getEmployeeReviews(employeeId),
   ]);
 
   const fullName = `${employee.firstName} ${employee.lastName}`;
@@ -138,6 +168,16 @@ export default async function PersonPage({
     currentFlow?.targetDate &&
     new Date(currentFlow.targetDate).toLocaleDateString();
 
+  // Latest 3 reviews
+  const latestReviews = reviews
+    .slice()
+    .sort((a, b) => {
+      const da = a.createdAt ? Date.parse(a.createdAt) : 0;
+      const db = b.createdAt ? Date.parse(b.createdAt) : 0;
+      return db - da;
+    })
+    .slice(0, 3);
+
   return (
     <AuthGate>
       <main className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-8">
@@ -145,10 +185,7 @@ export default async function PersonPage({
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-xs text-slate-400">
-              <Link
-                href="/people"
-                className="text-indigo-600 hover:underline"
-              >
+              <Link href="/people" className="text-indigo-600 hover:underline">
                 People
               </Link>
               <span className="text-slate-300">/</span>
@@ -179,9 +216,26 @@ export default async function PersonPage({
           </div>
 
           <div className="flex flex-col items-end gap-2 text-xs">
+            {/* Performance CTAs */}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Link
+                href={`/performance/reviews/new?employeeId=${employee.id}`}
+                className="inline-flex items-center gap-1 rounded-full bg-indigo-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-indigo-700"
+              >
+                New review
+              </Link>
+              <Link
+                href={`/performance/reviews?employeeId=${employee.id}`}
+                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+              >
+                View reviews
+              </Link>
+            </div>
+
+            {/* Onboarding CTAs */}
             <Link
               href={`/onboarding/new?employeeId=${employee.id}`}
-              className="inline-flex items-center gap-1 rounded-full bg-indigo-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-indigo-700"
+              className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-semibold text-slate-50 hover:bg-slate-800"
             >
               Start onboarding
             </Link>
@@ -197,9 +251,10 @@ export default async function PersonPage({
         </header>
 
         {/* MAIN GRID */}
-        <section className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1.4fr)]">
-          {/* LEFT: Events + AI timeline */}
+        <section className="grid gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1.3fr)]">
+          {/* LEFT: Events + Performance */}
           <div className="space-y-4">
+            {/* Activity timeline */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-900">
                 Activity timeline
@@ -212,6 +267,73 @@ export default async function PersonPage({
               </div>
             </div>
 
+            {/* Performance reviews */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-900">
+                    Performance reviews
+                  </h2>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Recent review cycles tied to this employee.
+                  </p>
+                </div>
+                <Link
+                  href={`/performance/reviews/new?employeeId=${employee.id}`}
+                  className="text-[11px] font-medium text-indigo-600 hover:text-indigo-500"
+                >
+                  New review
+                </Link>
+              </div>
+
+              {latestReviews.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-600">
+                  No performance reviews have been recorded yet. Create the
+                  first review for {fullName || "this employee"}.
+                </div>
+              ) : (
+                <ul className="space-y-2 text-sm">
+                  {latestReviews.map((r) => (
+                    <li
+                      key={r.id}
+                      className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium text-slate-900">
+                          {r.period || "Review"}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {r.rating || "No rating"} ·{" "}
+                          {formatDate(r.createdAt)}
+                        </div>
+                      </div>
+                      <Link
+                        href={`/performance/reviews/${r.id}`}
+                        className="text-xs font-medium text-indigo-600 hover:text-indigo-500"
+                      >
+                        Open
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {reviews.length > 3 && (
+                <div className="mt-3 text-right text-[11px]">
+                  <Link
+                    href={`/performance/reviews?employeeId=${employee.id}`}
+                    className="text-indigo-600 hover:text-indigo-500"
+                  >
+                    View all reviews →
+                  </Link>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* RIGHT: AI + Onboarding + Profile details */}
+          <div className="space-y-4">
+            {/* AI insights */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-900">
                 AI-powered insights
@@ -224,10 +346,7 @@ export default async function PersonPage({
                 <AiPeopleTimeline employeeId={employee.id} />
               </div>
             </div>
-          </div>
 
-          {/* RIGHT: Onboarding + basic info */}
-          <div className="space-y-4">
             {/* Onboarding card */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex items-start justify-between gap-2">
@@ -326,7 +445,9 @@ export default async function PersonPage({
                   <div>{employee.email ?? "—"}</div>
                 </div>
                 <div>
-                  <span className="text-[11px] text-slate-500">Department</span>
+                  <span className="text-[11px] text-slate-500">
+                    Department
+                  </span>
                   <div>{employee.department ?? "—"}</div>
                 </div>
                 <div>
