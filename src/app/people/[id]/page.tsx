@@ -4,8 +4,24 @@ import EventsTimeline from "@/components/events-timeline";
 import AiPeopleTimeline from "@/components/ai-people-timeline";
 import Link from "next/link";
 import { AuthGate } from "@/components/dev-auth-gate";
+import PayrollCompCard from "@/components/payroll-comp-card";
 
 type EmployeeStatus = "ACTIVE" | "ON_LEAVE" | "CONTRACTOR" | "ALUMNI";
+
+type PayType = "SALARY" | "HOURLY" | "CONTRACTOR";
+type PaySchedule =
+  | "WEEKLY"
+  | "BIWEEKLY"
+  | "SEMI_MONTHLY"
+  | "MONTHLY"
+  | "OTHER";
+type PayrollProvider =
+  | "NONE"
+  | "GUSTO"
+  | "ADP"
+  | "RIPPLING"
+  | "DEEL"
+  | "OTHER";
 
 type Employee = {
   id: string;
@@ -17,6 +33,14 @@ type Employee = {
   location?: string | null;
   status?: EmployeeStatus;
   manager?: { id: string; firstName: string; lastName: string } | null;
+
+  // Payroll / comp fields (all optional & safe if backend doesn't send them yet)
+  payType?: PayType | null;
+  basePayCents?: number | null;
+  payCurrency?: string | null;
+  paySchedule?: PaySchedule | null;
+  payrollProvider?: PayrollProvider | null;
+  payrollExternalId?: string | null;
 };
 
 type EventItem = {
@@ -176,15 +200,15 @@ export default async function PersonPage({
 }) {
   const employeeId = params.id;
 
-  // 👇 Guard so we never call /employees/undefined
+  // Guard so we never call /employees/undefined
   if (!employeeId || employeeId === "undefined") {
     return (
       <AuthGate>
         <main className="mx-auto max-w-3xl px-6 py-8">
-          <h1 className="text-xl font-semibold text-slate-100">
+          <h1 className="text-xl font-semibold text-slate-900">
             No employee selected
           </h1>
-          <p className="mt-2 text-sm text-slate-400">
+          <p className="mt-2 text-sm text-slate-600">
             This page needs a valid employee ID in the URL. Go back to the
             People hub and open someone from the list.
           </p>
@@ -409,7 +433,7 @@ export default async function PersonPage({
             </div>
           </div>
 
-          {/* RIGHT: AI + Onboarding + Time off + Profile details */}
+          {/* RIGHT: AI + Onboarding + Time off + Payroll + Profile */}
           <div className="space-y-4">
             {/* AI insights */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -571,6 +595,19 @@ export default async function PersonPage({
                 </ul>
               )}
             </div>
+
+            {/* Payroll / comp card (safe even if values are undefined) */}
+            <PayrollCompCard
+              employeeId={employee.id}
+              initial={{
+                payType: employee.payType ?? null,
+                basePayCents: employee.basePayCents ?? null,
+                payCurrency: employee.payCurrency ?? "USD",
+                paySchedule: employee.paySchedule ?? null,
+                payrollProvider: employee.payrollProvider ?? "NONE",
+                payrollExternalId: employee.payrollExternalId ?? null,
+              }}
+            />
 
             {/* Basic contact card */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 text-xs text-slate-700 shadow-sm">

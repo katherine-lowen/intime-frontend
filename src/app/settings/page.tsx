@@ -2,7 +2,14 @@
 import React from "react";
 import Link from "next/link";
 import { AuthGate } from "@/components/dev-auth-gate";
-import { CheckCircle2, Circle, Clock, Sparkles, ArrowRight } from "lucide-react";
+import {
+  CheckCircle2,
+  Circle,
+  Clock,
+  Sparkles,
+  ArrowRight,
+} from "lucide-react";
+import PayrollConnectionCard from "@/components/payroll-connection-card";
 
 export const dynamic = "force-dynamic";
 
@@ -109,7 +116,7 @@ export default function SettingsPage() {
 
   return (
     <AuthGate>
-      <main className="p-6 space-y-6">
+      <main className="space-y-6 p-6">
         {/* HEADER / HERO */}
         <section className="flex flex-wrap items-center justify-between gap-3">
           <div className="space-y-1">
@@ -124,8 +131,8 @@ export default function SettingsPage() {
               Finish setting up your Intime workspace.
             </h1>
             <p className="text-sm text-slate-600">
-              We&apos;ll walk you through the foundations: organization profile, people,
-              hiring, and time-off rules.
+              We&apos;ll walk you through the foundations: organization
+              profile, people, hiring, time-off rules, and payroll connections.
             </p>
           </div>
 
@@ -150,11 +157,11 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* GRID: LEFT = CHECKLIST, RIGHT = ORG/TIME SETTINGS */}
+        {/* GRID: LEFT = CHECKLIST, RIGHT = ORG/TIME SETTINGS + PAYROLL */}
         <section className="grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1.1fr)]">
           {/* LEFT COLUMN: CHECKLIST */}
           <div className="space-y-4">
-            <div className="card px-5 py-4 space-y-3">
+            <div className="card space-y-3 px-5 py-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h2 className="section-title">Company setup checklist</h2>
@@ -162,7 +169,7 @@ export default function SettingsPage() {
                     A guided list of steps to get Intime ready for your team.
                   </p>
                 </div>
-                <div className="hidden sm:flex items-center gap-1 rounded-full bg-slate-50 px-2 py-1 text-[11px] text-slate-500">
+                <div className="hidden items-center gap-1 rounded-full bg-slate-50 px-2 py-1 text-[11px] text-slate-500 sm:flex">
                   <Sparkles className="h-3 w-3" />
                   Designed for modern HR teams
                 </div>
@@ -201,20 +208,21 @@ export default function SettingsPage() {
 
             <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
               As you roll out Intime, this checklist becomes your admin hub:
-              company profile, people, hiring, and time-aware PTO will all be
-              configured here.
+              company profile, people, hiring, time-aware PTO, and payroll
+              exports will all be configured here.
             </div>
           </div>
 
-          {/* RIGHT COLUMN: ORG PROFILE + TIME SETTINGS (your existing UI) */}
+          {/* RIGHT COLUMN: ORG PROFILE + TIME SETTINGS + PAYROLL CONNECT */}
           <div className="space-y-4">
             {/* Org profile */}
-            <div className="card px-5 py-4 space-y-4" id="org-profile">
+            <div className="card space-y-4 px-5 py-4" id="org-profile">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h2 className="section-title">Organization profile</h2>
                   <p className="text-xs text-slate-500">
-                    How your company appears across Intime, offers, and documents.
+                    How your company appears across Intime, offers, and
+                    documents.
                   </p>
                 </div>
               </div>
@@ -292,13 +300,13 @@ export default function SettingsPage() {
             </div>
 
             {/* Time & working week */}
-            <div className="card px-5 py-4 space-y-4" id="time">
+            <div className="card space-y-4 px-5 py-4" id="time">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h2 className="section-title">Time & working week</h2>
                   <p className="text-xs text-slate-500">
-                    Control default timezone, workweek, and how time is tracked in
-                    Intime.
+                    Control default timezone, workweek, and how time is tracked
+                    in Intime.
                   </p>
                 </div>
               </div>
@@ -343,13 +351,14 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <div className="space-y-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 border border-slate-100">
+              <div className="space-y-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
                 <div className="font-medium text-slate-700">
                   How Intime uses this
                 </div>
                 <p>
                   Timezones and workdays power hiring speed, time-to-fill,
-                  onboarding timelines, and PTO calculations across the platform.
+                  onboarding timelines, and PTO calculations across the
+                  platform.
                 </p>
               </div>
 
@@ -362,10 +371,13 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* ADVANCED SETTINGS (your existing right-hand cards moved down) */}
+        {/* ADVANCED SETTINGS: now includes PAYROLL connect */}
         <section className="grid gap-5 lg:grid-cols-2">
+          {/* Payroll connection */}
+          <PayrollConnectionCard />
+
           {/* PTO policies summary */}
-          <div className="card px-5 py-4 space-y-3">
+          <div className="card space-y-3 px-5 py-4">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="section-title">PTO & leave policies</h2>
@@ -393,9 +405,13 @@ export default function SettingsPage() {
                 </p>
               </div>
 
-              <ul className="list-disc pl-5 space-y-1 text-slate-600">
-                <li>Assign different policies to departments or locations.</li>
-                <li>Support for unlimited PTO, accrual-based, and fixed banks.</li>
+              <ul className="list-disc space-y-1 pl-5 text-slate-600">
+                <li>
+                  Assign different policies to departments or locations.
+                </li>
+                <li>
+                  Support for unlimited PTO, accrual-based, and fixed banks.
+                </li>
                 <li>Sync approved time-off into calendars automatically.</li>
               </ul>
             </div>
@@ -412,7 +428,7 @@ export default function SettingsPage() {
           </div>
 
           {/* Security / access placeholder */}
-          <div className="card px-5 py-4 space-y-3">
+          <div className="card space-y-3 px-5 py-4">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="section-title">Access & admin</h2>
@@ -425,8 +441,8 @@ export default function SettingsPage() {
 
             <div className="space-y-2 text-xs text-slate-600">
               <p>
-                Role-based permissions will let you grant access to HR, managers,
-                finance, and IT without exposing everything.
+                Role-based permissions will let you grant access to HR,
+                managers, finance, and IT without exposing everything.
               </p>
               <p className="text-slate-500">
                 For now, all settings changes are treated as admin-level

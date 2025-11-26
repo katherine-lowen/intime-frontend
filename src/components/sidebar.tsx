@@ -1,4 +1,3 @@
-// src/components/sidebar.tsx
 "use client";
 
 import { useState } from "react";
@@ -117,13 +116,19 @@ const TALENT_FLYOUT_ITEMS: FlyoutItem[] = [
   },
 ];
 
-// Platform hub: operations, docs, settings, analytics
+// Platform hub: operations, payroll, docs, settings, analytics
 const PLATFORM_FLYOUT_ITEMS: FlyoutItem[] = [
   {
     href: "/operations",
     label: "Operations",
     description: "HR operations, workflows, and insights.",
     icon: "⚙️",
+  },
+  {
+    href: "/payroll",
+    label: "Payroll & compensation",
+    description: "Pay schedules, comp, and providers.",
+    icon: "💸",
   },
   {
     href: "/employee-documents",
@@ -180,7 +185,11 @@ const SECTIONS: NavSection[] = [
       { href: "/talent", label: "Talent hub", icon: "⭐" },
       // Key quick-links
       { href: "/hiring", label: "Recruiting", icon: "📌" },
-      { href: "/onboarding/templates", label: "Onboarding templates", icon: "🧩" },
+      {
+        href: "/onboarding/templates",
+        label: "Onboarding templates",
+        icon: "🧩",
+      },
     ],
   },
 
@@ -189,7 +198,7 @@ const SECTIONS: NavSection[] = [
     items: [
       // Flyout anchor
       { href: "/operations", label: "Operations", icon: "⚙️" },
-      // Essentials
+      { href: "/payroll", label: "Payroll", icon: "💸" },
       { href: "/employee-documents", label: "Documents", icon: "📂" },
       { href: "/settings", label: "Settings", icon: "⚙︎" },
     ],
