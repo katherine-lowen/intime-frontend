@@ -1,515 +1,341 @@
 // src/app/onboarding/templates/new/page.tsx
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import api from "@/lib/api";
-import { AuthGate } from "@/components/dev-auth-gate";
 
-export const dynamic = "force-dynamic";
+type AssigneeType = "EMPLOYEE" | "MANAGER" | "HR" | "OTHER";
 
-type TemplateTask = {
+type Step = {
   title: string;
-  description?: string | null;
-  assigneeType: "EMPLOYEE" | "MANAGER" | "HR" | "OTHER";
-  dueRelativeDays?: number | null;
+  description: string;
+  assigneeType: AssigneeType;
+  dueRelativeDays: string; // keep as string in state, convert to number/null on submit
 };
 
-type CreatedTemplate = {
-  id: string;
+const DEFAULT_STEP: Step = {
+  title: "",
+  description: "",
+  assigneeType: "EMPLOYEE",
+  dueRelativeDays: "",
 };
 
-const ASSIGNEE_OPTIONS: TemplateTask["assigneeType"][] = [
-  "EMPLOYEE",
-  "MANAGER",
-  "HR",
-  "OTHER",
-];
-
-function emptyTask(): TemplateTask {
-  return {
-    title: "",
-    description: "",
-    assigneeType: "EMPLOYEE",
-    dueRelativeDays: 0,
-  };
-}
-
-function toIntOrNull(value: string): number | null {
-  if (value.trim() === "") return null;
-  const n = Number.parseInt(value, 10);
-  return Number.isNaN(n) ? null : n;
-}
-
-function NewOnboardingTemplateInner() {
+export default function NewOnboardingTemplatePage() {
   const router = useRouter();
 
-  // Template metadata
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [department, setDepartment] = useState("");
   const [role, setRole] = useState("");
   const [isDefault, setIsDefault] = useState(false);
-
-  // AI prompt fields
-  const [aiSeniority, setAiSeniority] = useState("Mid-level");
-  const [aiLocation, setAiLocation] = useState("Remote / hybrid");
-  const [aiTone, setAiTone] = useState(
-    "Friendly, fast-moving SaaS company that cares about autonomy and context."
-  );
-
-  const [tasks, setTasks] = useState<TemplateTask[]>([]);
+  const [steps, setSteps] = useState<Step[]>([{ ...DEFAULT_STEP }]);
   const [saving, setSaving] = useState(false);
-  const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleGenerate(e: FormEvent) {
+  function updateStep(index: number, patch: Partial<Step>) {
+    setSteps((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], ...patch };
+      return next;
+    });
+  }
+
+  function addStep() {
+    setSteps((prev) => [...prev, { ...DEFAULT_STEP }]);
+  }
+
+  function removeStep(index: number) {
+    setSteps((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    setGenerating(true);
+
+    if (!name.trim()) {
+      setError("Template name is required.");
+      return;
+    }
+
+    const cleanedSteps = steps
+      .map((s) => ({
+        title: s.title.trim(),
+        description: s.description.trim() || undefined,
+        assigneeType: s.assigneeType,
+        dueRelativeDays:
+          s.dueRelativeDays.trim() === ""
+            ? null
+            : Number.isNaN(Number(s.dueRelativeDays))
+            ? null
+            : Number(s.dueRelativeDays),
+      }))
+      .filter((s) => s.title.length > 0);
+
+    if (cleanedSteps.length === 0) {
+      setError("Add at least one step to the template.");
+      return;
+    }
+
+    setSaving(true);
     try {
-      const res = await fetch("/api/ai-onboarding-template", {
+      const baseUrl =
+        process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+      const orgId =
+        process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
+
+      const res = await fetch(`${baseUrl}/onboarding/templates`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-org-id": orgId,
+        },
         body: JSON.stringify({
-          roleTitle: role || name,
-          department: department || undefined,
-          seniority: aiSeniority || undefined,
-          location: aiLocation || undefined,
-          companyTone: aiTone || undefined,
+          name: name.trim(),
+          description: description.trim() || undefined,
+          department: department.trim() || undefined,
+          role: role.trim() || undefined,
+          isDefault,
+          steps: cleanedSteps,
         }),
       });
 
       if (!res.ok) {
         const text = await res.text();
-        console.error("AI template error", res.status, text);
-        throw new Error("Failed to generate template from AI");
+        console.error("Create onboarding template failed:", res.status, text);
+        throw new Error(`Create failed: ${res.status}`);
       }
 
-      const data = (await res.json()) as { tasks: TemplateTask[] };
-      if (!Array.isArray(data.tasks) || data.tasks.length === 0) {
-        setError("AI did not return any tasks. Try adjusting the prompt.");
-      } else {
-        setTasks(data.tasks);
-      }
-    } catch (err: any) {
-      console.error("AI generate error", err);
-      setError(
-        err?.message || "Something went wrong generating the template with AI."
-      );
-    } finally {
-      setGenerating(false);
-    }
-  }
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setSaving(true);
-
-    try {
-      if (!name.trim()) {
-        setError("Template name is required.");
-        setSaving(false);
-        return;
-      }
-
-      const body = {
-        name: name.trim(),
-        description: description.trim() || undefined,
-        department: department.trim() || undefined,
-        role: role.trim() || undefined,
-        isDefault,
-        tasks: tasks.map((t) => ({
-          title: t.title.trim(),
-          description: t.description?.toString().trim() || undefined,
-          assigneeType: t.assigneeType,
-          dueRelativeDays:
-            typeof t.dueRelativeDays === "number" ? t.dueRelativeDays : null,
-        })),
-      };
-
-      const created = await api.post<CreatedTemplate>(
-        "/onboarding/templates",
-        body
-      );
-
-      router.push(`/onboarding/templates/${created.id}`);
-    } catch (err: any) {
-      console.error("Save template error", err);
-      setError(
-        err?.message || "Failed to save template. Please try again in a moment."
-      );
+      // On success, go back to the list
+      router.push("/onboarding/templates");
+      router.refresh();
+    } catch (e: any) {
+      setError(e?.message || "Failed to create template.");
     } finally {
       setSaving(false);
     }
   }
 
-  function updateTask(index: number, patch: Partial<TemplateTask>) {
-    setTasks((prev) =>
-      prev.map((t, i) => (i === index ? { ...t, ...patch } : t))
-    );
-  }
-
-  function addTask() {
-    setTasks((prev) => [...prev, emptyTask()]);
-  }
-
-  function removeTask(index: number) {
-    setTasks((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  function moveTask(index: number, direction: "up" | "down") {
-    setTasks((prev) => {
-      const next = [...prev];
-      const targetIndex = direction === "up" ? index - 1 : index + 1;
-      if (targetIndex < 0 || targetIndex >= next.length) return prev;
-      const [item] = next.splice(index, 1);
-      next.splice(targetIndex, 0, item);
-      return next;
-    });
-  }
-
   return (
-    <main className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-8">
-      {/* Header */}
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <Link
-            href="/onboarding/templates"
-            className="text-xs text-indigo-600 hover:underline"
-          >
-            ← Back to templates
-          </Link>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">
-            New onboarding template
-          </h1>
-          <p className="text-sm text-slate-600">
-            Use AI to draft a 30-day onboarding checklist, then fine-tune tasks
-            before saving as a reusable template.
-          </p>
+    <div className="px-6 py-6">
+      <form
+        onSubmit={handleSubmit}
+        className="mx-auto max-w-4xl space-y-6"
+      >
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold text-slate-100">
+              New onboarding template
+            </h1>
+            <p className="mt-1 text-sm text-slate-400">
+              Define a reusable checklist for onboarding new hires in this role or department.
+            </p>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 text-xs">
+        {error && (
+          <div className="rounded-md border border-red-500/60 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+            {error}
+          </div>
+        )}
+
+        {/* Template details */}
+        <div className="grid grid-cols-1 gap-4 rounded-xl border border-slate-800 bg-slate-950/60 p-4 md:grid-cols-2">
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">
+                Template name
+              </label>
+              <input
+                className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                placeholder="New hire – AE, US Remote"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">
+                Description
+              </label>
+              <textarea
+                className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                rows={3}
+                placeholder="What is this template used for?"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">
+                  Department (optional)
+                </label>
+                <input
+                  className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  placeholder="Sales"
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">
+                  Role / title (optional)
+                </label>
+                <input
+                  className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  placeholder="Account Executive"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <label className="mt-2 inline-flex items-center gap-2 text-sm text-slate-200">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-indigo-500 focus:ring-indigo-500"
+                checked={isDefault}
+                onChange={(e) => setIsDefault(e.target.checked)}
+              />
+              <span>Set as default onboarding template</span>
+            </label>
+
+            <p className="text-xs text-slate-500">
+              Default templates can be auto-suggested for new hires in this department or role.
+            </p>
+          </div>
+        </div>
+
+        {/* Steps builder */}
+        <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-100">
+                Steps
+              </h2>
+              <p className="mt-1 text-xs text-slate-400">
+                Define each task required to get a new hire fully onboarded.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={addStep}
+              className="inline-flex items-center rounded-md border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-xs font-medium text-slate-100 hover:bg-slate-900"
+            >
+              + Add step
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            {steps.map((step, index) => (
+              <div
+                key={index}
+                className="rounded-lg border border-slate-800 bg-slate-950/80 p-3 space-y-2"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Step {index + 1}
+                  </span>
+                  {steps.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeStep(index)}
+                      className="text-xs text-slate-400 hover:text-red-300"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400">
+                      Title
+                    </label>
+                    <input
+                      className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      placeholder="Welcome email, laptop ordering, system access..."
+                      value={step.title}
+                      onChange={(e) =>
+                        updateStep(index, { title: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400">
+                      Assignee
+                    </label>
+                    <select
+                      className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs text-slate-100 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      value={step.assigneeType}
+                      onChange={(e) =>
+                        updateStep(index, {
+                          assigneeType: e.target.value as AssigneeType,
+                        })
+                      }
+                    >
+                      <option value="EMPLOYEE">Employee</option>
+                      <option value="MANAGER">Manager</option>
+                      <option value="HR">HR</option>
+                      <option value="OTHER">Other</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-medium text-slate-400">
+                      Description (optional)
+                    </label>
+                    <input
+                      className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      placeholder="Details or links the assignee needs to complete this step."
+                      value={step.description}
+                      onChange={(e) =>
+                        updateStep(index, { description: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-400">
+                      Due (days after start)
+                    </label>
+                    <input
+                      type="number"
+                      className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      placeholder="0"
+                      value={step.dueRelativeDays}
+                      onChange={(e) =>
+                        updateStep(index, { dueRelativeDays: e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 pt-2">
           <button
             type="button"
-            onClick={addTask}
-            className="inline-flex items-center rounded-md border border-slate-200 bg-white px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50"
+            onClick={() => router.push("/onboarding/templates")}
+            className="text-sm text-slate-400 hover:text-slate-200"
           >
-            ➕ Add manual task
+            Cancel
           </button>
           <button
             type="submit"
-            form="new-template-form"
             disabled={saving}
-            className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-1.5 font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-60"
+            className="inline-flex items-center rounded-md bg-indigo-500 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-600 disabled:opacity-60"
           >
-            {saving ? "Saving…" : "Save template"}
+            {saving ? "Saving…" : "Create template"}
           </button>
         </div>
-      </header>
-
-      {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-          {error}
-        </div>
-      )}
-
-      <form
-        id="new-template-form"
-        onSubmit={handleSubmit}
-        className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1.6fr)]"
-      >
-        {/* LEFT: Template meta + AI prompt */}
-        <div className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="text-sm font-semibold text-slate-900">
-              Template details
-            </h2>
-            <p className="mt-1 text-xs text-slate-500">
-              Give this template a clear name and scope so it’s easy to reuse.
-            </p>
-
-            <div className="mt-3 space-y-3 text-sm">
-              <div>
-                <label className="block text-xs font-medium text-slate-700">
-                  Template name
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  placeholder="Standard Engineering Onboarding (30 days)"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-700">
-                  Description
-                </label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={3}
-                  className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  placeholder="30-day onboarding plan for new engineers in the core product team."
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-700">
-                    Department
-                  </label>
-                  <input
-                    type="text"
-                    value={department}
-                    onChange={(e) => setDepartment(e.target.value)}
-                    className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    placeholder="Engineering, Sales, Design…"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-700">
-                    Role / title
-                  </label>
-                  <input
-                    type="text"
-                    value={role}
-                    onChange={(e) => setRole(e.target.value)}
-                    className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    placeholder="Software Engineer, AE, Designer…"
-                  />
-                </div>
-              </div>
-
-              <label className="inline-flex items-center gap-2 text-xs text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={isDefault}
-                  onChange={(e) => setIsDefault(e.target.checked)}
-                  className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                />
-                Make this the default template for this role/department
-              </label>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-indigo-100 bg-indigo-50/70 p-4 text-xs text-slate-800 shadow-sm">
-            <h2 className="text-sm font-semibold text-slate-900">
-              Generate tasks with AI
-            </h2>
-            <p className="mt-1 text-xs text-slate-600">
-              Describe the role and what a great first month looks like. Intime
-              will draft a full checklist of tasks you can edit.
-            </p>
-
-            <div className="mt-3 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-medium text-slate-700">
-                    Seniority
-                  </label>
-                  <input
-                    type="text"
-                    value={aiSeniority}
-                    onChange={(e) => setAiSeniority(e.target.value)}
-                    className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    placeholder="Junior, Mid-level, Senior…"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-medium text-slate-700">
-                    Location / context
-                  </label>
-                  <input
-                    type="text"
-                    value={aiLocation}
-                    onChange={(e) => setAiLocation(e.target.value)}
-                    className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    placeholder="Remote, hybrid, HQ-based…"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-medium text-slate-700">
-                  Company tone & focus
-                </label>
-                <textarea
-                  value={aiTone}
-                  onChange={(e) => setAiTone(e.target.value)}
-                  rows={3}
-                  className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  placeholder="E.g. We move fast, value ownership, and want new hires to build relationships early."
-                />
-              </div>
-
-              <button
-                type="button"
-                onClick={handleGenerate}
-                disabled={generating}
-                className="mt-2 inline-flex items-center justify-center rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-60"
-              >
-                {generating ? "Generating from AI…" : "✨ Generate tasks with AI"}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* RIGHT: Tasks editor */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-900">
-              Template tasks
-            </h2>
-            <span className="text-[11px] text-slate-500">
-              {tasks.length} task{tasks.length === 1 ? "" : "s"}
-            </span>
-          </div>
-
-          {tasks.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-6 text-xs text-slate-500">
-              No tasks yet. Use{" "}
-              <span className="font-medium">“Generate tasks with AI”</span> or
-              add tasks manually to build your onboarding template.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {tasks.map((task, index) => (
-                <div
-                  key={index}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs shadow-sm"
-                >
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
-                      Task {index + 1}
-                    </span>
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => moveTask(index, "up")}
-                        className="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-500 hover:bg-slate-50"
-                      >
-                        ↑
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => moveTask(index, "down")}
-                        className="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-500 hover:bg-slate-50"
-                      >
-                        ↓
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => removeTask(index)}
-                        className="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-red-500 hover:bg-red-50"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div>
-                      <label className="block text-[11px] font-medium text-slate-700">
-                        Title
-                      </label>
-                      <input
-                        type="text"
-                        value={task.title}
-                        onChange={(e) =>
-                          updateTask(index, { title: e.target.value })
-                        }
-                        className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                        placeholder="Meet your manager"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-medium text-slate-700">
-                        Description
-                      </label>
-                      <textarea
-                        value={task.description ?? ""}
-                        onChange={(e) =>
-                          updateTask(index, { description: e.target.value })
-                        }
-                        rows={2}
-                        className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                        placeholder="30–45 minute 1:1 to align on expectations, communication preferences, and the first week’s priorities."
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-[1.2fr_0.8fr] gap-2">
-                      <div>
-                        <label className="block text-[11px] font-medium text-slate-700">
-                          Assignee
-                        </label>
-                        <select
-                          value={task.assigneeType}
-                          onChange={(e) =>
-                            updateTask(index, {
-                              assigneeType: e.target
-                                .value as TemplateTask["assigneeType"],
-                            })
-                          }
-                          className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                        >
-                          {ASSIGNEE_OPTIONS.map((opt) => (
-                            <option key={opt} value={opt}>
-                              {opt === "EMPLOYEE"
-                                ? "Employee"
-                                : opt === "MANAGER"
-                                ? "Manager"
-                                : opt === "HR"
-                                ? "HR / People"
-                                : "Other"}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-medium text-slate-700">
-                          Days from start
-                        </label>
-                        <input
-                          type="number"
-                          value={
-                            task.dueRelativeDays !== null &&
-                            task.dueRelativeDays !== undefined
-                              ? String(task.dueRelativeDays)
-                              : ""
-                          }
-                          onChange={(e) =>
-                            updateTask(index, {
-                              dueRelativeDays: toIntOrNull(e.target.value),
-                            })
-                          }
-                          className="mt-1 w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                          placeholder="0"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
       </form>
-    </main>
-  );
-}
-
-export default function NewOnboardingTemplatePage() {
-  return (
-    <AuthGate>
-      <NewOnboardingTemplateInner />
-    </AuthGate>
+    </div>
   );
 }
