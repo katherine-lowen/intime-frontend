@@ -53,6 +53,32 @@ type EmployeeReviewLite = {
   createdAt?: string | null;
 };
 
+type TimeOffStatus = "REQUESTED" | "APPROVED" | "DENIED" | "CANCELLED";
+
+type TimeOffType =
+  | "PTO"
+  | "SICK"
+  | "PERSONAL"
+  | "UNPAID"
+  | "JURY_DUTY"
+  | "PARENTAL_LEAVE";
+
+type TimeOffRequestLite = {
+  id: string;
+  type?: TimeOffType | null;
+  status: TimeOffStatus;
+  startDate: string;
+  endDate: string;
+  createdAt?: string | null;
+  policy?: {
+    id: string;
+    name: string;
+  } | null;
+  employee?: {
+    id: string;
+  } | null;
+};
+
 // -------- API helpers --------
 
 async function getEmployee(id: string): Promise<Employee> {
@@ -74,6 +100,20 @@ async function getEmployeeReviews(id: string): Promise<EmployeeReviewLite[]> {
     );
   } catch (err) {
     console.error("Failed to load performance reviews for employee", err);
+    return [];
+  }
+}
+
+async function getEmployeeTimeOffRequests(
+  employeeId: string
+): Promise<TimeOffRequestLite[]> {
+  try {
+    const all = await api.get<TimeOffRequestLite[]>("/timeoff/requests");
+    return (all as any[]).filter(
+      (r) => r.employee && r.employee.id === employeeId
+    );
+  } catch (err) {
+    console.error("Failed to load time off requests for employee", err);
     return [];
   }
 }
@@ -136,12 +176,40 @@ export default async function PersonPage({
 }) {
   const employeeId = params.id;
 
-  const [employee, events, flows, reviews] = await Promise.all([
-    getEmployee(employeeId),
-    getEmployeeEvents(employeeId),
-    getOnboardingFlows(),
-    getEmployeeReviews(employeeId),
-  ]);
+  // 👇 Guard so we never call /employees/undefined
+  if (!employeeId || employeeId === "undefined") {
+    return (
+      <AuthGate>
+        <main className="mx-auto max-w-3xl px-6 py-8">
+          <h1 className="text-xl font-semibold text-slate-100">
+            No employee selected
+          </h1>
+          <p className="mt-2 text-sm text-slate-400">
+            This page needs a valid employee ID in the URL. Go back to the
+            People hub and open someone from the list.
+          </p>
+          <div className="mt-4">
+            <Link
+              href="/people"
+              className="inline-flex items-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+            >
+              ← Back to People hub
+            </Link>
+          </div>
+        </main>
+      </AuthGate>
+    );
+  }
+
+  const [employee, events, flows, reviews, timeOffRequests] = await Promise.all(
+    [
+      getEmployee(employeeId),
+      getEmployeeEvents(employeeId),
+      getOnboardingFlows(),
+      getEmployeeReviews(employeeId),
+      getEmployeeTimeOffRequests(employeeId),
+    ]
+  );
 
   const fullName = `${employee.firstName} ${employee.lastName}`;
   const subtitleParts: string[] = [];
@@ -174,6 +242,16 @@ export default async function PersonPage({
     .sort((a, b) => {
       const da = a.createdAt ? Date.parse(a.createdAt) : 0;
       const db = b.createdAt ? Date.parse(b.createdAt) : 0;
+      return db - da;
+    })
+    .slice(0, 3);
+
+  // Time off: most recent 3 requests
+  const sortedTimeOff = timeOffRequests
+    .slice()
+    .sort((a, b) => {
+      const da = a.startDate ? Date.parse(a.startDate) : 0;
+      const db = b.startDate ? Date.parse(b.startDate) : 0;
       return db - da;
     })
     .slice(0, 3);
@@ -331,7 +409,7 @@ export default async function PersonPage({
             </div>
           </div>
 
-          {/* RIGHT: AI + Onboarding + Profile details */}
+          {/* RIGHT: AI + Onboarding + Time off + Profile details */}
           <div className="space-y-4">
             {/* AI insights */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -432,6 +510,66 @@ export default async function PersonPage({
                   </>
                 )}
               </div>
+            </div>
+
+            {/* Time off card */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-3 flex items-start justify-between gap-2">
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-900">
+                    Time off
+                  </h2>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Recent and upcoming time away for this employee.
+                  </p>
+                </div>
+                <Link
+                  href="/timeoff"
+                  className="text-[11px] font-medium text-indigo-600 hover:underline"
+                >
+                  Open time off
+                </Link>
+              </div>
+
+              {sortedTimeOff.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-600">
+                  No time off requests recorded for this employee yet.
+                  <div className="mt-2">
+                    <Link
+                      href={`/timeoff/new?employeeId=${employee.id}`}
+                      className="inline-flex items-center rounded-full bg-indigo-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-indigo-700"
+                    >
+                      New time off request
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <ul className="space-y-2 text-xs">
+                  {sortedTimeOff.map((r) => (
+                    <li
+                      key={r.id}
+                      className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <div className="text-[11px] font-medium text-slate-900">
+                          {r.type || "PTO"} · {formatDate(r.startDate)} –{" "}
+                          {formatDate(r.endDate)}
+                        </div>
+                        <div className="text-[11px] text-slate-500">
+                          {r.status === "REQUESTED"
+                            ? "Requested"
+                            : r.status === "APPROVED"
+                            ? "Approved"
+                            : r.status === "DENIED"
+                            ? "Denied"
+                            : "Cancelled"}
+                          {r.policy?.name ? ` · ${r.policy.name}` : ""}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             {/* Basic contact card */}

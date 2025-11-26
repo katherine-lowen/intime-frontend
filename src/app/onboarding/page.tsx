@@ -307,11 +307,12 @@ export default async function OnboardingListPage() {
                           </td>
                           <td className="px-4 py-2 text-right">
                             <Link
-                              href={`/onboarding/${employee.id}`}
-                              className="text-xs font-medium text-indigo-600 hover:underline"
-                            >
-                              View checklist →
+                  href={`/onboarding/${flow.id}`}
+              className="text-xs font-medium text-indigo-600 hover:underline"
+            >
+               View checklist →
                             </Link>
+
                           </td>
                         </tr>
                       );

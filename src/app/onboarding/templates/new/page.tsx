@@ -94,7 +94,7 @@ export default function NewOnboardingTemplatePage() {
           department: department.trim() || undefined,
           role: role.trim() || undefined,
           isDefault,
-          steps: cleanedSteps,
+         tasks: cleanedSteps,
         }),
       });
 
