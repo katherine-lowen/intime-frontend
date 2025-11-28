@@ -8,6 +8,7 @@ import TimeoffCalendar from "@/components/timeoff-calendar";
 import Link from "next/link";
 import { AuthGate } from "@/components/dev-auth-gate";
 import { CalendarClock, Umbrella, Users } from "lucide-react";
+import TimeoffPolicySummaryCard from "@/components/timeoff-policy-summary-card";
 
 export const dynamic = "force-dynamic";
 
@@ -95,7 +96,7 @@ export default async function TimeOffPage() {
 
         {/* DASHBOARD ROW */}
         <section className="grid gap-6 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1.6fr)]">
-          {/* Stats cards */}
+          {/* Left: stats + helper + policy coverage */}
           <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-3">
               <TimeoffStatCard
@@ -122,6 +123,9 @@ export default async function TimeOffPage() {
               Use this page as your PTO control center: incoming requests,
               upcoming time away, and a clear view of capacity across the org.
             </div>
+
+            {/* Policy coverage summary */}
+            <TimeoffPolicySummaryCard />
           </div>
 
           {/* Calendar / upcoming view */}

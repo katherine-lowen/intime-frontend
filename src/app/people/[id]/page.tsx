@@ -5,6 +5,7 @@ import AiPeopleTimeline from "@/components/ai-people-timeline";
 import Link from "next/link";
 import { AuthGate } from "@/components/dev-auth-gate";
 import PayrollCompCard from "@/components/payroll-comp-card";
+import EmployeeTimeoffPolicyCard from "@/components/employee-timeoff-policy-card";
 
 type EmployeeStatus = "ACTIVE" | "ON_LEAVE" | "CONTRACTOR" | "ALUMNI";
 
@@ -119,8 +120,9 @@ async function getOnboardingFlows(): Promise<OnboardingFlow[]> {
 
 async function getEmployeeReviews(id: string): Promise<EmployeeReviewLite[]> {
   try {
+    // backend controller: @Controller('performance-reviews')
     return await api.get<EmployeeReviewLite[]>(
-      `/performance/reviews?employeeId=${id}`
+      `/performance-reviews?employeeId=${id}`
     );
   } catch (err) {
     console.error("Failed to load performance reviews for employee", err);
@@ -142,7 +144,7 @@ async function getEmployeeTimeOffRequests(
   }
 }
 
-// -------- Formatting helpers --------
+// -------- Formatting / calculation helpers --------
 
 function formatStatus(status?: EmployeeStatus) {
   switch (status) {
@@ -191,17 +193,48 @@ function formatDate(value?: string | null) {
   return d.toLocaleDateString();
 }
 
+// Inclusive day count between two ISO dates
+function countDaysInclusive(startIso: string, endIso: string): number {
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  if (
+    Number.isNaN(start.getTime()) ||
+    Number.isNaN(end.getTime()) ||
+    end < start
+  ) {
+    return 0;
+  }
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const diff = end.getTime() - start.getTime();
+  return Math.floor(diff / msPerDay) + 1;
+}
+
+// Approved PTO days in the current calendar year
+function computePtoUsedThisYear(requests: TimeOffRequestLite[]): number {
+  const now = new Date();
+  const year = now.getFullYear();
+
+  return requests
+    .filter(
+      (r) =>
+        r.status === "APPROVED" &&
+        (r.type === "PTO" || !r.type) &&
+        new Date(r.startDate).getFullYear() === year
+    )
+    .reduce((sum, r) => sum + countDaysInclusive(r.startDate, r.endDate), 0);
+}
+
 export const dynamic = "force-dynamic";
 
 export default async function PersonPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  const employeeId = params.id;
+  const { id: employeeId } = await params;
 
   // Guard so we never call /employees/undefined
-  if (!employeeId || employeeId === "undefined") {
+  if (!employeeId || employeeId === "undefined" || employeeId.trim() === "") {
     return (
       <AuthGate>
         <main className="mx-auto max-w-3xl px-6 py-8">
@@ -279,6 +312,8 @@ export default async function PersonPage({
       return db - da;
     })
     .slice(0, 3);
+
+  const usedPtoDaysThisYear = computePtoUsedThisYear(timeOffRequests);
 
   return (
     <AuthGate>
@@ -433,7 +468,7 @@ export default async function PersonPage({
             </div>
           </div>
 
-          {/* RIGHT: AI + Onboarding + Time off + Payroll + Profile */}
+          {/* RIGHT: AI + Onboarding + Time off + PTO policy + Payroll + Profile */}
           <div className="space-y-4">
             {/* AI insights */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -546,6 +581,13 @@ export default async function PersonPage({
                   <p className="mt-1 text-xs text-slate-500">
                     Recent and upcoming time away for this employee.
                   </p>
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    {usedPtoDaysThisYear > 0
+                      ? `Used ${usedPtoDaysThisYear} PTO ${
+                          usedPtoDaysThisYear === 1 ? "day" : "days"
+                        } this year.`
+                      : "No approved PTO days yet this year."}
+                  </p>
                 </div>
                 <Link
                   href="/timeoff"
@@ -595,6 +637,9 @@ export default async function PersonPage({
                 </ul>
               )}
             </div>
+
+            {/* PTO policy assignment */}
+            <EmployeeTimeoffPolicyCard employeeId={employee.id} />
 
             {/* Payroll / comp card (safe even if values are undefined) */}
             <PayrollCompCard

@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AuthGate } from "@/components/dev-auth-gate";
+import { logSubmission } from "@/lib/submissions";
 
 type Employee = {
   id: string;
@@ -15,6 +16,10 @@ type Employee = {
 };
 
 type EmployeeDocumentStatus = "SENT" | "SIGNED" | "VOID";
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
 
 function getEmployeeLabel(e: Employee) {
   const name = [e.firstName, e.lastName].filter(Boolean).join(" ");
@@ -34,7 +39,8 @@ export default function NewEmployeeDocumentPage() {
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState("");
   const [notes, setNotes] = useState("");
-  const [status, setStatus] = useState<EmployeeDocumentStatus>("SENT");
+  const [status, setStatus] =
+    useState<EmployeeDocumentStatus>("SENT");
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,12 +51,8 @@ export default function NewEmployeeDocumentPage() {
         setLoadingEmployees(true);
         setEmployeesError(null);
 
-        const baseUrl =
-          process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
-        const orgId = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
-
-        const res = await fetch(`${baseUrl}/employees`, {
-          headers: { "x-org-id": orgId },
+        const res = await fetch(`${API_BASE}/employees`, {
+          headers: { "x-org-id": ORG_ID },
         });
 
         if (!res.ok) {
@@ -72,6 +74,8 @@ export default function NewEmployeeDocumentPage() {
     void loadEmployees();
   }, []);
 
+  const hasEmployees = employees.length > 0;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -85,25 +89,31 @@ export default function NewEmployeeDocumentPage() {
       return;
     }
 
-    setSaving(true);
-    try {
-      const baseUrl =
-        process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
-      const orgId = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
+    const payload = {
+      employeeId,
+      title: title.trim(),
+      kind: kind.trim() || null,
+      notes: notes.trim() || null,
+      status,
+    };
 
-      const res = await fetch(`${baseUrl}/employee-documents`, {
+    setSaving(true);
+
+    // 🔹 ATTEMPTED
+    await logSubmission({
+      action: "create_employee_document",
+      payload,
+      status: "ATTEMPTED",
+    });
+
+    try {
+      const res = await fetch(`${API_BASE}/employee-documents`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-org-id": orgId,
+          "x-org-id": ORG_ID,
         },
-        body: JSON.stringify({
-          employeeId,
-          title: title.trim(),
-          kind: kind.trim() || null,
-          notes: notes.trim() || null,
-          status,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -112,16 +122,30 @@ export default function NewEmployeeDocumentPage() {
         throw new Error(`Create failed: ${res.status}`);
       }
 
+      // 🔹 SUCCESS
+      await logSubmission({
+        action: "create_employee_document",
+        payload,
+        status: "SUCCESS",
+      });
+
       router.push("/employee-documents");
       router.refresh();
     } catch (e: any) {
-      setError(e?.message || "Failed to create document.");
+      const message = e?.message || "Failed to create document.";
+      setError(message);
+
+      // 🔹 FAILED
+      await logSubmission({
+        action: "create_employee_document",
+        payload,
+        status: "FAILED",
+        error: message,
+      });
     } finally {
       setSaving(false);
     }
   }
-
-  const hasEmployees = employees.length > 0;
 
   return (
     <AuthGate>

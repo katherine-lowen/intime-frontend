@@ -1,100 +1,167 @@
+// src/app/careers/[slug]/jobs/[id]/page.tsx
 import Link from "next/link";
-import api from "@/lib/api";
+import CareersApplyForm from "@/components/careers-apply-form";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8080";
+const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID || "demo-org";
 
 export const dynamic = "force-dynamic";
 
-type Job = {
+type Question = {
   id: string;
-  title: string;
-  location?: string | null;
-  department?: string | null;
-  description?: string | null;
+  label: string;
+  helpText?: string | null;
+  type: string;
+  required: boolean;
+  optionsJson?: any;
 };
 
-async function getJob(id: string): Promise<Job | null> {
+type PublicJobDetail = {
+  id: string;
+  title: string;
+  description?: string | null;
+  location?: string | null;
+  department?: string | null;
+  createdAt?: string | null;
+  compensationMin?: number | null;
+  compensationMax?: number | null;
+  compensationCurrency?: string | null;
+  applicationTemplate: {
+    id: string;
+    name: string;
+    description?: string | null;
+    questions: Question[];
+  } | null;
+};
+
+async function fetchJob(id: string): Promise<PublicJobDetail | null> {
   try {
-    const job = await api.get<Job>(`/careers/jobs/${id}`);
-    return job;
+    // Backend: CareersController.getJob -> GET /careers/jobs/:id
+    const res = await fetch(`${API_URL}/careers/jobs/${id}`, {
+      headers: {
+        "X-Org-Id": ORG_ID,
+      },
+      cache: "no-store",
+    });
+
+    if (!res.ok) {
+      console.error("Failed to load careers job", res.status, res.statusText);
+      return null;
+    }
+
+    return (await res.json()) as PublicJobDetail;
   } catch (err) {
-    console.error("Failed to load public job", err);
+    console.error("Error fetching careers job", err);
     return null;
   }
 }
 
 function formatCompanyFromSlug(slug: string): string {
   const cleaned = slug.replace(/-careers$/i, "");
-  return cleaned
-    .split("-")
-    .map((p) => p[0]?.toUpperCase() + p.slice(1))
-    .join(" ");
+  return (
+    cleaned
+      .split("-")
+      .filter(Boolean)
+      .map((part) => part[0]?.toUpperCase() + part.slice(1))
+      .join(" ") || "Your company"
+  );
 }
 
-export default async function JobDetailPage({
+function formatPosted(dateStr?: string | null) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+export default async function CareersJobDetailPage({
   params,
 }: {
   params: { slug: string; id: string };
 }) {
-  const job = await getJob(params.id);
-  const companyName = formatCompanyFromSlug(params.slug);
+  const job = await fetchJob(params.id);
 
   if (!job) {
+    const companyName = formatCompanyFromSlug(params.slug);
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm text-center">
-          <h1 className="text-lg font-semibold text-slate-900">Role not found</h1>
-          <p className="mt-2 text-sm text-slate-600">
-            This role may have been closed or unpublished.
-          </p>
+      <main className="mx-auto max-w-3xl px-6 py-10 text-center">
+        <h1 className="text-xl font-semibold text-slate-900">
+          This role is no longer available
+        </h1>
+        <p className="mt-2 text-sm text-slate-600">
+          It may have been filled or closed at {companyName}.{" "}
           <Link
             href={`/careers/${params.slug}/jobs`}
-            className="mt-4 inline-block rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
+            className="text-indigo-600 hover:underline"
           >
-            ← Back to all roles
+            View all open roles →
           </Link>
-        </div>
-      </div>
+        </p>
+      </main>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-slate-50">
-      <main className="mx-auto max-w-3xl px-6 py-10 space-y-10">
-        {/* Back link */}
-        <Link
-          href={`/careers/${params.slug}/jobs`}
-          className="text-sm text-slate-600 hover:text-indigo-600"
-        >
-          ← Back to all roles
-        </Link>
+  const companyName = formatCompanyFromSlug(params.slug);
+  const metaLine = [job.department, job.location].filter(Boolean).join(" • ");
 
-        {/* Job Header */}
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50">
+      <main className="mx-auto max-w-3xl px-6 py-10 space-y-8">
+        {/* Back link */}
+        <div className="flex items-center justify-between gap-3">
+          <Link
+            href={`/careers/${params.slug}/jobs`}
+            className="inline-flex items-center text-xs font-medium text-indigo-600 hover:underline"
+          >
+            ← Back to all roles
+          </Link>
+          <span className="text-[11px] text-slate-500">
+            {companyName} · Careers
+          </span>
+        </div>
+
+        {/* Header */}
         <header className="space-y-3">
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
-            {job.title}
-          </h1>
-          <div className="flex flex-wrap gap-3 text-sm text-slate-600">
-            <span>{companyName}</span>
-            {job.department && <span>• {job.department}</span>}
-            {job.location && <span>• {job.location}</span>}
+          <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-700">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            Open role
+            <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-slate-50">
+              {companyName}
+            </span>
+          </div>
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
+              {job.title}
+            </h1>
+            {metaLine && (
+              <p className="mt-1 text-sm text-slate-600">{metaLine}</p>
+            )}
+            {job.createdAt && (
+              <p className="mt-1 text-[11px] text-slate-400">
+                Posted {formatPosted(job.createdAt)}
+              </p>
+            )}
           </div>
         </header>
 
-        {/* Apply CTA */}
-        <div>
-          <Link
-            href={`/careers/${params.slug}/jobs/${job.id}/apply`}
-            className="inline-flex rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
-          >
-            Apply for this role
-          </Link>
-        </div>
+        {/* Job description */}
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="text-sm font-semibold text-slate-900">
+            About this role
+          </h2>
+          <p className="mt-2 text-sm text-slate-700 whitespace-pre-line">
+            {job.description ||
+              "The hiring manager is still polishing this job description."}
+          </p>
+        </section>
 
-        {/* Job Description */}
-        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-900">About the role</h2>
-          <div className="prose prose-sm mt-4 text-slate-700 whitespace-pre-wrap">
-            {job.description || "A description for this role has not been provided."}
-          </div>
+        {/* Application form */}
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <CareersApplyForm job={job} />
         </section>
       </main>
     </div>

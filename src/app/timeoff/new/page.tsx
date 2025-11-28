@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AuthGate } from "@/components/dev-auth-gate";
+import { logSubmission } from "@/lib/submissions";
 
 type TimeOffType =
   | "PTO"
@@ -30,6 +31,10 @@ type PolicyOption = {
   annualAllowanceDays?: number | null;
 };
 
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
+
 export default function NewTimeOffRequestPage() {
   const router = useRouter();
 
@@ -53,16 +58,12 @@ export default function NewTimeOffRequestPage() {
         setLoadingOptions(true);
         setOptionsError(null);
 
-        const baseUrl =
-          process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
-        const orgId = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
-
         const [employeesRes, policiesRes] = await Promise.all([
-          fetch(`${baseUrl}/employees`, {
-            headers: { "x-org-id": orgId },
+          fetch(`${API_URL}/employees`, {
+            headers: { "x-org-id": ORG_ID },
           }),
-          fetch(`${baseUrl}/timeoff/policies`, {
-            headers: { "x-org-id": orgId },
+          fetch(`${API_URL}/timeoff/policies`, {
+            headers: { "x-org-id": ORG_ID },
           }),
         ]);
 
@@ -111,26 +112,31 @@ export default function NewTimeOffRequestPage() {
     }
 
     setSaving(true);
-    try {
-      const baseUrl =
-        process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
-      const orgId = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
 
-      const res = await fetch(`${baseUrl}/timeoff/requests`, {
+    const payload = {
+      employeeId,
+      policyId: policyId || null,
+      type,
+      startDate,
+      endDate,
+      reason: reason.trim() || null,
+    };
+
+    // 🔹 Log attempt to Obsession
+    await logSubmission({
+      action: "create_timeoff_request",
+      status: "ATTEMPTED",
+      payload,
+    });
+
+    try {
+      const res = await fetch(`${API_URL}/timeoff/requests`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-org-id": orgId,
+          "x-org-id": ORG_ID,
         },
-        body: JSON.stringify({
-          employeeId,
-          policyId: policyId || null,
-          type,
-          startDate,
-          endDate,
-          reason: reason.trim() || null,
-          // managerId: optional, can be set later on approval
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -139,10 +145,26 @@ export default function NewTimeOffRequestPage() {
         throw new Error(`Create failed: ${res.status}`);
       }
 
+      // 🔹 Log success
+      await logSubmission({
+        action: "create_timeoff_request",
+        status: "SUCCESS",
+        payload,
+      });
+
       router.push("/timeoff");
       router.refresh();
     } catch (e: any) {
-      setError(e?.message || "Failed to create time off request.");
+      const message = e?.message || "Failed to create time off request.";
+      setError(message);
+
+      // 🔹 Log failure
+      await logSubmission({
+        action: "create_timeoff_request",
+        status: "FAILED",
+        payload,
+        error: message,
+      });
     } finally {
       setSaving(false);
     }

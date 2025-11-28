@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import api from "@/lib/api";
 import { AuthGate } from "@/components/dev-auth-gate";
+import { logSubmission } from "@/lib/submissions";
 
 type Employee = {
   id: string;
@@ -185,30 +186,53 @@ export default function NewOnboardingFlowPage() {
       return;
     }
 
+    const payload = {
+      employeeId,
+      startDate: startDate || null,
+      targetDate: targetDate || null,
+      tasks: tasks.map((t) => ({
+        title: t.title.trim(),
+        description: t.description?.trim() || undefined,
+        assigneeType: t.assigneeType,
+        dueRelativeDays: t.dueRelativeDays,
+      })),
+    };
+
+    setSubmitting(true);
+
+    // 🔹 Log ATTEMPTED
+    await logSubmission({
+      action: "create_onboarding_flow",
+      payload,
+      status: "ATTEMPTED",
+    });
+
     try {
-      setSubmitting(true);
-
-      const body = {
-        employeeId,
-        startDate: startDate || null,
-        targetDate: targetDate || null,
-        tasks: tasks.map((t) => ({
-          title: t.title.trim(),
-          description: t.description?.trim() || undefined,
-          assigneeType: t.assigneeType,
-          dueRelativeDays: t.dueRelativeDays,
-        })),
-      };
-
       const created = await api.post<{ id: string }>(
         "/onboarding/flows",
-        body,
+        payload,
       );
 
+      // 🔹 Log SUCCESS
+      await logSubmission({
+        action: "create_onboarding_flow",
+        payload: { ...payload, flowId: created.id },
+        status: "SUCCESS",
+      });
+
       router.push(`/onboarding/${created.id}`);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      setError("Failed to create onboarding flow.");
+      const message = e?.message || "Failed to create onboarding flow.";
+      setError(message);
+
+      // 🔹 Log FAILED
+      await logSubmission({
+        action: "create_onboarding_flow",
+        payload,
+        status: "FAILED",
+        error: message,
+      });
     } finally {
       setSubmitting(false);
     }

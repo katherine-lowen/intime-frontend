@@ -137,6 +137,12 @@ const PLATFORM_FLYOUT_ITEMS: FlyoutItem[] = [
     icon: "📂",
   },
   {
+    href: "/obsession",
+    label: "Obsession log",
+    description: "Internal feed of key submissions.",
+    icon: "🧠",
+  },
+  {
     href: "/settings",
     label: "Company settings",
     description: "Org & workspace configuration.",
@@ -200,6 +206,7 @@ const SECTIONS: NavSection[] = [
       { href: "/operations", label: "Operations", icon: "⚙️" },
       { href: "/payroll", label: "Payroll", icon: "💸" },
       { href: "/employee-documents", label: "Documents", icon: "📂" },
+      { href: "/obsession", label: "Obsession", icon: "🧠" },
       { href: "/settings", label: "Settings", icon: "⚙︎" },
     ],
   },

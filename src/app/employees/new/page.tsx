@@ -1,9 +1,14 @@
+// src/app/employees/new/page.tsx
 "use client";
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { logSubmission } from "@/lib/submissions";
 
-const API = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3333").replace(/\/$/, "");
+const API = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3333").replace(
+  /\/$/,
+  "",
+);
 const ORG = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
 
 export default function NewEmployeePage() {
@@ -17,36 +22,67 @@ export default function NewEmployeePage() {
   const [title, setTitle] = React.useState("");
   const [department, setDept] = React.useState("");
   const [location, setLoc] = React.useState("");
-  const [status, setStatus] = React.useState<"ACTIVE"|"ON_LEAVE"|"CONTRACTOR"|"ALUMNI">("ACTIVE");
+  const [status, setStatus] = React.useState<
+    "ACTIVE" | "ON_LEAVE" | "CONTRACTOR" | "ALUMNI"
+  >("ACTIVE");
   const [startDate, setStart] = React.useState("");
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
+
+    const payload = {
+      orgId: ORG,
+      firstName,
+      lastName,
+      email,
+      title: title || undefined,
+      department: department || undefined,
+      location: location || undefined,
+      status,
+      startDate: startDate || undefined,
+    };
+
     setLoading(true);
+
+    // 🔹 ATTEMPTED
+    await logSubmission({
+      action: "create_employee_raw",
+      payload,
+      status: "ATTEMPTED",
+    });
+
     try {
       const res = await fetch(`${API}/employees`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orgId: ORG,
-          firstName, lastName, email,
-          title: title || undefined,
-          department: department || undefined,
-          location: location || undefined,
-          status,
-          startDate: startDate || undefined,
-        }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const text = await res.text().catch(() => "");
         throw new Error(`HTTP ${res.status} ${text}`);
       }
-      // go back to list
+
+      // 🔹 SUCCESS
+      await logSubmission({
+        action: "create_employee_raw",
+        payload,
+        status: "SUCCESS",
+      });
+
       r.push("/employees");
       r.refresh();
     } catch (e: any) {
-      setErr(e?.message ?? "Failed to create employee");
+      const message = e?.message ?? "Failed to create employee";
+      setErr(message);
+
+      // 🔹 FAILED
+      await logSubmission({
+        action: "create_employee_raw",
+        payload,
+        status: "FAILED",
+        error: message,
+      });
     } finally {
       setLoading(false);
     }
@@ -55,13 +91,22 @@ export default function NewEmployeePage() {
   return (
     <div className="mx-auto max-w-2xl px-6 py-8">
       <h1 className="text-2xl font-semibold tracking-tight">Add Employee</h1>
-      <p className="mt-1 text-sm text-neutral-600">Create a real record in your database.</p>
+      <p className="mt-1 text-sm text-neutral-600">
+        Create a real record in your database.
+      </p>
 
       <form onSubmit={onSubmit} className="mt-6 space-y-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="First name" value={firstName} onChange={setFirst} required />
           <Field label="Last name" value={lastName} onChange={setLast} required />
-          <Field label="Email" type="email" value={email} onChange={setEmail} required className="sm:col-span-2" />
+          <Field
+            label="Email"
+            type="email"
+            value={email}
+            onChange={setEmail}
+            required
+            className="sm:col-span-2"
+          />
           <Field label="Title" value={title} onChange={setTitle} />
           <Field label="Department" value={department} onChange={setDept} />
           <Field label="Location" value={location} onChange={setLoc} />
@@ -78,10 +123,19 @@ export default function NewEmployeePage() {
               <option value="ALUMNI">ALUMNI</option>
             </select>
           </div>
-          <Field label="Start date" type="date" value={startDate} onChange={setStart} />
+          <Field
+            label="Start date"
+            type="date"
+            value={startDate}
+            onChange={setStart}
+          />
         </div>
 
-        {err && <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{err}</div>}
+        {err && (
+          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            {err}
+          </div>
+        )}
 
         <div className="flex gap-3">
           <button
