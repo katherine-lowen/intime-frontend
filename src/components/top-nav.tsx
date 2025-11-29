@@ -14,6 +14,34 @@ import {
   ArrowRight,
 } from "lucide-react";
 import ProfileMenu from "@/components/profile-menu";
+import api from "@/lib/api";
+
+/* --------------------------------------
+   /me RESPONSE TYPE (minimal)
+--------------------------------------- */
+
+type MeResponse = {
+  user: {
+    id: string;
+    email: string;
+    name?: string | null;
+  } | null;
+  org: {
+    id: string;
+    name: string;
+    plan?: string | null;
+  } | null;
+  employee: {
+    id: string;
+    firstName: string;
+    lastName: string;
+  } | null;
+  membership: {
+    id: string;
+    role: string;
+  } | null;
+  inferredOrgId: string | null;
+};
 
 /* --------------------------------------
    LABEL META + CRUMBS (same logic as before)
@@ -26,15 +54,43 @@ type LabelMeta = {
 };
 
 const BASE_LABELS: Record<string, LabelMeta> = {
-  "/": { title: "Dashboard", section: "Overview", subtitle: "Org-wide snapshot" },
-  "/dashboard": { title: "Dashboard", section: "Overview", subtitle: "Org-wide snapshot" },
+  "/": {
+    title: "Dashboard",
+    section: "Overview",
+    subtitle: "Org-wide snapshot",
+  },
+  "/dashboard": {
+    title: "Dashboard",
+    section: "Overview",
+    subtitle: "Org-wide snapshot",
+  },
 
-  "/people": { title: "Directory", section: "People", subtitle: "Everyone in your org" },
-  "/people/new": { title: "Add employee", section: "People", subtitle: "Create a new profile" },
+  "/people": {
+    title: "Directory",
+    section: "People",
+    subtitle: "Everyone in your org",
+  },
+  "/people/new": {
+    title: "Add employee",
+    section: "People",
+    subtitle: "Create a new profile",
+  },
 
-  "/jobs": { title: "Jobs", section: "Talent", subtitle: "Open roles & pipelines" },
-  "/candidates": { title: "Candidates", section: "Talent", subtitle: "Applicants & interviews" },
-  "/hiring": { title: "Hiring home", section: "Talent", subtitle: "Recruiting workspace" },
+  "/jobs": {
+    title: "Jobs",
+    section: "Talent",
+    subtitle: "Open roles & pipelines",
+  },
+  "/candidates": {
+    title: "Candidates",
+    section: "Talent",
+    subtitle: "Applicants & interviews",
+  },
+  "/hiring": {
+    title: "Hiring home",
+    section: "Talent",
+    subtitle: "Recruiting workspace",
+  },
 
   "/hiring/ai-studio": {
     title: "AI Studio",
@@ -66,7 +122,11 @@ const BASE_LABELS: Record<string, LabelMeta> = {
     subtitle: "Org & workspace settings",
   },
 
-  "/timeoff": { title: "Time off", section: "People", subtitle: "Policies & requests" },
+  "/timeoff": {
+    title: "Time off",
+    section: "People",
+    subtitle: "Policies & requests",
+  },
   "/help": { title: "Help & support", section: "Support" },
 };
 
@@ -86,7 +146,11 @@ function getMeta(pathname: string): LabelMeta {
   }
 
   if (basePath.startsWith("/candidates/")) {
-    return { title: "Candidate", section: "Talent", subtitle: "Candidate detail" };
+    return {
+      title: "Candidate",
+      section: "Talent",
+      subtitle: "Candidate detail",
+    };
   }
 
   return { title: "Workspace", section: "Intime", subtitle: "HR platform" };
@@ -97,25 +161,40 @@ function getCrumbs(pathname: string): Crumb[] {
   const segments = path.split("/").filter(Boolean);
 
   if (segments.length === 0 || segments[0] === "dashboard") {
-    return [{ label: "Overview", href: "/dashboard" }, { label: "Dashboard" }];
+    return [
+      { label: "Overview", href: "/dashboard" },
+      { label: "Dashboard" },
+    ];
   }
 
   const [first] = segments;
 
   if (first === "people") {
-    return [{ label: "People", href: "/people" }, { label: "Directory" }];
+    return [
+      { label: "People", href: "/people" },
+      { label: "Directory" },
+    ];
   }
 
   if (first === "hiring") {
-    return [{ label: "Talent", href: "/talent" }, { label: "Hiring" }];
+    return [
+      { label: "Talent", href: "/talent" },
+      { label: "Hiring" },
+    ];
   }
 
   if (first === "jobs") {
-    return [{ label: "Talent", href: "/talent" }, { label: "Jobs" }];
+    return [
+      { label: "Talent", href: "/talent" },
+      { label: "Jobs" },
+    ];
   }
 
   if (first === "candidates") {
-    return [{ label: "Talent", href: "/talent" }, { label: "Candidates" }];
+    return [
+      { label: "Talent", href: "/talent" },
+      { label: "Candidates" },
+    ];
   }
 
   if (first === "talent") return [{ label: "Talent overview" }];
@@ -264,6 +343,40 @@ export default function TopNav() {
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
 
+  // /me identity state
+  const [me, setMe] = useState<MeResponse | null>(null);
+  const [meLoading, setMeLoading] = useState(true);
+
+  // Fetch /me on mount
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMe() {
+      try {
+        const data = await api.get<MeResponse>("/me");
+        if (!cancelled) {
+          setMe(data);
+        }
+      } catch (e) {
+        console.error("[TopNav] Failed to load /me:", e);
+      } finally {
+        if (!cancelled) setMeLoading(false);
+      }
+    }
+
+    loadMe();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const displayName =
+    me?.employee
+      ? `${me.employee.firstName} ${me.employee.lastName}`
+      : me?.user?.name || "Guest";
+  const displayEmail = me?.user?.email || "unknown@example.com";
+  const orgName = me?.org?.name || "Intime workspace";
+
   // keyboard shortcuts: ⌘K / Ctrl+K + Esc
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -371,15 +484,25 @@ export default function TopNav() {
             </button>
           </div>
 
-          {/* RIGHT: ICONS + PROFILE */}
+          {/* RIGHT: ORG BADGE + ICONS + PROFILE */}
           <div className="flex items-center gap-4 flex-shrink-0">
+            {/* Org pill */}
+            <div className="hidden md:flex flex-col items-end mr-1">
+              <span className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                Workspace
+              </span>
+              <span className="inline-flex items-center rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-[11px] text-slate-200">
+                {orgName}
+              </span>
+            </div>
+
             <HelpCircle className="text-slate-300 h-4 w-4 hover:text-white cursor-pointer hidden md:block" />
             <Keyboard className="text-slate-300 h-4 w-4 hover:text-white cursor-pointer hidden md:block" />
             <Bell className="text-slate-300 h-4 w-4 hover:text-white cursor-pointer hidden md:block" />
 
             <ProfileMenu
-              name="Katherine Soroka"
-              email="katherine@hireintime.ai"
+              name={displayName}
+              email={displayEmail}
             />
           </div>
         </div>

@@ -2,7 +2,34 @@
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
 
-const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID || "demo-org";
+// Optional: use this ONLY if you want to force a specific org for debugging.
+// Leave it undefined in real multi-org mode.
+const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID || "";
+
+/**
+ * Try to read identity info from the browser.
+ * Populated by IdentitySync.tsx after Supabase login.
+ */
+function getIdentityHeaders(): Record<string, string> {
+  if (typeof window === "undefined") {
+    return {};
+  }
+
+  const email = window.localStorage.getItem("intime_user_email") || "";
+  const name = window.localStorage.getItem("intime_user_name") || "";
+
+  const headers: Record<string, string> = {};
+  if (email) headers["x-user-email"] = email;
+  if (name) headers["x-user-name"] = name;
+
+  // If you *really* want to hard-force an org on the frontend side
+  // (e.g., demo or single-tenant mode), set NEXT_PUBLIC_ORG_ID in env.
+  if (ORG_ID) {
+    headers["x-org-id"] = ORG_ID;
+  }
+
+  return headers;
+}
 
 async function apiFetch<T>(
   path: string,
@@ -15,7 +42,7 @@ async function apiFetch<T>(
 
   const finalHeaders: HeadersInit = {
     "Content-Type": "application/json",
-    "x-org-id": ORG_ID,
+    ...getIdentityHeaders(),
     ...(headers || {}),
   };
 
@@ -31,8 +58,17 @@ async function apiFetch<T>(
 
   if (!res.ok) {
     const text = await res.text();
-    console.error("[api.ts] Error", options.method || "GET", url, "→", res.status, text);
-    throw new Error(`API ${options.method || "GET"} ${path} failed: ${res.status}`);
+    console.error(
+      "[api.ts] Error",
+      options.method || "GET",
+      url,
+      "→",
+      res.status,
+      text
+    );
+    throw new Error(
+      `API ${options.method || "GET"} ${path} failed: ${res.status}`
+    );
   }
 
   // Handle 204 No Content
@@ -44,8 +80,7 @@ async function apiFetch<T>(
 }
 
 const api = {
-  get: <T>(path: string) =>
-    apiFetch<T>(path, { method: "GET" }),
+  get: <T>(path: string) => apiFetch<T>(path, { method: "GET" }),
 
   post: <T>(path: string, body?: unknown) =>
     apiFetch<T>(path, { method: "POST", jsonBody: body }),
@@ -53,8 +88,7 @@ const api = {
   patch: <T>(path: string, body?: unknown) =>
     apiFetch<T>(path, { method: "PATCH", jsonBody: body }),
 
-  del: <T>(path: string) =>
-    apiFetch<T>(path, { method: "DELETE" }),
+  del: <T>(path: string) => apiFetch<T>(path, { method: "DELETE" }),
 };
 
 export default api;

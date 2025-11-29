@@ -3,6 +3,7 @@ import "./globals.css";
 import type { ReactNode } from "react";
 import { Sidebar } from "@/components/sidebar";
 import TopNav from "@/components/top-nav";
+import { IdentitySync } from "@/components/IdentitySync";
 
 export const metadata = {
   title: "Intime HR Platform",
@@ -13,11 +14,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body className="bg-slate-50 text-slate-900 antialiased">
+        {/* 👇 Runs client-side only; syncs Supabase user → localStorage */}
+        <IdentitySync />
+
         <div className="flex min-h-screen">
           {/* Left nav */}
           <aside className="hidden w-64 md:flex flex-col bg-slate-950">
-  <Sidebar />
-</aside>
+            <Sidebar />
+          </aside>
 
           {/* Main column */}
           <div className="flex min-h-screen flex-1 flex-col">

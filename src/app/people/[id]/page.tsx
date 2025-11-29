@@ -25,7 +25,7 @@ type PayrollProvider =
   | "OTHER";
 
 type Employee = {
-  id: string;
+  employeeId: string; // canonical ID we use everywhere
   firstName: string;
   lastName: string;
   email?: string | null;
@@ -33,15 +33,41 @@ type Employee = {
   department?: string | null;
   location?: string | null;
   status?: EmployeeStatus;
-  manager?: { id: string; firstName: string; lastName: string } | null;
+  startDate?: string | Date | null;
 
-  // Payroll / comp fields (all optional & safe if backend doesn't send them yet)
+  manager?: {
+    employeeId: string;
+    firstName: string;
+    lastName: string;
+  } | null;
+
+  // Payroll / comp
   payType?: PayType | null;
   basePayCents?: number | null;
   payCurrency?: string | null;
   paySchedule?: PaySchedule | null;
   payrollProvider?: PayrollProvider | null;
   payrollExternalId?: string | null;
+};
+
+// Shape returned from /employees list
+type EmployeeListItem = {
+  employeeId?: string;
+  id?: string;
+  firstName: string;
+  lastName: string;
+  email?: string | null;
+  title?: string | null;
+  department?: string | null;
+  location?: string | null;
+  status?: EmployeeStatus;
+  startDate?: string | null;
+  manager?: {
+    employeeId?: string;
+    id?: string;
+    firstName: string;
+    lastName: string;
+  } | null;
 };
 
 type EventItem = {
@@ -106,23 +132,119 @@ type TimeOffRequestLite = {
 
 // -------- API helpers --------
 
-async function getEmployee(id: string): Promise<Employee> {
-  return api.get(`/employees/${id}`);
+// Try the single-employee endpoint first
+async function tryGetEmployeeDetail(id: string): Promise<Employee | null> {
+  try {
+    const e = await api.get<any>(`/employees/${id}`);
+    return {
+      employeeId: e.employeeId ?? id,
+      firstName: e.firstName,
+      lastName: e.lastName,
+      email: e.email ?? null,
+      title: e.title ?? null,
+      department: e.department ?? null,
+      location: e.location ?? null,
+      status: e.status,
+      startDate:
+        typeof e.startDate === "string"
+          ? e.startDate
+          : e.startDate ?? null,
+      manager: e.manager
+        ? {
+            employeeId: e.manager.employeeId ?? e.manager.id ?? "",
+            firstName: e.manager.firstName,
+            lastName: e.manager.lastName,
+          }
+        : null,
+      payType: e.payType ?? null,
+      basePayCents: e.basePayCents ?? null,
+      payCurrency: e.payCurrency ?? null,
+      paySchedule: e.paySchedule ?? null,
+      payrollProvider: e.payrollProvider ?? null,
+      payrollExternalId: e.payrollExternalId ?? null,
+    };
+  } catch (err) {
+    console.warn("GET /employees/:id failed, will fall back to list", err);
+    return null;
+  }
 }
 
-async function getEmployeeEvents(id: string): Promise<EventItem[]> {
-  return api.get(`/events?employeeId=${id}`);
+// Fall back to the list endpoint if detail endpoint fails
+async function tryResolveEmployeeFromList(id: string): Promise<Employee | null> {
+  try {
+    const list = await api.get<EmployeeListItem[]>("/employees");
+
+    const match = list.find(
+      (e) => e.employeeId === id || e.id === id
+    );
+    if (!match) return null;
+
+    return {
+      employeeId: match.employeeId ?? match.id ?? id,
+      firstName: match.firstName,
+      lastName: match.lastName,
+      email: match.email ?? null,
+      title: match.title ?? null,
+      department: match.department ?? null,
+      location: match.location ?? null,
+      status: match.status,
+      startDate: match.startDate ?? null,
+      manager: match.manager
+        ? {
+            employeeId: match.manager.employeeId ?? match.manager.id ?? "",
+            firstName: match.manager.firstName,
+            lastName: match.manager.lastName,
+          }
+        : null,
+      // list doesn’t return payroll fields, so default them
+      payType: null,
+      basePayCents: null,
+      payCurrency: "USD",
+      paySchedule: null,
+      payrollProvider: "NONE",
+      payrollExternalId: null,
+    };
+  } catch (err) {
+    console.error("Fallback /employees list failed", err);
+    return null;
+  }
+}
+
+// Unified resolver: detail endpoint first, then list
+async function getEmployeeById(id: string): Promise<Employee | null> {
+  const fromDetail = await tryGetEmployeeDetail(id);
+  if (fromDetail) return fromDetail;
+
+  const fromList = await tryResolveEmployeeFromList(id);
+  return fromList;
+}
+
+async function getEmployeeEvents(employeeId: string): Promise<EventItem[]> {
+  try {
+    return await api.get<EventItem[]>(`/events?employeeId=${employeeId}`);
+  } catch (err) {
+    console.error("Failed to load events for employee", employeeId, err);
+    return [];
+  }
 }
 
 async function getOnboardingFlows(): Promise<OnboardingFlow[]> {
-  return api.get("/onboarding/flows");
+  try {
+    return await api.get<OnboardingFlow[]>("/onboarding/flows");
+  } catch (err) {
+    console.warn(
+      "[people/[id]] /onboarding/flows not available yet, returning []"
+    );
+    return [];
+  }
 }
 
-async function getEmployeeReviews(id: string): Promise<EmployeeReviewLite[]> {
+async function getEmployeeReviews(
+  employeeId: string
+): Promise<EmployeeReviewLite[]> {
   try {
-    // backend controller: @Controller('performance-reviews')
     return await api.get<EmployeeReviewLite[]>(
-      `/performance-reviews?employeeId=${id}`
+      `/performance-reviews?employeeId=${employeeId}`
     );
   } catch (err) {
     console.error("Failed to load performance reviews for employee", err);
@@ -231,10 +353,13 @@ export default async function PersonPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id: employeeId } = await params;
+  const { id: employeeIdFromUrl } = await params;
 
-  // Guard so we never call /employees/undefined
-  if (!employeeId || employeeId === "undefined" || employeeId.trim() === "") {
+  if (
+    !employeeIdFromUrl ||
+    employeeIdFromUrl === "undefined" ||
+    employeeIdFromUrl.trim() === ""
+  ) {
     return (
       <AuthGate>
         <main className="mx-auto max-w-3xl px-6 py-8">
@@ -258,15 +383,41 @@ export default async function PersonPage({
     );
   }
 
-  const [employee, events, flows, reviews, timeOffRequests] = await Promise.all(
-    [
-      getEmployee(employeeId),
-      getEmployeeEvents(employeeId),
-      getOnboardingFlows(),
-      getEmployeeReviews(employeeId),
-      getEmployeeTimeOffRequests(employeeId),
-    ]
-  );
+  // 1️⃣ Try detail endpoint, then list fallback
+  const employee = await getEmployeeById(employeeIdFromUrl);
+
+  if (!employee) {
+    return (
+      <AuthGate>
+        <main className="mx-auto max-w-3xl px-6 py-8">
+          <h1 className="text-xl font-semibold text-slate-900">
+            Employee not found
+          </h1>
+          <p className="mt-2 text-sm text-slate-600">
+            We couldn&apos;t find an employee for this ID in the current
+            workspace.
+          </p>
+          <div className="mt-4">
+            <Link
+              href="/people"
+              className="inline-flex items-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+            >
+              ← Back to People hub
+            </Link>
+          </div>
+        </main>
+      </AuthGate>
+    );
+  }
+
+  const employeeId = employee.employeeId;
+
+  const [events, flows, reviews, timeOffRequests] = await Promise.all([
+    getEmployeeEvents(employeeId),
+    getOnboardingFlows(),
+    getEmployeeReviews(employeeId),
+    getEmployeeTimeOffRequests(employeeId),
+  ]);
 
   const fullName = `${employee.firstName} ${employee.lastName}`;
   const subtitleParts: string[] = [];
@@ -275,7 +426,6 @@ export default async function PersonPage({
   if (employee.location) subtitleParts.push(employee.location);
   const subtitle = subtitleParts.join(" • ");
 
-  // Pick the most recent non-archived flow for this employee
   const employeeFlows = flows.filter((f) => f.employeeId === employeeId);
   const currentFlow =
     employeeFlows
@@ -293,7 +443,6 @@ export default async function PersonPage({
     currentFlow?.targetDate &&
     new Date(currentFlow.targetDate).toLocaleDateString();
 
-  // Latest 3 reviews
   const latestReviews = reviews
     .slice()
     .sort((a, b) => {
@@ -303,7 +452,6 @@ export default async function PersonPage({
     })
     .slice(0, 3);
 
-  // Time off: most recent 3 requests
   const sortedTimeOff = timeOffRequests
     .slice()
     .sort((a, b) => {
@@ -356,13 +504,13 @@ export default async function PersonPage({
             {/* Performance CTAs */}
             <div className="flex flex-wrap items-center justify-end gap-2">
               <Link
-                href={`/performance/reviews/new?employeeId=${employee.id}`}
+                href={`/performance/reviews/new?employeeId=${employeeId}`}
                 className="inline-flex items-center gap-1 rounded-full bg-indigo-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-indigo-700"
               >
                 New review
               </Link>
               <Link
-                href={`/performance/reviews?employeeId=${employee.id}`}
+                href={`/performance/reviews?employeeId=${employeeId}`}
                 className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
               >
                 View reviews
@@ -371,7 +519,7 @@ export default async function PersonPage({
 
             {/* Onboarding CTAs */}
             <Link
-              href={`/onboarding/new?employeeId=${employee.id}`}
+              href={`/onboarding/new?employeeId=${employeeId}`}
               className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-semibold text-slate-50 hover:bg-slate-800"
             >
               Start onboarding
@@ -416,7 +564,7 @@ export default async function PersonPage({
                   </p>
                 </div>
                 <Link
-                  href={`/performance/reviews/new?employeeId=${employee.id}`}
+                  href={`/performance/reviews/new?employeeId=${employeeId}`}
                   className="text-[11px] font-medium text-indigo-600 hover:text-indigo-500"
                 >
                   New review
@@ -458,7 +606,7 @@ export default async function PersonPage({
               {reviews.length > 3 && (
                 <div className="mt-3 text-right text-[11px]">
                   <Link
-                    href={`/performance/reviews?employeeId=${employee.id}`}
+                    href={`/performance/reviews?employeeId=${employeeId}`}
                     className="text-indigo-600 hover:text-indigo-500"
                   >
                     View all reviews →
@@ -480,7 +628,7 @@ export default async function PersonPage({
                 risks.
               </p>
               <div className="mt-4">
-                <AiPeopleTimeline employeeId={employee.id} />
+                <AiPeopleTimeline employeeId={employeeId} />
               </div>
             </div>
 
@@ -510,7 +658,7 @@ export default async function PersonPage({
                     No onboarding flow has been started for this employee yet.
                     <div className="mt-2">
                       <Link
-                        href={`/onboarding/new?employeeId=${employee.id}`}
+                        href={`/onboarding/new?employeeId=${employeeId}`}
                         className="inline-flex items-center rounded-full bg-indigo-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-indigo-700"
                       >
                         Start onboarding plan
@@ -560,7 +708,7 @@ export default async function PersonPage({
                         Open onboarding flow
                       </Link>
                       <Link
-                        href={`/onboarding/new?employeeId=${employee.id}`}
+                        href={`/onboarding/new?employeeId=${employeeId}`}
                         className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold text-slate-50 hover:bg-slate-800"
                       >
                         Regenerate onboarding plan
@@ -602,7 +750,7 @@ export default async function PersonPage({
                   No time off requests recorded for this employee yet.
                   <div className="mt-2">
                     <Link
-                      href={`/timeoff/new?employeeId=${employee.id}`}
+                      href={`/timeoff/new?employeeId=${employeeId}`}
                       className="inline-flex items-center rounded-full bg-indigo-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-indigo-700"
                     >
                       New time off request
@@ -639,11 +787,11 @@ export default async function PersonPage({
             </div>
 
             {/* PTO policy assignment */}
-            <EmployeeTimeoffPolicyCard employeeId={employee.id} />
+            <EmployeeTimeoffPolicyCard employeeId={employeeId} />
 
-            {/* Payroll / comp card (safe even if values are undefined) */}
+            {/* Payroll / comp card */}
             <PayrollCompCard
-              employeeId={employee.id}
+              employeeId={employeeId}
               initial={{
                 payType: employee.payType ?? null,
                 basePayCents: employee.basePayCents ?? null,

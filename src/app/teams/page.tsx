@@ -1,79 +1,99 @@
 // src/app/teams/page.tsx
 import Link from "next/link";
 import api from "@/lib/api";
-import { AuthGate } from "@/components/dev-auth-gate";
+
+export const dynamic = "force-dynamic";
 
 type Team = {
   id: string;
-  orgId: string;
   name: string;
-  memberCount?: number;
-  createdAt?: string;
+  employeesCount: number;
 };
 
 async function getTeams(): Promise<Team[]> {
-  return api.get("/teams");
+  return api.get<Team[]>("/teams");
 }
 
 export default async function TeamsPage() {
   const teams = await getTeams();
+  const totalHeadcount = teams.reduce(
+    (sum, t) => sum + (t.employeesCount || 0),
+    0
+  );
 
   return (
-    <main className="p-6 space-y-6">
-      <header className="flex items-center justify-between">
+    <main className="mx-auto max-w-5xl px-6 py-8">
+      {/* Header */}
+      <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Teams</h1>
-          <p className="text-sm opacity-70">Groups of people in your org.</p>
+          <div className="text-xs text-slate-400">People</div>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">
+            Teams
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Logical groups of employees for reporting, analytics, and headcount.
+          </p>
         </div>
-        <Link
-          href="/teams/new"
-          className="rounded border px-3 py-2 text-sm hover:bg-gray-50"
-        >
-          Add Team
-        </Link>
+        <div className="flex flex-col items-end gap-2 text-xs">
+          <div className="flex items-center gap-3 text-slate-500">
+            <span>
+              <span className="font-semibold text-slate-900">
+                {teams.length}
+              </span>{" "}
+              teams
+            </span>
+            <span className="h-4 w-px bg-slate-200" />
+            <span>
+              <span className="font-semibold text-emerald-700">
+                {totalHeadcount}
+              </span>{" "}
+              employees
+            </span>
+          </div>
+          <Link
+            href="/people/new"
+            className="inline-flex items-center rounded-full bg-slate-900 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-slate-800"
+          >
+            Add employee
+          </Link>
+        </div>
       </header>
 
+      {/* Empty state */}
       {teams.length === 0 ? (
-        <div className="rounded border p-6 text-sm text-gray-600">
-          No teams yet. Click{" "}
-          <span className="font-medium">Add Team</span> to create your first
-          one.
-        </div>
+        <section className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 py-8 text-center text-sm text-slate-600">
+          <p>No teams yet.</p>
+          <p className="mt-2">
+            Teams are created automatically when you start assigning employees
+            to them, or you can add them by seeding data in the backend.
+          </p>
+        </section>
       ) : (
-        <ul className="divide-y rounded border">
+        <section className="grid gap-4 md:grid-cols-2">
           {teams.map((t) => (
-            <li
+            <Link
               key={t.id}
-              className="grid grid-cols-3 gap-4 p-4 text-sm items-center"
+              href={`/teams/${t.id}`}
+              className="group rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-800 shadow-sm hover:border-indigo-200 hover:bg-indigo-50/60"
             >
-              {/* Name + actions */}
-              <div className="flex flex-col gap-1">
-                <Link
-                  href={`/teams/${t.id}/edit`}
-                  className="font-medium hover:underline"
-                >
-                  {t.name}
-                </Link>
-                <Link
-                  href={`/teams/${t.id}/intelligence`}
-                  className="text-xs text-indigo-600 hover:underline"
-                >
-                  Open intelligence →
-                </Link>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-900 group-hover:text-indigo-700">
+                    {t.name}
+                  </h2>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {t.employeesCount === 1
+                      ? "1 person"
+                      : `${t.employeesCount} people`}
+                  </p>
+                </div>
+                <div className="rounded-full bg-slate-900/90 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-slate-50 group-hover:bg-slate-900">
+                  View team
+                </div>
               </div>
-
-              {/* Members */}
-              <div>{t.memberCount ?? "—"} members</div>
-
-              {/* Created date */}
-              <div className="text-right opacity-70">
-                {t.createdAt
-                  ? new Date(t.createdAt).toLocaleDateString()
-                  : "—"}
-              </div>
-            </li>
+            </Link>
           ))}
-        </ul>
+        </section>
       )}
     </main>
   );

@@ -1,282 +1,161 @@
 // src/app/teams/[id]/page.tsx
-import api from "@/lib/api";
 import Link from "next/link";
-import { AuthGate } from "@/components/dev-auth-gate";
-
-type EmployeeStatus = "ACTIVE" | "ON_LEAVE" | "CONTRACTOR" | "ALUMNI";
-
-type Team = {
-  id: string;
-  orgId: string;
-  name: string;
-  memberCount?: number;
-  createdAt?: string;
-};
-
-type Employee = {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email?: string | null;
-  title?: string | null;
-  department?: string | null;
-  status?: EmployeeStatus | null;
-  teamId?: string | null;
-};
-
-type EventItem = {
-  id: string;
-  type: string;
-  source: string;
-  summary?: string | null;
-  createdAt?: string | null;
-  employeeId?: string | null;
-  jobId?: string | null;
-};
-
-async function getTeams(): Promise<Team[]> {
-  return api.get<Team[]>("/teams");
-}
-
-async function getEmployees(): Promise<Employee[]> {
-  return api.get<Employee[]>("/employees");
-}
-
-async function getEvents(): Promise<EventItem[]> {
-  return api.get<EventItem[]>("/events");
-}
-
-// Next 16: params is a Promise in server components, so we await it
-type PageProps = {
-  params: Promise<{
-    id: string;
-  }>;
-};
+import api from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
-export default async function TeamDetailPage({ params }: PageProps) {
-  const { id } = await params;
-  const teamId = id;
+type EmployeeStatus = "ACTIVE" | "ON_LEAVE" | "CONTRACTOR" | "ALUMNI";
 
-  let teams: Team[] = [];
-  let employees: Employee[] = [];
-  let events: EventItem[] = [];
+type TeamDetail = {
+  id: string;
+  name: string;
+  employeesCount: number;
+  employees: {
+    id: string;
+    employeeId?: string;
+    firstName: string;
+    lastName: string;
+    email?: string | null;
+    title?: string | null;
+    department?: string | null;
+    location?: string | null;
+    status?: EmployeeStatus | null;
+    managerId?: string | null;
+  }[];
+};
 
-  try {
-    [teams, employees, events] = await Promise.all([
-      getTeams(),
-      getEmployees(),
-      getEvents(),
-    ]);
-  } catch (err) {
-    console.error("Failed to load team detail data", err);
-    return (
-      <main className="p-6 space-y-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Team</h1>
-        <p className="text-sm text-red-600">
-          Something went wrong while loading this team from the API.
-        </p>
-      </main>
-    );
+async function getTeam(id: string): Promise<TeamDetail> {
+  return api.get<TeamDetail>(`/teams/${id}`);
+}
+
+function statusLabel(status?: EmployeeStatus | null) {
+  switch (status) {
+    case "ACTIVE":
+      return "Active";
+    case "ON_LEAVE":
+      return "On leave";
+    case "CONTRACTOR":
+      return "Contractor";
+    case "ALUMNI":
+      return "Alumni";
+    default:
+      return "Active";
   }
+}
 
-  const team = teams.find((t) => t.id === teamId);
-
-  if (!team) {
-    return (
-      <main className="p-6 space-y-4">
-        <header className="flex items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Team</h1>
-            <p className="text-sm text-slate-600">
-              This team could not be found.
-            </p>
-          </div>
-          <Link
-            href="/teams"
-            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 hover:bg-slate-50"
-          >
-            ← Back to teams
-          </Link>
-        </header>
-        <p className="text-sm text-slate-600">
-          It may have been deleted or you may have followed an old link.
-        </p>
-      </main>
-    );
-  }
-
-  const members = employees.filter((e) => e.teamId === teamId);
-  const activeMembers = members.filter((m) => m.status === "ACTIVE");
-
-  // Events for people on this team
-  const teamMemberIds = new Set(members.map((m) => m.id));
-  const teamEvents = events
-    .filter((ev) => ev.employeeId && teamMemberIds.has(ev.employeeId))
-    .sort((a, b) => {
-      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return bTime - aTime;
-    })
-    .slice(0, 20);
+export default async function TeamPage({
+  params,
+}: {
+  params: { id: string };
+}) {
+  const teamId = params.id;
+  const team = await getTeam(teamId);
 
   return (
-    <main className="flex flex-col gap-6 p-6">
+    <main className="mx-auto max-w-5xl px-6 py-8">
+      {/* Breadcrumbs */}
+      <div className="mb-4 flex items-center gap-2 text-xs text-slate-400">
+        <Link href="/people" className="text-indigo-600 hover:underline">
+          People
+        </Link>
+        <span className="text-slate-300">/</span>
+        <Link href="/teams" className="text-indigo-600 hover:underline">
+          Teams
+        </Link>
+        <span className="text-slate-300">/</span>
+        <span>Team</span>
+      </div>
+
       {/* Header */}
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">
+      <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
             {team.name}
           </h1>
-          <p className="text-sm text-slate-600">
-            {members.length === 0
-              ? "No members assigned yet."
-              : `${members.length} people • ${activeMembers.length} active`}
+          <p className="mt-1 text-sm text-slate-500">
+            {team.employeesCount === 1
+              ? "1 person in this team."
+              : `${team.employeesCount} people in this team.`}
           </p>
-          {team.createdAt && (
-            <p className="text-xs text-slate-500">
-              Created{" "}
-              {new Date(team.createdAt).toLocaleDateString(undefined, {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              })}
-            </p>
-          )}
         </div>
-
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <Link
-            href="/teams"
-            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-800 hover:bg-slate-50"
-          >
-            ← All teams
-          </Link>
-          <Link
-            href={`/teams/${team.id}/edit`}
-            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-medium text-slate-800 hover:bg-slate-50"
-          >
-            Edit team
-          </Link>
-          <Link
-            href={`/teams/${team.id}/intelligence`}
-            className="rounded-full border border-slate-200 bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-slate-800"
-          >
-            Open intelligence
-          </Link>
-        </div>
+        <Link
+          href="/org"
+          className="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+        >
+          View in org chart
+        </Link>
       </header>
 
-      {/* Main layout: members + recent activity */}
-      <div className="grid gap-6 md:grid-cols-3">
-        {/* Members */}
-        <section className="md:col-span-2 space-y-3 rounded-xl border border-slate-200 bg-white/70 p-4 shadow-sm">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold tracking-tight">
-              Team members
-            </h2>
-            <Link
-              href="/people"
-              className="text-[11px] text-slate-500 hover:underline"
-            >
-              Manage people →
-            </Link>
-          </div>
-
-          {members.length === 0 ? (
-            <p className="text-xs text-slate-500">
-              No one has been assigned to this team yet. Once you link employees
-              to this team, they&apos;ll appear here with status and role.
-            </p>
-          ) : (
-            <ul className="divide-y divide-slate-100 rounded-lg border border-slate-100 bg-white">
-              {members.map((m) => (
-                <li
-                  key={m.id}
-                  className="flex items-center justify-between gap-3 px-3 py-2 text-xs"
-                >
-                  <div className="flex flex-col">
-                    <Link
-                      href={`/people/${m.id}`}
-                      className="font-medium text-slate-900 hover:underline"
-                    >
-                      {m.firstName} {m.lastName}
-                    </Link>
-                    <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                      {m.title && <span>{m.title}</span>}
-                      {m.department && (
-                        <>
-                          <span>·</span>
-                          <span>{m.department}</span>
-                        </>
-                      )}
-                      {m.email && (
-                        <>
-                          <span>·</span>
-                          <span>{m.email}</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  <div className="text-right text-[11px] text-slate-600">
-                    {m.status
-                      ? m.status.replace(/_/g, " ").toLowerCase()
-                      : "—"}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+      {/* Members table */}
+      {team.employees.length === 0 ? (
+        <section className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 py-8 text-center text-sm text-slate-600">
+          <p>No members yet.</p>
+          <p className="mt-2">
+            Assign employees to this team from their profile page in the People
+            directory.
+          </p>
         </section>
-
-        {/* Recent activity */}
-        <section className="space-y-3 rounded-xl border border-slate-200 bg-white/70 p-4 shadow-sm">
-          <h2 className="text-sm font-semibold tracking-tight">
-            Recent activity
-          </h2>
-
-          {teamEvents.length === 0 ? (
-            <p className="text-xs text-slate-500">
-              No recent events for this team yet. As hires, status changes, and
-              reviews happen for team members, they&apos;ll show up here.
-            </p>
-          ) : (
-            <ul className="space-y-2 text-xs">
-              {teamEvents.map((ev) => (
-                <li
-                  key={ev.id}
-                  className="rounded-md bg-slate-50 px-2.5 py-2 flex flex-col gap-1"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] font-medium text-slate-800">
-                      {ev.summary || ev.type}
-                    </span>
-                    <span className="text-[10px] text-slate-500">
-                      {ev.createdAt
-                        ? new Date(ev.createdAt).toLocaleDateString(
-                            undefined,
-                            {
-                              month: "short",
-                              day: "numeric",
-                            },
-                          )
-                        : ""}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
-                    <span className="uppercase tracking-wide rounded-full border border-slate-200 bg-white px-2 py-0.5">
-                      {ev.type}
-                    </span>
-                    <span>·</span>
-                    <span>{ev.source}</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+      ) : (
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <table className="min-w-full divide-y divide-slate-100 text-sm">
+            <thead className="bg-slate-50/80">
+              <tr className="text-xs uppercase tracking-[0.14em] text-slate-500">
+                <th className="px-4 py-3 text-left">Name</th>
+                <th className="px-4 py-3 text-left">Role</th>
+                <th className="px-4 py-3 text-left">Department</th>
+                <th className="px-4 py-3 text-left">Location</th>
+                <th className="px-4 py-3 text-left">Status</th>
+                <th className="px-4 py-3 text-right">Profile</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {team.employees.map((e) => {
+                const id = e.employeeId || e.id;
+                const fullName = `${e.firstName} ${e.lastName}`.trim();
+                return (
+                  <tr key={id} className="hover:bg-slate-50/60">
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col">
+                        <Link
+                          href={`/people/${id}`}
+                          className="text-sm font-medium text-slate-900 hover:text-indigo-600"
+                        >
+                          {fullName || "Unnamed"}
+                        </Link>
+                        {e.email && (
+                          <span className="text-xs text-slate-500">
+                            {e.email}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-700">
+                      {e.title || "—"}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-700">
+                      {e.department || "—"}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-700">
+                      {e.location || "—"}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-700">
+                      {statusLabel(e.status || "ACTIVE")}
+                    </td>
+                    <td className="px-4 py-3 text-right text-xs">
+                      <Link
+                        href={`/people/${id}`}
+                        className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+                      >
+                        Open profile
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </section>
-      </div>
+      )}
     </main>
   );
 }
