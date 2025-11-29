@@ -6,7 +6,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Menu,
-  X,
   Search,
   Bell,
   HelpCircle,
@@ -312,10 +311,18 @@ const COMMANDS: CommandItem[] = [
 ];
 
 /* --------------------------------------
+   PROPS
+--------------------------------------- */
+
+type TopNavProps = {
+  onOpenSidebar?: () => void;
+};
+
+/* --------------------------------------
    TOP NAV + COMMAND PALETTE
 --------------------------------------- */
 
-export default function TopNav() {
+export default function TopNav({ onOpenSidebar }: TopNavProps) {
   const router = useRouter();
   const rawPath = usePathname();
   const pathname = rawPath ?? "/";
@@ -330,9 +337,6 @@ export default function TopNav() {
 
   const meta = getMeta(pathname);
   const crumbs = getCrumbs(pathname);
-  // (rest of your component stays the same)
-
-  const [mobileOpen, setMobileOpen] = useState(false);
 
   // command palette state
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -417,10 +421,10 @@ export default function TopNav() {
             <button
               type="button"
               className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800 md:hidden"
-              onClick={() => setMobileOpen((prev) => !prev)}
-              aria-label="Toggle navigation"
+              onClick={() => onOpenSidebar && onOpenSidebar()}
+              aria-label="Open navigation"
             >
-              {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+              <Menu className="h-4 w-4" />
             </button>
 
             {/* Breadcrumbs + current title (desktop) */}
@@ -567,8 +571,6 @@ export default function TopNav() {
           </div>
         </div>
       )}
-
-      {/* NOTE: mobile sidebar state is kept here if you want to wire it later. */}
     </>
   );
 }
