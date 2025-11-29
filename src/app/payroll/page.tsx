@@ -33,6 +33,13 @@ async function getPayrollExport(): Promise<PayrollRow[]> {
     cache: "no-store",
   });
 
+  if (res.status === 404) {
+    // Backend route not wired yet or no export for this org.
+    // For demo/YC mode, just treat this as "no data yet".
+    console.warn("Payroll export endpoint returned 404 – treating as empty.");
+    return [];
+  }
+
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     console.error("Failed to load payroll export", res.status, text);
@@ -41,6 +48,7 @@ async function getPayrollExport(): Promise<PayrollRow[]> {
 
   return (await res.json()) as PayrollRow[];
 }
+
 
 function formatMoney(cents: number | null | undefined, currency: string | null | undefined) {
   if (!cents && cents !== 0) return "—";
