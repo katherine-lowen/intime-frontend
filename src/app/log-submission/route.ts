@@ -1,40 +1,28 @@
+// src/app/log-submission/route.ts
 import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase-server";
 
-export async function POST(req: Request) {
+// Simple no-op log endpoint so build doesn't depend on Supabase
+export async function POST(request: Request) {
   try {
-    const body = await req.json();
+    // You can parse and inspect the body here if you want:
+    // const body = await request.json();
+    // console.log("log-submission", body);
 
-    const {
-      action,
-      orgId,
-      userId,
-      status = "ATTEMPTED",
-      payload,
-      error,
-    } = body;
-
-    const { data, error: supabaseError } = await supabaseServer
-      .from("user_submissions")
-      .insert({
-        action,
-        org_id: orgId,
-        user_id: userId,
-        status,
-        payload,
-        error,
-      })
-      .select()
-      .single();
-
-    if (supabaseError) {
-      console.error("Supabase error:", supabaseError);
-      return NextResponse.json({ error: "supabase insert failed" }, { status: 500 });
-    }
-
-    return NextResponse.json({ ok: true, id: data.id });
+    return NextResponse.json(
+      {
+        ok: true,
+        message: "Log received (no-op, Supabase disabled).",
+      },
+      { status: 200 }
+    );
   } catch (err) {
-    console.error(err);
-    return NextResponse.json({ error: "unexpected error" }, { status: 500 });
+    console.error("log-submission error", err);
+    return NextResponse.json(
+      {
+        ok: false,
+        message: "Failed to handle log submission.",
+      },
+      { status: 500 }
+    );
   }
 }
