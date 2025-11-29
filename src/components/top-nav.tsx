@@ -14,37 +14,23 @@ import {
   ArrowRight,
 } from "lucide-react";
 import ProfileMenu from "@/components/profile-menu";
-import api from "@/lib/api";
 
 /* --------------------------------------
-   /me RESPONSE TYPE (minimal)
+   Stored user (from auth)
 --------------------------------------- */
 
-type MeResponse = {
-  user: {
-    id: string;
-    email: string;
-    name?: string | null;
-  } | null;
-  org: {
-    id: string;
-    name: string;
-    plan?: string | null;
-  } | null;
-  employee: {
-    id: string;
-    firstName: string;
-    lastName: string;
-  } | null;
-  membership: {
-    id: string;
-    role: string;
-  } | null;
-  inferredOrgId: string | null;
+const USER_KEY = "intime_user";
+
+type StoredUser = {
+  id: string;
+  email: string;
+  name?: string | null;
+  orgId?: string;
+  role?: string;
 };
 
 /* --------------------------------------
-   LABEL META + CRUMBS (same logic as before)
+   LABEL META + CRUMBS
 --------------------------------------- */
 
 type LabelMeta = {
@@ -326,15 +312,25 @@ const COMMANDS: CommandItem[] = [
 ];
 
 /* --------------------------------------
-   TOP NAV + GLOBAL COMMAND PALETTE
+   TOP NAV + COMMAND PALETTE
 --------------------------------------- */
 
 export default function TopNav() {
   const router = useRouter();
   const rawPath = usePathname();
   const pathname = rawPath ?? "/";
+
+  // Hide top nav on auth + signup flows
+  const isAuthRoute =
+    pathname.startsWith("/login") || pathname.startsWith("/signup");
+
+  if (isAuthRoute) {
+    return null;
+  }
+
   const meta = getMeta(pathname);
   const crumbs = getCrumbs(pathname);
+  // (rest of your component stays the same)
 
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -343,39 +339,26 @@ export default function TopNav() {
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  // /me identity state
-  const [me, setMe] = useState<MeResponse | null>(null);
-  const [meLoading, setMeLoading] = useState(true);
+  // user identity from localStorage
+  const [user, setUser] = useState<StoredUser | null>(null);
 
-  // Fetch /me on mount
   useEffect(() => {
-    let cancelled = false;
-
-    async function loadMe() {
-      try {
-        const data = await api.get<MeResponse>("/me");
-        if (!cancelled) {
-          setMe(data);
-        }
-      } catch (e) {
-        console.error("[TopNav] Failed to load /me:", e);
-      } finally {
-        if (!cancelled) setMeLoading(false);
-      }
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(USER_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as StoredUser;
+      setUser(parsed);
+    } catch (e) {
+      console.warn("[TopNav] Failed to parse stored user", e);
     }
-
-    loadMe();
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   const displayName =
-    me?.employee
-      ? `${me.employee.firstName} ${me.employee.lastName}`
-      : me?.user?.name || "Guest";
-  const displayEmail = me?.user?.email || "unknown@example.com";
-  const orgName = me?.org?.name || "Intime workspace";
+    user?.name ||
+    (user?.email ? user.email.split("@")[0] : "Guest");
+  const displayEmail = user?.email || "unknown@example.com";
+  const orgName = "Intime workspace";
 
   // keyboard shortcuts: ⌘K / Ctrl+K + Esc
   useEffect(() => {
@@ -500,10 +483,7 @@ export default function TopNav() {
             <Keyboard className="text-slate-300 h-4 w-4 hover:text-white cursor-pointer hidden md:block" />
             <Bell className="text-slate-300 h-4 w-4 hover:text-white cursor-pointer hidden md:block" />
 
-            <ProfileMenu
-              name={displayName}
-              email={displayEmail}
-            />
+            <ProfileMenu name={displayName} email={displayEmail} />
           </div>
         </div>
       </header>
@@ -588,9 +568,7 @@ export default function TopNav() {
         </div>
       )}
 
-      {/* NOTE: mobile sidebar itself is still handled by the Sidebar component;
-          this file just keeps track of the hamburger's "open" state if you ever
-          want to wire it in. */}
+      {/* NOTE: mobile sidebar state is kept here if you want to wire it later. */}
     </>
   );
 }

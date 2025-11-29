@@ -1,289 +1,262 @@
 // src/app/performance/reviews/page.tsx
-import Link from "next/link";
 import api from "@/lib/api";
 import { AuthGate } from "@/components/dev-auth-gate";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-type SearchParams = Record<string, string | string[] | undefined>;
+type ReviewRating =
+  | "Needs improvement"
+  | "Meets expectations"
+  | "Exceeds expectations"
+  | "Outstanding"
+  | string
+  | null
+  | undefined;
 
-type EmployeeLite = {
+type Review = {
   id: string;
-  firstName: string;
-  lastName: string;
-  title?: string | null;
-  department?: string | null;
-};
-
-type PerformanceReview = {
-  id: string;
-  orgId: string;
-  employeeId: string;
   period?: string | null;
-  rating?: string | null;
-  managerSummary?: string | null;
-  employeeSummary?: string | null;
-  createdAt: string;
-  employee: EmployeeLite;
+  rating?: ReviewRating;
+  createdAt?: string | null;
+  employee?: {
+    id: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    email?: string | null;
+    title?: string | null;
+    department?: string | null;
+  } | null;
 };
 
-function first(sp: SearchParams, key: string): string | undefined {
-  const v = sp[key];
-  return Array.isArray(v) ? v[0] : v;
-}
-
-async function getReviews(employeeId?: string): Promise<PerformanceReview[]> {
-  let url = "/performance-reviews";
-  if (employeeId) {
-    const params = new URLSearchParams();
-    params.set("employeeId", employeeId);
-    url = `/performance-reviews?${params.toString()}`;
+function ratingBadge(rating: ReviewRating) {
+  if (!rating) {
+    return (
+      <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs font-medium text-slate-500">
+        Unrated
+      </span>
+    );
   }
-  return api.get<PerformanceReview[]>(url);
+
+  const base =
+    "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border";
+
+  if (rating === "Needs improvement") {
+    return (
+      <span className={`${base} border-rose-200 bg-rose-50 text-rose-800`}>
+        Needs improvement
+      </span>
+    );
+  }
+  if (rating === "Meets expectations") {
+    return (
+      <span className={`${base} border-slate-200 bg-slate-50 text-slate-700`}>
+        Meets expectations
+      </span>
+    );
+  }
+  if (rating === "Exceeds expectations") {
+    return (
+      <span
+        className={`${base} border-emerald-200 bg-emerald-50 text-emerald-800`}
+      >
+        Exceeds expectations
+      </span>
+    );
+  }
+  if (rating === "Outstanding") {
+    return (
+      <span
+        className={`${base} border-indigo-200 bg-indigo-50 text-indigo-800`}
+      >
+        Outstanding
+      </span>
+    );
+  }
+
+  return (
+    <span className={`${base} border-slate-200 bg-slate-50 text-slate-700`}>
+      {rating}
+    </span>
+  );
 }
 
 function formatDate(value?: string | null) {
   if (!value) return "—";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  return d.toLocaleDateString();
 }
 
-function withinLastDays(dateStr: string, days: number) {
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return false;
-  const now = new Date();
-  const cutoff = new Date();
-  cutoff.setDate(now.getDate() - days);
-  return d >= cutoff && d <= now;
+function getEmployeeName(e: Review["employee"]) {
+  if (!e) return "Employee";
+  const name = [e.firstName, e.lastName].filter(Boolean).join(" ");
+  return name || e.email || "Employee";
 }
 
-function thisQuarter(dateStr: string) {
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return false;
-  const now = new Date();
-  const q = Math.floor(now.getMonth() / 3);
-  const qStart = new Date(now.getFullYear(), q * 3, 1);
-  const qEnd = new Date(now.getFullYear(), q * 3 + 3, 0, 23, 59, 59, 999);
-  return d >= qStart && d <= qEnd;
+async function getReviews(): Promise<Review[]> {
+  try {
+    // Always get the full list; filter by employeeId on the server component.
+    return await api.get<Review[]>("/performance-reviews");
+  } catch (err) {
+    console.error("Failed to load performance reviews:", err);
+    return [];
+  }
 }
 
 export default async function PerformanceReviewsPage({
   searchParams,
 }: {
-  searchParams: Promise<SearchParams>;
+  searchParams?: { [key: string]: string | string[] | undefined };
 }) {
-  const sp = await searchParams;
-  const employeeId = first(sp, "employeeId");
+  const reviews = await getReviews();
 
-  let reviews: PerformanceReview[] = [];
-  try {
-    reviews = await getReviews(employeeId);
-  } catch (e) {
-    console.error("Failed to load performance reviews", e);
-  }
+  const employeeIdFilter =
+    typeof searchParams?.employeeId === "string"
+      ? searchParams.employeeId
+      : undefined;
 
-  const total = reviews.length;
-  const last30 = reviews.filter((r) => withinLastDays(r.createdAt, 30)).length;
+  const filteredReviews = employeeIdFilter
+    ? reviews.filter((r) => r.employee?.id === employeeIdFilter)
+    : reviews;
 
-  const employeesThisQuarter = new Set(
-    reviews
-      .filter((r) => thisQuarter(r.createdAt))
-      .map((r) => r.employeeId)
-  ).size;
-
-  const isFilteredToEmployee = !!employeeId;
+  const hasReviews = filteredReviews.length > 0;
+  const firstEmployee = filteredReviews[0]?.employee;
 
   return (
     <AuthGate>
-      <main className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-8">
-        {/* HEADER */}
-        <header className="flex flex-wrap items-start justify-between gap-3">
+      <main className="mx-auto max-w-6xl px-6 py-8">
+        <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+            <p className="text-xs text-slate-400">Performance / Reviews</p>
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">
               Performance reviews
             </h1>
             <p className="text-sm text-slate-600">
-              Central view of reviews across your org, by cycle, rating, and
-              employee.
+              Central log of manager reviews and self-reviews across your org.
             </p>
-            {isFilteredToEmployee && (
-              <p className="mt-1 text-xs text-indigo-700">
-                Showing reviews for a specific employee (from their profile).
-              </p>
+
+            {employeeIdFilter && firstEmployee && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                <span className="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 font-medium text-indigo-700">
+                  Filtered to{" "}
+                  <span className="ml-1">
+                    {getEmployeeName(firstEmployee)}
+                  </span>
+                </span>
+                <Link
+                  href="/performance/reviews"
+                  className="text-[11px] font-medium text-slate-500 hover:text-slate-700"
+                >
+                  Clear filter
+                </Link>
+              </div>
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href={
-                employeeId
-                  ? `/performance/reviews/new?employeeId=${employeeId}`
-                  : "/performance/reviews/new"
-              }
-              className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500"
-            >
-              ➕ New performance review
-            </Link>
-          </div>
+          <Link
+            href="/performance/reviews/new"
+            className="inline-flex items-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
+          >
+            + New review
+          </Link>
         </header>
 
-        {/* FILTER STRIP WHEN COMING FROM PROFILE */}
-        {isFilteredToEmployee && (
-          <section className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-            Filtered by employeeId:{" "}
-            <span className="font-mono text-slate-800">{employeeId}</span>
-            <span className="mx-1 text-slate-400">·</span>
-            <Link
-              href="/performance/reviews"
-              className="font-medium text-indigo-600 hover:text-indigo-500"
-            >
-              Clear filter
-            </Link>
-          </section>
-        )}
-
-        {/* SUMMARY STRIP */}
-        <section className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="text-xs text-slate-500">Total reviews</div>
-            <div className="mt-1 text-2xl font-semibold text-slate-900">
-              {total}
-            </div>
-            <p className="mt-1 text-[11px] text-slate-500">
-              {isFilteredToEmployee
-                ? "Reviews for this employee."
-                : "All-time performance reviews logged in Intime."}
+        {!hasReviews ? (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 py-8 text-center text-sm text-slate-600">
+            <p className="font-medium text-slate-700">
+              {employeeIdFilter
+                ? "No reviews found for this person yet."
+                : "No performance reviews yet."}
             </p>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="text-xs text-slate-500">Last 30 days</div>
-            <div className="mt-1 text-2xl font-semibold text-slate-900">
-              {last30}
-            </div>
-            <p className="mt-1 text-[11px] text-slate-500">
-              Reviews completed in the last month.
+            <p className="mt-1">
+              Start by logging the most recent review for someone on your team.
             </p>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="text-xs text-slate-500">
-              Employees reviewed this quarter
-            </div>
-            <div className="mt-1 text-2xl font-semibold text-slate-900">
-              {employeesThisQuarter}
-            </div>
-            <p className="mt-1 text-[11px] text-slate-500">
-              Unique employees with at least one review in the current quarter.
-            </p>
-          </div>
-        </section>
-
-        {/* TABLE */}
-        <section className="rounded-2xl border border-slate-200 bg-white/90 shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-            <h2 className="text-sm font-semibold text-slate-900">
-              Recent reviews
-            </h2>
-            <span className="text-[11px] text-slate-500">
-              {total} total review{total === 1 ? "" : "s"}
-            </span>
-          </div>
-
-          {reviews.length === 0 ? (
-            <div className="px-4 py-6 text-sm text-slate-500">
-              No performance reviews logged yet. Start by{" "}
+            <div className="mt-4">
               <Link
                 href={
-                  employeeId
-                    ? `/performance/reviews/new?employeeId=${employeeId}`
+                  employeeIdFilter
+                    ? `/performance/reviews/new?employeeId=${encodeURIComponent(
+                        employeeIdFilter,
+                      )}`
                     : "/performance/reviews/new"
                 }
-                className="font-medium text-indigo-600 hover:underline"
+                className="inline-flex items-center rounded-full bg-indigo-600 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-indigo-700"
               >
-                creating a review
-              </Link>{" "}
-              {isFilteredToEmployee
-                ? "for this employee."
-                : "for one of your employees."}
+                + Add first review
+              </Link>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="border-b bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                  <tr>
-                    <th className="px-4 py-2 text-left">Employee</th>
-                    <th className="px-4 py-2 text-left">Role</th>
-                    <th className="px-4 py-2 text-left">Period</th>
-                    <th className="px-4 py-2 text-left">Rating</th>
-                    <th className="px-4 py-2 text-left">Created</th>
-                    <th className="px-4 py-2 text-left">Manager summary</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {reviews
-                    .slice()
-                    .sort(
-                      (a, b) =>
-                        new Date(b.createdAt).getTime() -
-                        new Date(a.createdAt).getTime()
-                    )
-                    .map((r) => {
-                      const employee = r.employee;
-                      const name = `${employee.firstName} ${employee.lastName}`;
-                      const subtitleParts: string[] = [];
-                      if (employee.title) subtitleParts.push(employee.title);
-                      if (employee.department)
-                        subtitleParts.push(employee.department);
-                      const subtitle = subtitleParts.join(" • ");
-                      const summary =
-                        r.managerSummary ||
-                        r.employeeSummary ||
-                        "No summary captured.";
-
-                      return (
-                        <tr
-                          key={r.id}
-                          className="border-b last:border-b-0 hover:bg-slate-50/70"
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <table className="min-w-full divide-y divide-slate-200">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    Employee
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    Period
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    Rating
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    Created
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {filteredReviews.map((r) => (
+                  <tr key={r.id} className="hover:bg-slate-50/60">
+                    <td className="px-4 py-3 text-sm">
+                      {r.employee ? (
+                        <Link
+                          href={`/people/${r.employee.id}`}
+                          className="font-medium text-slate-900 hover:text-indigo-600 hover:underline"
                         >
-                          <td className="px-4 py-2 align-top">
-                            <div className="font-medium text-slate-900">
-                              {name}
-                            </div>
-                            <div className="text-xs text-slate-500">
-                              {subtitle || "Team member"}
-                            </div>
-                          </td>
-                          <td className="px-4 py-2 align-top text-xs text-slate-600">
-                            {employee.title ?? "—"}
-                          </td>
-                          <td className="px-4 py-2 align-top text-xs text-slate-600">
-                            {r.period ?? "—"}
-                          </td>
-                          <td className="px-4 py-2 align-top text-xs text-slate-700">
-                            {r.rating ?? "—"}
-                          </td>
-                          <td className="px-4 py-2 align-top text-xs text-slate-600">
-                            {formatDate(r.createdAt)}
-                          </td>
-                          <td className="px-4 py-2 align-top text-xs text-slate-600">
-                            <p className="line-clamp-3 max-w-xs">
-                              {summary}
-                            </p>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
+                          {getEmployeeName(r.employee)}
+                        </Link>
+                      ) : (
+                        <span className="font-medium text-slate-900">
+                          {getEmployeeName(r.employee)}
+                        </span>
+                      )}
+                      {r.employee?.title && (
+                        <div className="text-xs text-slate-500">
+                          {r.employee.title}
+                          {r.employee.department
+                            ? ` · ${r.employee.department}`
+                            : ""}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-800">
+                      {r.period || "—"}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-800">
+                      {ratingBadge(r.rating)}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-700">
+                      {formatDate(r.createdAt)}
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm">
+                      <Link
+                        href={`/performance/reviews/${r.id}`}
+                        className="text-xs font-medium text-indigo-600 hover:text-indigo-500 hover:underline"
+                      >
+                        Open
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </main>
     </AuthGate>
   );

@@ -225,6 +225,14 @@ export function Sidebar({
 }) {
   const pathname = usePathname() ?? "";
 
+  // Hide sidebar (and its reserved space) on auth + signup flows
+  const isAuthRoute =
+    pathname.startsWith("/login") || pathname.startsWith("/signup");
+
+  if (isAuthRoute) {
+    return null;
+  }
+
   return (
     <>
       {/* Desktop sidebar */}
@@ -261,6 +269,7 @@ export function Sidebar({
     </>
   );
 }
+
 
 /* ------------------------------
    SHARED SIDEBAR CONTENT

@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AuthGate } from "@/components/dev-auth-gate";
 
 type EmployeeOption = {
@@ -19,12 +19,14 @@ const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
 
 export default function NewPerformanceReviewPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+const preselectedEmployeeId = searchParams?.get("employeeId") ?? null;
 
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [loadingEmployees, setLoadingEmployees] = useState(true);
   const [employeesError, setEmployeesError] = useState<string | null>(null);
 
-  const [employeeId, setEmployeeId] = useState("");
+  const [employeeId, setEmployeeId] = useState(preselectedEmployeeId ?? "");
   const [period, setPeriod] = useState("");
   const [rating, setRating] = useState("");
   const [managerSummary, setManagerSummary] = useState("");
@@ -32,6 +34,8 @@ export default function NewPerformanceReviewPage() {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const hasPreselectedEmployee = !!preselectedEmployeeId;
 
   // Load employees for the dropdown
   useEffect(() => {
@@ -52,7 +56,11 @@ export default function NewPerformanceReviewPage() {
 
         const data = (await res.json()) as EmployeeOption[];
         setEmployees(data);
-        if (data.length > 0) setEmployeeId(data[0].id);
+
+        // If we *don't* have a preselected employee, default to first in list
+        if (!hasPreselectedEmployee && data.length > 0) {
+          setEmployeeId(data[0].id);
+        }
       } catch (e: any) {
         setEmployeesError(e?.message || "Failed to load employees.");
       } finally {
@@ -61,7 +69,7 @@ export default function NewPerformanceReviewPage() {
     }
 
     void loadEmployees();
-  }, []);
+  }, [hasPreselectedEmployee]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -99,7 +107,12 @@ export default function NewPerformanceReviewPage() {
         throw new Error(`Create failed: ${res.status}`);
       }
 
-      router.push("/performance/reviews");
+      // If we came from a person profile, go back there.
+      if (hasPreselectedEmployee && employeeId) {
+        router.push(`/people/${employeeId}`);
+      } else {
+        router.push("/performance/reviews");
+      }
       router.refresh();
     } catch (e: any) {
       setError(e?.message || "Failed to create performance review.");
@@ -109,6 +122,14 @@ export default function NewPerformanceReviewPage() {
   }
 
   const hasEmployees = employees.length > 0;
+
+  function handleBack() {
+    if (hasPreselectedEmployee && employeeId) {
+      router.push(`/people/${employeeId}`);
+    } else {
+      router.push("/performance/reviews");
+    }
+  }
 
   return (
     <AuthGate>
@@ -126,10 +147,10 @@ export default function NewPerformanceReviewPage() {
 
           <button
             type="button"
-            onClick={() => router.push("/performance/reviews")}
+            onClick={handleBack}
             className="text-xs text-slate-500 hover:text-slate-700"
           >
-            ← Back to reviews
+            ← Back
           </button>
         </header>
 
@@ -166,14 +187,12 @@ export default function NewPerformanceReviewPage() {
                 className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-50 disabled:text-slate-400"
                 value={employeeId}
                 onChange={(e) => setEmployeeId(e.target.value)}
-                disabled={!hasEmployees || loadingEmployees}
+                disabled={!hasEmployees || loadingEmployees || hasPreselectedEmployee}
               >
                 {!hasEmployees && <option value="">No employees</option>}
                 {employees.map((e) => {
                   const name = `${e.firstName} ${e.lastName}`;
-                  const meta = [e.title, e.department]
-                    .filter(Boolean)
-                    .join(" • ");
+                  const meta = [e.title, e.department].filter(Boolean).join(" • ");
                   return (
                     <option key={e.id} value={e.id}>
                       {name}
@@ -182,6 +201,12 @@ export default function NewPerformanceReviewPage() {
                   );
                 })}
               </select>
+              {hasPreselectedEmployee && (
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Employee preselected from profile. To change, start a new review
+                  from the Performance hub.
+                </p>
+              )}
             </div>
 
             <div>
@@ -245,7 +270,7 @@ export default function NewPerformanceReviewPage() {
           <div className="flex items-center justify-between gap-4 pt-2">
             <button
               type="button"
-              onClick={() => router.push("/performance/reviews")}
+              onClick={handleBack}
               className="text-sm text-slate-500 hover:text-slate-700"
             >
               Cancel

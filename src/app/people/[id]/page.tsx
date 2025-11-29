@@ -6,23 +6,13 @@ import Link from "next/link";
 import { AuthGate } from "@/components/dev-auth-gate";
 import PayrollCompCard from "@/components/payroll-comp-card";
 import EmployeeTimeoffPolicyCard from "@/components/employee-timeoff-policy-card";
+import { PerformancePanel } from "./performance-panel";
 
 type EmployeeStatus = "ACTIVE" | "ON_LEAVE" | "CONTRACTOR" | "ALUMNI";
 
 type PayType = "SALARY" | "HOURLY" | "CONTRACTOR";
-type PaySchedule =
-  | "WEEKLY"
-  | "BIWEEKLY"
-  | "SEMI_MONTHLY"
-  | "MONTHLY"
-  | "OTHER";
-type PayrollProvider =
-  | "NONE"
-  | "GUSTO"
-  | "ADP"
-  | "RIPPLING"
-  | "DEEL"
-  | "OTHER";
+type PaySchedule = "WEEKLY" | "BIWEEKLY" | "SEMI_MONTHLY" | "MONTHLY" | "OTHER";
+type PayrollProvider = "NONE" | "GUSTO" | "ADP" | "RIPPLING" | "DEEL" | "OTHER";
 
 type Employee = {
   employeeId: string; // canonical ID we use everywhere
@@ -97,13 +87,6 @@ type OnboardingFlow = {
   tasks: OnboardingTask[];
 };
 
-type EmployeeReviewLite = {
-  id: string;
-  period?: string | null;
-  rating?: string | null;
-  createdAt?: string | null;
-};
-
 type TimeOffStatus = "REQUESTED" | "APPROVED" | "DENIED" | "CANCELLED";
 
 type TimeOffType =
@@ -146,9 +129,7 @@ async function tryGetEmployeeDetail(id: string): Promise<Employee | null> {
       location: e.location ?? null,
       status: e.status,
       startDate:
-        typeof e.startDate === "string"
-          ? e.startDate
-          : e.startDate ?? null,
+        typeof e.startDate === "string" ? e.startDate : e.startDate ?? null,
       manager: e.manager
         ? {
             employeeId: e.manager.employeeId ?? e.manager.id ?? "",
@@ -174,9 +155,7 @@ async function tryResolveEmployeeFromList(id: string): Promise<Employee | null> 
   try {
     const list = await api.get<EmployeeListItem[]>("/employees");
 
-    const match = list.find(
-      (e) => e.employeeId === id || e.id === id
-    );
+    const match = list.find((e) => e.employeeId === id || e.id === id);
     if (!match) return null;
 
     return {
@@ -233,32 +212,20 @@ async function getOnboardingFlows(): Promise<OnboardingFlow[]> {
     return await api.get<OnboardingFlow[]>("/onboarding/flows");
   } catch (err) {
     console.warn(
-      "[people/[id]] /onboarding/flows not available yet, returning []"
+      "[people/[id]] /onboarding/flows not available yet, returning []",
+      err,
     );
-    return [];
-  }
-}
-
-async function getEmployeeReviews(
-  employeeId: string
-): Promise<EmployeeReviewLite[]> {
-  try {
-    return await api.get<EmployeeReviewLite[]>(
-      `/performance-reviews?employeeId=${employeeId}`
-    );
-  } catch (err) {
-    console.error("Failed to load performance reviews for employee", err);
     return [];
   }
 }
 
 async function getEmployeeTimeOffRequests(
-  employeeId: string
+  employeeId: string,
 ): Promise<TimeOffRequestLite[]> {
   try {
     const all = await api.get<TimeOffRequestLite[]>("/timeoff/requests");
     return (all as any[]).filter(
-      (r) => r.employee && r.employee.id === employeeId
+      (r) => r.employee && r.employee.id === employeeId,
     );
   } catch (err) {
     console.error("Failed to load time off requests for employee", err);
@@ -341,7 +308,7 @@ function computePtoUsedThisYear(requests: TimeOffRequestLite[]): number {
       (r) =>
         r.status === "APPROVED" &&
         (r.type === "PTO" || !r.type) &&
-        new Date(r.startDate).getFullYear() === year
+        new Date(r.startDate).getFullYear() === year,
     )
     .reduce((sum, r) => sum + countDaysInclusive(r.startDate, r.endDate), 0);
 }
@@ -351,9 +318,9 @@ export const dynamic = "force-dynamic";
 export default async function PersonPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 }) {
-  const { id: employeeIdFromUrl } = await params;
+  const { id: employeeIdFromUrl } = params;
 
   if (
     !employeeIdFromUrl ||
@@ -412,10 +379,9 @@ export default async function PersonPage({
 
   const employeeId = employee.employeeId;
 
-  const [events, flows, reviews, timeOffRequests] = await Promise.all([
+  const [events, flows, timeOffRequests] = await Promise.all([
     getEmployeeEvents(employeeId),
     getOnboardingFlows(),
-    getEmployeeReviews(employeeId),
     getEmployeeTimeOffRequests(employeeId),
   ]);
 
@@ -432,7 +398,7 @@ export default async function PersonPage({
       .filter((f) => f.status !== "ARCHIVED")
       .sort(
         (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       )[0] ?? null;
 
   const progress = computeProgress(currentFlow?.tasks);
@@ -442,15 +408,6 @@ export default async function PersonPage({
   const target =
     currentFlow?.targetDate &&
     new Date(currentFlow.targetDate).toLocaleDateString();
-
-  const latestReviews = reviews
-    .slice()
-    .sort((a, b) => {
-      const da = a.createdAt ? Date.parse(a.createdAt) : 0;
-      const db = b.createdAt ? Date.parse(b.createdAt) : 0;
-      return db - da;
-    })
-    .slice(0, 3);
 
   const sortedTimeOff = timeOffRequests
     .slice()
@@ -552,68 +509,8 @@ export default async function PersonPage({
               </div>
             </div>
 
-            {/* Performance reviews */}
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <div>
-                  <h2 className="text-sm font-semibold text-slate-900">
-                    Performance reviews
-                  </h2>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Recent review cycles tied to this employee.
-                  </p>
-                </div>
-                <Link
-                  href={`/performance/reviews/new?employeeId=${employeeId}`}
-                  className="text-[11px] font-medium text-indigo-600 hover:text-indigo-500"
-                >
-                  New review
-                </Link>
-              </div>
-
-              {latestReviews.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-600">
-                  No performance reviews have been recorded yet. Create the
-                  first review for {fullName || "this employee"}.
-                </div>
-              ) : (
-                <ul className="space-y-2 text-sm">
-                  {latestReviews.map((r) => (
-                    <li
-                      key={r.id}
-                      className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2"
-                    >
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium text-slate-900">
-                          {r.period || "Review"}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          {r.rating || "No rating"} ·{" "}
-                          {formatDate(r.createdAt)}
-                        </div>
-                      </div>
-                      <Link
-                        href={`/performance/reviews/${r.id}`}
-                        className="text-xs font-medium text-indigo-600 hover:text-indigo-500"
-                      >
-                        Open
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {reviews.length > 3 && (
-                <div className="mt-3 text-right text-[11px]">
-                  <Link
-                    href={`/performance/reviews?employeeId=${employeeId}`}
-                    className="text-indigo-600 hover:text-indigo-500"
-                  >
-                    View all reviews →
-                  </Link>
-                </div>
-              )}
-            </div>
+            {/* Performance panel */}
+            <PerformancePanel employeeId={employeeId} />
           </div>
 
           {/* RIGHT: AI + Onboarding + Time off + PTO policy + Payroll + Profile */}

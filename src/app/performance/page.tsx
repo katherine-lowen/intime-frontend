@@ -31,7 +31,8 @@ type ReviewListItem = {
 
 async function getReviews(): Promise<ReviewListItem[]> {
   try {
-    return await api.get<ReviewListItem[]>("/performance/reviews");
+    // 🔧 FIXED: match backend controller @Controller('performance-reviews')
+    return await api.get<ReviewListItem[]>("/performance-reviews");
   } catch (err) {
     console.error("Failed to load performance reviews:", err);
     return [];
@@ -66,9 +67,7 @@ function ratingBadge(rating: ReviewRating) {
 
   if (rating === "Needs improvement") {
     return (
-      <span
-        className={`${base} border-rose-200 bg-rose-50 text-rose-800`}
-      >
+      <span className={`${base} border-rose-200 bg-rose-50 text-rose-800`}>
         Needs improvement
       </span>
     );
@@ -76,9 +75,7 @@ function ratingBadge(rating: ReviewRating) {
 
   if (rating === "Meets expectations") {
     return (
-      <span
-        className={`${base} border-slate-200 bg-slate-50 text-slate-700`}
-      >
+      <span className={`${base} border-slate-200 bg-slate-50 text-slate-700`}>
         Meets expectations
       </span>
     );
@@ -106,9 +103,7 @@ function ratingBadge(rating: ReviewRating) {
 
   // Fallback for any custom strings
   return (
-    <span
-      className={`${base} border-slate-200 bg-slate-50 text-slate-700`}
-    >
+    <span className={`${base} border-slate-200 bg-slate-50 text-slate-700`}>
       {rating}
     </span>
   );

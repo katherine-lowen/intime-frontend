@@ -3,121 +3,152 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getDevSession } from "@/components/dev-auth-gate";
 
-const RAW_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8080";
-// Strip any trailing slashes so we never end up with //auth/dev-login
-const API_URL = RAW_API_URL.replace(/\/+$/, "");
-const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID || "demo-org";
+const USER_KEY = "intime_user";
+
+type DevUser = {
+  id: string;
+  email: string;
+  name?: string | null;
+  orgId: string;
+  role: string;
+};
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("admin@intime.local");
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  // If we already have a dev session, go straight to dashboard
+  // If already "logged in" (user in localStorage), bounce to dashboard
   useEffect(() => {
-    const session = getDevSession();
-    if (session) {
-      router.replace("/dashboard");
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(USER_KEY);
+      if (raw) {
+        router.replace("/dashboard");
+      }
+    } catch {
+      // ignore
     }
   }, [router]);
 
-  async function handleSubmit(e: FormEvent) {
+  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
+
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const email = String(formData.get("email") || "").trim();
+    const password = String(formData.get("password") || "").trim();
+
+    if (!email || !password) {
+      setError("Please enter an email and password.");
+      return;
+    }
+
     setLoading(true);
-
     try {
-      const res = await fetch(`${API_URL}/auth/dev-login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email,
-          orgId: ORG_ID,
-        }),
-      });
+      // Derive a simple display name from the email
+      const beforeAt = email.split("@")[0] || "User";
+      const niceName =
+        beforeAt.includes(".")
+          ? beforeAt
+              .split(".")
+              .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+              .join(" ")
+          : beforeAt.charAt(0).toUpperCase() + beforeAt.slice(1);
 
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-
-      const data = (await res.json()) as {
-        user?: { id?: string; email?: string | null; name?: string | null };
-        orgId?: string;
-      };
-
-      // Store a simple dev session in localStorage for the dev-auth-gate
-      const session = {
-        email: data.user?.email ?? email,
-        name: data.user?.name ?? email.split("@")[0],
-        orgId: data.orgId ?? ORG_ID,
-        createdAt: new Date().toISOString(),
+      const devUser: DevUser = {
+        id: `dev-${Date.now()}`,
+        email,
+        name: niceName,
+        orgId: "demo-org",
+        role: "admin",
       };
 
       if (typeof window !== "undefined") {
-        window.localStorage.setItem("intime_dev_session", JSON.stringify(session));
+        window.localStorage.setItem(USER_KEY, JSON.stringify(devUser));
       }
 
       router.push("/dashboard");
-    } catch (err: any) {
-      console.error("Dev login failed:", err);
-      setError(err?.message ?? "Failed to sign in");
+    } catch (err) {
+      console.error("[Login] Failed to store dev user:", err);
+      setError("Something went wrong saving your session.");
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg">
-        <h1 className="text-xl font-semibold text-slate-900">Sign in to Intime</h1>
-        <p className="mt-2 text-sm text-slate-500">
-          Dev-only login. We&apos;ll treat this email as an admin in your demo org.
+    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4">
+      <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/80 p-6 shadow-xl">
+        {/* Brand */}
+        <div className="mb-6 flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-sky-500 text-sm font-semibold text-white">
+            IT
+          </div>
+          <div>
+            <div className="text-sm font-semibold text-slate-100">Intime</div>
+            <div className="text-[11px] text-slate-400">
+              Early access · Dev login
+            </div>
+          </div>
+        </div>
+
+        <h1 className="text-lg font-semibold text-slate-100">
+          Sign in to your workspace
+        </h1>
+        <p className="mt-1 text-xs text-slate-400">
+          This is a temporary dev-only login. Any email &amp; password will work.
         </p>
 
         {error && (
-          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+          <div className="mt-4 rounded-md border border-rose-500/60 bg-rose-950/50 px-3 py-2 text-[11px] text-rose-100">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div className="space-y-1">
-            <label
-              htmlFor="email"
-              className="text-xs font-medium uppercase tracking-wide text-slate-500"
-            >
+            <label className="block text-[11px] font-medium text-slate-300">
               Work email
             </label>
             <input
-              id="email"
+              name="email"
               type="email"
               autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none ring-0 transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               placeholder="you@company.com"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="block text-[11px] font-medium text-slate-300">
+              Password
+            </label>
+            <input
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              placeholder="••••••••"
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+            className="mt-2 inline-flex w-full items-center justify-center rounded-full bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-500 disabled:opacity-60"
           >
-            {loading ? "Signing in…" : "Sign in as admin"}
+            {loading ? "Signing in…" : "Sign in"}
           </button>
-        </form>
 
-        <p className="mt-4 text-[11px] text-slate-400">
-          This is a local dev login only. We&apos;ll wire up real auth later.
-        </p>
+          <p className="mt-2 text-[11px] text-slate-500">
+            For now, this creates a local dev session only. We&apos;ll wire real
+            auth + Stripe-backed orgs next.
+          </p>
+        </form>
       </div>
-    </div>
+    </main>
   );
 }
