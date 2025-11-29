@@ -32,6 +32,55 @@ type Candidate = {
   createdAt?: string;
 };
 
+// Mirror the AI Studio tools so we can surface them on the Hiring page
+const AI_TOOLS = [
+  {
+    id: "job-intake",
+    title: "AI job intake",
+    tag: "Hiring ops",
+    icon: "🧾",
+    href: "/hiring/ai-studio/job-intake",
+    description:
+      "Turn a hiring manager’s notes into a structured job brief, with must-haves, nice-to-haves, and interview focus areas.",
+  },
+  {
+    id: "jd-generator",
+    title: "AI job description",
+    tag: "Content",
+    icon: "✏️",
+    href: "/hiring/ai-studio/job-description",
+    description:
+      "Generate a polished JD with responsibilities, requirements, and a compelling summary.",
+  },
+  {
+    id: "candidate-summary",
+    title: "AI candidate summary",
+    tag: "Candidate intel",
+    icon: "🧠",
+    href: "/hiring/ai-studio/candidate-summary",
+    description:
+      "Summarize messy interview notes, resumes, and scorecards into a clear narrative.",
+  },
+  {
+    id: "onboarding-plan",
+    title: "AI onboarding plan",
+    tag: "Onboarding",
+    icon: "🧭",
+    href: "/hiring/ai-studio/onboarding-plan",
+    description:
+      "Create a 30–60–90 day plan for new hires using their role, level, and team context.",
+  },
+  {
+    id: "resume-match",
+    title: "AI resume match",
+    tag: "Screening",
+    icon: "⚡️",
+    href: "/hiring/ai-studio/resume-match",
+    description:
+      "Instantly score a candidate against a job description and highlight alignment, gaps, and follow-up questions.",
+  },
+];
+
 async function getJobs(): Promise<Job[]> {
   // JobsController.list currently returns { page, limit, total, items }
   const res = await api.get<any>("/jobs?limit=1000");
@@ -192,8 +241,7 @@ export default async function HiringWorkspacePage() {
                 Requisitions
               </h2>
               <span className="text-[11px] text-slate-500">
-                {jobs.length} total job
-                {jobs.length === 1 ? "" : "s"}
+                {jobs.length} total job{jobs.length === 1 ? "" : "s"}
               </span>
             </div>
 
@@ -277,7 +325,9 @@ export default async function HiringWorkspacePage() {
                           </td>
                           <td className="px-4 py-2 text-xs text-slate-700">
                             {count === 0 ? (
-                              <span className="text-slate-400">No candidates</span>
+                              <span className="text-slate-400">
+                                No candidates
+                              </span>
                             ) : (
                               <>
                                 {count} candidate{count === 1 ? "" : "s"}
@@ -395,6 +445,73 @@ export default async function HiringWorkspacePage() {
                 </ul>
               )}
             </div>
+          </div>
+        </section>
+
+        {/* AI STUDIO TEASER / TOOLS GRID */}
+        <section className="mt-2 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">
+                AI Studio for recruiting
+              </h2>
+              <p className="mt-1 text-xs text-slate-600 max-w-2xl">
+                Jump into Intime&apos;s AI tools without leaving the hiring
+                workspace — from intake and JDs to candidate summaries and
+                onboarding plans.
+              </p>
+            </div>
+            <Link
+              href="/hiring/ai-studio"
+              className="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100"
+            >
+              Open full AI Studio ↗
+            </Link>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {AI_TOOLS.map((tool) => (
+              <div
+                key={tool.id}
+                className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200 bg-white/90 p-4 text-xs shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md"
+              >
+                <div className="pointer-events-none absolute -right-16 -top-16 h-24 w-24 rounded-full bg-indigo-100 opacity-0 blur-2xl transition group-hover:opacity-100" />
+
+                <div className="relative space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="inline-flex items-center gap-1 text-[10px]">
+                      <span className="rounded-full bg-indigo-50 px-2 py-0.5 font-medium text-indigo-700">
+                        {tool.tag}
+                      </span>
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-500">
+                        AI powered
+                      </span>
+                    </div>
+                    <span className="text-lg">{tool.icon}</span>
+                  </div>
+
+                  <h3 className="text-[13px] font-semibold text-slate-900">
+                    {tool.title}
+                  </h3>
+                  <p className="text-[11px] leading-relaxed text-slate-600">
+                    {tool.description}
+                  </p>
+                </div>
+
+                <div className="relative mt-3 flex items-center justify-between">
+                  <Link
+                    href={tool.href}
+                    className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-medium text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700"
+                  >
+                    <span>Open tool</span>
+                    <span aria-hidden>↗</span>
+                  </Link>
+                  <span className="text-[10px] text-slate-400">
+                    Links to JD, candidates, and people
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         </section>
       </main>
