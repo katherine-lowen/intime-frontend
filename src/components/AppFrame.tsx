@@ -1,41 +1,35 @@
 // src/components/AppFrame.tsx
 "use client";
 
-import type { ReactNode } from "react";
-import { usePathname } from "next/navigation";
+import { useState, type ReactNode } from "react";
 import { Sidebar } from "@/components/sidebar";
 import TopNav from "@/components/top-nav";
 
-const FRAMELESS_PREFIXES = ["/login", "/signup", "/choose-plan"];
-
 export function AppFrame({ children }: { children: ReactNode }) {
-  const pathname = usePathname() || "";
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const isFrameless = FRAMELESS_PREFIXES.some((prefix) =>
-    pathname === prefix ||
-    pathname.startsWith(`${prefix}/`) ||
-    pathname.startsWith(`${prefix}?`)
-  );
+  const handleToggleSidebar = () => {
+    setSidebarOpen((prev) => !prev);
+  };
 
-  if (isFrameless) {
-    // No sidebar / top-nav for these routes
-    return <>{children}</>;
-  }
+  const handleCloseSidebar = () => {
+    setSidebarOpen(false);
+  };
 
   return (
     <div className="flex min-h-screen">
-      {/* Left nav */}
-      <aside className="hidden w-64 md:flex flex-col bg-slate-950">
-        <Sidebar />
-      </aside>
+      {/* Sidebar handles both desktop + mobile internally */}
+      <Sidebar open={sidebarOpen} onClose={handleCloseSidebar} />
 
       {/* Main column */}
       <div className="flex min-h-screen flex-1 flex-col">
-        {/* Top breadcrumb/nav */}
-        <TopNav />
-
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto">{children}</main>
+        <TopNav
+          onToggleSidebar={handleToggleSidebar}
+          isSidebarOpen={sidebarOpen}
+        />
+        <main className="flex-1 overflow-y-auto bg-slate-50 text-slate-900">
+          {children}
+        </main>
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Menu,
+  X,
   Search,
   Bell,
   HelpCircle,
@@ -310,19 +311,19 @@ const COMMANDS: CommandItem[] = [
   },
 ];
 
-/* --------------------------------------
-   PROPS
---------------------------------------- */
-
 type TopNavProps = {
-  onOpenSidebar?: () => void;
+  onToggleSidebar?: () => void;
+  isSidebarOpen?: boolean;
 };
 
 /* --------------------------------------
    TOP NAV + COMMAND PALETTE
 --------------------------------------- */
 
-export default function TopNav({ onOpenSidebar }: TopNavProps) {
+export default function TopNav({
+  onToggleSidebar,
+  isSidebarOpen,
+}: TopNavProps) {
   const router = useRouter();
   const rawPath = usePathname();
   const pathname = rawPath ?? "/";
@@ -359,8 +360,7 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
   }, []);
 
   const displayName =
-    user?.name ||
-    (user?.email ? user.email.split("@")[0] : "Guest");
+    user?.name || (user?.email ? user.email.split("@")[0] : "Guest");
   const displayEmail = user?.email || "unknown@example.com";
   const orgName = "Intime workspace";
 
@@ -413,22 +413,26 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
   return (
     <>
       {/* TOP BAR */}
-      <header className="sticky top-0 z-40 bg-slate-900/90 backdrop-blur border-b border-slate-800">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 gap-4 md:gap-6">
+      <header className="sticky top-0 z-40 border-b border-slate-800 bg-slate-900/90 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 md:gap-6">
           {/* LEFT: MENU + BREADCRUMBS */}
-          <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="flex flex-shrink-0 items-center gap-3">
             {/* Mobile hamburger */}
             <button
               type="button"
               className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800 md:hidden"
-              onClick={() => onOpenSidebar && onOpenSidebar()}
-              aria-label="Open navigation"
+              onClick={onToggleSidebar}
+              aria-label="Toggle navigation"
             >
-              <Menu className="h-4 w-4" />
+              {isSidebarOpen ? (
+                <X className="h-4 w-4" />
+              ) : (
+                <Menu className="h-4 w-4" />
+              )}
             </button>
 
             {/* Breadcrumbs + current title (desktop) */}
-            <div className="hidden md:flex flex-col">
+            <div className="hidden flex-col md:flex">
               <div className="flex items-center gap-1 text-[11px] text-slate-400">
                 {crumbs.map((c, i) => (
                   <span key={i} className="inline-flex items-center gap-1">
@@ -452,14 +456,14 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
           </div>
 
           {/* CENTER: SEARCH TRIGGER (desktop) */}
-          <div className="hidden md:flex flex-1 justify-center">
+          <div className="hidden flex-1 justify-center md:flex">
             <button
               type="button"
               onClick={() => {
                 setPaletteOpen(true);
                 setQuery("");
               }}
-              className="group relative flex w-full max-w-lg items-center gap-2 rounded-xl bg-slate-800/60 border border-slate-700 px-3 py-2 text-left text-sm text-slate-200 hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+              className="group relative flex w-full max-w-lg items-center gap-2 rounded-xl border border-slate-700 bg-slate-800/60 px-3 py-2 text-left text-sm text-slate-200 hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
             >
               <Search className="h-4 w-4 text-slate-400" />
               <span className="flex-1 text-xs text-slate-400 group-hover:text-slate-300">
@@ -472,9 +476,9 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
           </div>
 
           {/* RIGHT: ORG BADGE + ICONS + PROFILE */}
-          <div className="flex items-center gap-4 flex-shrink-0">
+          <div className="flex flex-shrink-0 items-center gap-4">
             {/* Org pill */}
-            <div className="hidden md:flex flex-col items-end mr-1">
+            <div className="mr-1 hidden flex-col items-end md:flex">
               <span className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
                 Workspace
               </span>
@@ -483,9 +487,9 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
               </span>
             </div>
 
-            <HelpCircle className="text-slate-300 h-4 w-4 hover:text-white cursor-pointer hidden md:block" />
-            <Keyboard className="text-slate-300 h-4 w-4 hover:text-white cursor-pointer hidden md:block" />
-            <Bell className="text-slate-300 h-4 w-4 hover:text-white cursor-pointer hidden md:block" />
+            <HelpCircle className="hidden h-4 w-4 cursor-pointer text-slate-300 hover:text-white md:block" />
+            <Keyboard className="hidden h-4 w-4 cursor-pointer text-slate-300 hover:text-white md:block" />
+            <Bell className="hidden h-4 w-4 cursor-pointer text-slate-300 hover:text-white md:block" />
 
             <ProfileMenu name={displayName} email={displayEmail} />
           </div>
@@ -494,7 +498,7 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
 
       {/* GLOBAL COMMAND PALETTE OVERLAY */}
       {paletteOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 backdrop-blur-sm pt-24 px-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-4 pt-24 backdrop-blur-sm">
           <div className="w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
             {/* Input row */}
             <div className="flex items-center gap-2 border-b border-slate-800 px-3 py-2.5">
@@ -523,7 +527,7 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
                 <div className="space-y-2">
                   {["Overview", "People", "Talent", "Platform"].map((group) => {
                     const groupItems = filteredCommands.filter(
-                      (c) => c.group === group
+                      (c) => c.group === group,
                     );
                     if (!groupItems.length) return null;
 
