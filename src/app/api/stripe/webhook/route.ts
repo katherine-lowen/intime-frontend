@@ -2,24 +2,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY || null;
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || null;
 const apiBase =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
-if (!stripeSecretKey) {
-  throw new Error("STRIPE_SECRET_KEY is not set");
-}
-if (!webhookSecret) {
-  throw new Error("STRIPE_WEBHOOK_SECRET is not set");
-}
-
-// Do NOT pin apiVersion here – let the SDK handle it
-const stripe = new Stripe(stripeSecretKey as string);
+// Build-safe: no top-level throws
+const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  // At runtime, if Stripe isn't configured, return 500 instead of killing the build
+  if (!stripe || !webhookSecret) {
+    console.error(
+      "[Stripe webhook] called but Stripe is not fully configured (missing STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET)"
+    );
+    return new NextResponse("Stripe not configured", { status: 500 });
+  }
+
   const sig = req.headers.get("stripe-signature");
   if (!sig) {
     return new NextResponse("Missing stripe-signature header", {
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret!);
+    event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
   } catch (err: any) {
     console.error("[Stripe webhook] Signature error:", err?.message || err);
     return new NextResponse(`Webhook Error: ${err?.message ?? "Invalid"}`, {
@@ -54,10 +55,8 @@ export async function POST(req: NextRequest) {
         const session = event.data.object as any;
 
         orgId = session.metadata?.orgId;
-        stripeCustomerId =
-          (session.customer as string | null) ?? null;
-        stripeSubscriptionId =
-          (session.subscription as string | null) ?? null;
+        stripeCustomerId = (session.customer as string | null) ?? null;
+        stripeSubscriptionId = (session.subscription as string | null) ?? null;
 
         const mode = session.mode; // "subscription" or "payment"
         if (mode === "subscription") {
@@ -73,8 +72,7 @@ export async function POST(req: NextRequest) {
         const subscription = event.data.object as any;
 
         orgId = subscription.metadata?.orgId;
-        stripeCustomerId =
-          (subscription.customer as string | null) ?? null;
+        stripeCustomerId = (subscription.customer as string | null) ?? null;
         stripeSubscriptionId = subscription.id ?? null;
 
         const price = subscription.items?.data?.[0]?.price;
