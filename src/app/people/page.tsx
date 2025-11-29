@@ -53,7 +53,15 @@ function statusBadgeClasses(status?: EmployeeStatus | null) {
 }
 
 export default async function PeoplePage() {
-  const employees = await getEmployees();
+  let employees: Employee[] = [];
+  let loadError: string | null = null;
+
+  try {
+    employees = await getEmployees();
+  } catch (err) {
+    console.error("[PeoplePage] Failed to load /employees", err);
+    loadError = "We couldn’t load your people data just now.";
+  }
 
   // Derive simple filter values
   const departments = Array.from(
@@ -70,6 +78,13 @@ export default async function PeoplePage() {
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-8">
+      {/* Optional error banner */}
+      {loadError && (
+        <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+          {loadError} We&apos;re showing an empty directory instead.
+        </div>
+      )}
+
       {/* Header row */}
       <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -162,14 +177,14 @@ export default async function PeoplePage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {employees.map((e) => {
-                const id = e.employeeId || e.id!;
+                const id = e.employeeId || e.id || "";
                 const fullName = `${e.firstName} ${e.lastName}`.trim();
                 return (
-                  <tr key={id} className="hover:bg-slate-50/60">
+                  <tr key={id || fullName || e.email || Math.random()}>
                     <td className="px-4 py-3">
                       <div className="flex flex-col">
                         <Link
-                          href={`/people/${id}`}
+                          href={id ? `/people/${id}` : "#"}
                           className="text-sm font-medium text-slate-900 hover:text-indigo-600"
                         >
                           {fullName || "Unnamed"}
@@ -200,12 +215,18 @@ export default async function PeoplePage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right text-xs">
-                      <Link
-                        href={`/people/${id}`}
-                        className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
-                      >
-                        Open profile
-                      </Link>
+                      {id ? (
+                        <Link
+                          href={`/people/${id}`}
+                          className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+                        >
+                          Open profile
+                        </Link>
+                      ) : (
+                        <span className="text-[11px] text-slate-400">
+                          No profile id
+                        </span>
+                      )}
                     </td>
                   </tr>
                 );
