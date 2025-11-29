@@ -2,14 +2,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-
-if (!stripeSecretKey) {
-  throw new Error("STRIPE_SECRET_KEY is not set");
-}
-
-const stripe = new Stripe(stripeSecretKey);
-
 type Body = {
   plan: "starter" | "growth" | "scale";
   billingPeriod: "monthly" | "annual";
@@ -27,7 +19,19 @@ const priceMap: Record<string, string | undefined> = {
 
 export async function POST(req: NextRequest) {
   try {
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+    if (!stripeSecretKey) {
+      console.error("[Stripe] Missing STRIPE_SECRET_KEY");
+      return NextResponse.json(
+        { error: "Stripe is not configured on this server" },
+        { status: 500 }
+      );
+    }
+
+    const stripe = new Stripe(stripeSecretKey);
+
     const body = (await req.json()) as Body;
+
     const key = `${body.plan}:${body.billingPeriod}`;
     const priceId = priceMap[key];
 
@@ -47,7 +51,6 @@ export async function POST(req: NextRequest) {
       metadata: {
         plan: body.plan,
         billingPeriod: body.billingPeriod,
-        // later we can add orgId, userId, etc.
       },
       success_url: `${origin}/billing/result?status=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/billing/result?status=canceled`,

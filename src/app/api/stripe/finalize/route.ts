@@ -2,60 +2,42 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+type Body = {
+  sessionId: string;
+};
 
-export async function GET(req: NextRequest) {
-  const sessionId = req.nextUrl.searchParams.get("session_id");
-
-  if (!sessionId) {
-    return new NextResponse("Missing session_id", { status: 400 });
-  }
-
+export async function POST(req: NextRequest) {
   try {
-    // 1️⃣ Fetch the session from Stripe
-    const session = await stripe.checkout.sessions.retrieve(sessionId, {
-      expand: ["customer", "subscription"],
-    });
-
-    const metadata = session.metadata || {};
-    const email = session.customer_details?.email;
-
-    if (!email) {
-      return new NextResponse("Missing customer email.", { status: 500 });
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+    if (!stripeSecretKey) {
+      console.error("[Stripe finalize] Missing STRIPE_SECRET_KEY");
+      return NextResponse.json(
+        { error: "Stripe is not configured on this server" },
+        { status: 500 }
+      );
     }
 
-    // 2️⃣ Create workspace + user in backend
-    const backendRes = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/auth/create-from-stripe`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          orgId: metadata.orgId,
-          plan: metadata.plan,
-          billingPeriod: metadata.billingPeriod,
-          stripeCustomerId: session.customer,
-          stripeSubscriptionId: session.subscription,
-        }),
-      }
-    );
+    const stripe = new Stripe(stripeSecretKey);
 
-    if (!backendRes.ok) {
-      const text = await backendRes.text();
-      console.error("Backend error:", text);
-      return new NextResponse("Backend error", { status: 500 });
+    const { sessionId } = (await req.json()) as Body;
+    if (!sessionId) {
+      return NextResponse.json(
+        { error: "Missing sessionId" },
+        { status: 400 }
+      );
     }
 
-    const data = await backendRes.json();
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
 
-    // 3️⃣ Return user session to frontend
-    return NextResponse.json({
-      success: true,
-      user: data.user,
-    });
+    // You can forward this to your backend later if you want:
+    // await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"}/billing/finalize`, { ... })
+
+    return NextResponse.json({ session });
   } catch (err: any) {
-    console.error("[Finalize] Stripe error:", err.message);
-    return new NextResponse("Finalize error", { status: 500 });
+    console.error("[Stripe finalize] error", err);
+    return NextResponse.json(
+      { error: err?.message || "Failed to finalize checkout" },
+      { status: 500 }
+    );
   }
 }
