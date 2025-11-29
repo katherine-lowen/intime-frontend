@@ -87,10 +87,17 @@ export default function ChoosePlanPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const initialBilling =
-    (searchParams?.get("billing") as BillingPeriod) || "monthly";
-  const initialPlan =
-    (searchParams?.get("plan") as PlanKey) || ("growth" as PlanKey);
+  // Read query params safely
+  const billingParam = searchParams?.get("billing");
+  const planParam = searchParams?.get("plan");
+
+  const initialBilling: BillingPeriod =
+    billingParam === "annual" ? "annual" : "monthly";
+
+  const initialPlan: PlanKey =
+    planParam === "starter" || planParam === "growth" || planParam === "scale"
+      ? planParam
+      : "growth";
 
   const [billing, setBilling] = useState<BillingPeriod>(initialBilling);
   const [selectedPlan, setSelectedPlan] = useState<PlanKey>(initialPlan);
@@ -98,7 +105,11 @@ export default function ChoosePlanPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const plan = PLANS.find((p) => p.key === selectedPlan)!;
+  // Always have a plan fallback so rendering never crashes
+  const plan =
+    PLANS.find((p) => p.key === selectedPlan) ??
+    PLANS.find((p) => p.key === "growth")!;
+
 
   async function handleCheckout(e: React.FormEvent) {
     e.preventDefault();
