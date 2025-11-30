@@ -2,12 +2,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
+// Gracefully handle missing env var (Vercel preview/local)
+const apiKey = process.env.OPENAI_API_KEY;
+const openai = apiKey ? new OpenAI({ apiKey }) : null;
 
 export async function POST(req: NextRequest) {
   try {
+    // 🚫 If missing key → return controlled error (not server crash)
+    if (!openai) {
+      console.error("[AI Candidate Summary] Missing OPENAI_API_KEY");
+      return NextResponse.json(
+        { error: "AI not configured on server (missing OPENAI_API_KEY)" },
+        { status: 500 }
+      );
+    }
+
     const body = await req.json().catch(() => ({} as any));
     const { name, jobTitle, resumeText, notes } = body ?? {};
 
@@ -21,10 +30,10 @@ Given:
 - Optional recruiter notes
 
 Return a concise JSON object with:
-- summary: 3–5 sentence narrative of the candidate and fit for the role
+- summary: 3–5 sentence narrative
 - strengths: bullet points of specific strengths
-- risks: bullet points of concerns / gaps to probe
-- recommendation: one clear recommendation (e.g. 'Move to manager screen', 'Pass', 'Keep warm for X role')
+- risks: bullet points of concerns / gaps
+- recommendation: a single next-step recommendation
 `;
 
     const userPrompt = `
@@ -38,36 +47,28 @@ Recruiter / interviewer notes:
 ${notes || "No internal notes provided."}
 `;
 
+    // 🧠 Updated schema (must include additionalProperties: false)
     const completion = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
       response_format: {
         type: "json_schema",
         json_schema: {
           name: "CandidateSummary",
-          strict: true,
+          strict: false, // avoid hard failures
           schema: {
             type: "object",
+            additionalProperties: false,
             properties: {
-              summary: {
-                type: "string",
-                description:
-                  "3–5 sentence narrative summary of the candidate and their fit.",
-              },
+              summary: { type: "string" },
               strengths: {
                 type: "array",
                 items: { type: "string" },
-                description: "Bullet-point strengths.",
               },
               risks: {
                 type: "array",
                 items: { type: "string" },
-                description: "Bullet-point risks / gaps / questions.",
               },
-              recommendation: {
-                type: "string",
-                description:
-                  "One clear recommendation for next step / disposition.",
-              },
+              recommendation: { type: "string" },
             },
             required: ["summary", "strengths", "risks", "recommendation"],
           },
@@ -77,20 +78,21 @@ ${notes || "No internal notes provided."}
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
+      temperature: 0.3,
     });
 
-    const rawContent = completion.choices[0]?.message?.content;
+    const raw = completion.choices[0]?.message?.content;
 
-    if (typeof rawContent !== "string") {
-      console.error("[AI Candidate Summary] Unexpected content:", rawContent);
+    if (typeof raw !== "string") {
+      console.error("[AI Candidate Summary] Unexpected content:", raw);
       return NextResponse.json(
         { error: "Unexpected AI response format" },
         { status: 500 }
       );
     }
 
-    const parsed = JSON.parse(rawContent);
-    return NextResponse.json(parsed);
+    const data = JSON.parse(raw);
+    return NextResponse.json(data);
   } catch (err) {
     console.error("[AI Candidate Summary] Error:", err);
     return NextResponse.json(

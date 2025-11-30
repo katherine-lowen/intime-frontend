@@ -1,11 +1,11 @@
 // src/app/api/ai-insights/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import api from "@/lib/api";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Graceful OpenAI client (no crash if key is missing)
+const apiKey = process.env.OPENAI_API_KEY;
+const openai = apiKey ? new OpenAI({ apiKey }) : null;
 
 type Body =
   | {
@@ -131,7 +131,7 @@ function buildFallbackInsights(title: string): AiInsights {
   };
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   let body: Body = {} as Body;
 
   // Safely parse JSON body – frontend might send an empty body
@@ -144,8 +144,9 @@ export async function POST(req: Request) {
   const { title, json } = await buildContext(body);
 
   // If no OpenAI API key, return a static-but-useful answer
-  if (!process.env.OPENAI_API_KEY) {
-    return NextResponse.json(buildFallbackInsights(title));
+  if (!openai) {
+    console.error("[AI Insights] Missing OPENAI_API_KEY");
+    return NextResponse.json(buildFallbackInsights(title), { status: 200 });
   }
 
   try {
@@ -161,7 +162,7 @@ You will get JSON context about their org (jobs, employees, candidates, document
    - Risk signals (burnout, manager overload, underused teams, stalled roles).
    - For documents, highlight key obligations, unusual clauses, or patterns vs other templates.
 
-2. Respond STRICTLY as minified JSON with this shape:
+2. Respond with a JSON object with this shape:
 
 {
   "summary": "Short, 2–3 sentence plain-English summary.",
@@ -174,18 +175,18 @@ You will get JSON context about their org (jobs, employees, candidates, document
   ]
 }
 
-Do NOT include backticks or markdown. Do NOT include any other keys.
-
 Here is the org context JSON:
 ${JSON.stringify(json)}
     `.trim();
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
+      response_format: { type: "json_object" },
       messages: [
         {
           role: "system",
-          content: "You are a precise HR strategy AI that always returns valid JSON.",
+          content:
+            "You are a precise HR strategy AI that ALWAYS returns valid JSON with keys: summary (string) and suggestions (string[]).",
         },
         {
           role: "user",
@@ -195,11 +196,11 @@ ${JSON.stringify(json)}
       temperature: 0.4,
     });
 
-    const raw = completion.choices[0]?.message?.content?.trim() ?? "";
+    const raw = completion.choices[0]?.message?.content ?? "";
 
     let parsed: any = null;
     try {
-      parsed = JSON.parse(raw);
+      parsed = raw ? JSON.parse(raw) : null;
     } catch {
       parsed = null;
     }
@@ -235,8 +236,9 @@ ${JSON.stringify(json)}
     };
 
     return NextResponse.json(payload);
-  } catch (err: any) {
+  } catch (err) {
     console.error("AI insights error:", err);
+    // On error, still return fallback insights so the UI doesn't break
     return NextResponse.json(buildFallbackInsights(title), { status: 200 });
   }
 }

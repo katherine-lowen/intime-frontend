@@ -1,9 +1,8 @@
 // src/app/api/ai-onboarding-plan/route.ts
 import OpenAI from "openai";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const apiKey = process.env.OPENAI_API_KEY;
+const openai = apiKey ? new OpenAI({ apiKey }) : null;
 
 type EmployeeInput = {
   firstName: string;
@@ -25,7 +24,27 @@ type RequestBody = {
 
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as RequestBody;
+    if (!openai) {
+      console.error("[AI Onboarding Plan] Missing OPENAI_API_KEY");
+      return new Response(
+        JSON.stringify({
+          suggestions: [],
+          error:
+            "AI is not configured yet. Set OPENAI_API_KEY to enable onboarding suggestions.",
+        }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    let body: RequestBody = {};
+    try {
+      body = (await req.json()) as RequestBody;
+    } catch {
+      body = {};
+    }
 
     const { employee, tasks = [], mode = "flowTemplate" } = body;
 
@@ -77,7 +96,7 @@ Existing tasks:
 ${existingTasksBlock}
 
 ${instruction}
-`;
+`.trim();
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
@@ -90,6 +109,7 @@ ${instruction}
         { role: "user", content: prompt },
       ],
       response_format: { type: "json_object" },
+      temperature: 0.3,
     });
 
     const raw = completion.choices[0]?.message?.content ?? "{}";
@@ -98,9 +118,13 @@ ${instruction}
     try {
       parsed = JSON.parse(raw);
     } catch {
-      // if model returns an array directly
+      // If the model returns an array directly, wrap it
       if (raw.trim().startsWith("[")) {
-        parsed = { suggestions: JSON.parse(raw) };
+        try {
+          parsed = { suggestions: JSON.parse(raw) };
+        } catch {
+          parsed = { suggestions: [] };
+        }
       } else {
         parsed = { suggestions: [] };
       }
@@ -139,7 +163,7 @@ ${instruction}
       },
     );
   } catch (err) {
-    console.error("AI onboarding plan error", err);
+    console.error("[AI Onboarding Plan] Error", err);
     return new Response(
       JSON.stringify({
         suggestions: [],

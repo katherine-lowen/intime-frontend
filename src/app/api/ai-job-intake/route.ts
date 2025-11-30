@@ -2,12 +2,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
+const apiKey = process.env.OPENAI_API_KEY;
+const openai = apiKey ? new OpenAI({ apiKey }) : null;
 
 export async function POST(req: NextRequest) {
   try {
+    if (!openai) {
+      console.error("[AI Job Intake] Missing OPENAI_API_KEY");
+      return NextResponse.json(
+        {
+          error:
+            "AI is not configured yet. Set OPENAI_API_KEY to enable job intake generation.",
+        },
+        { status: 500 }
+      );
+    }
+
     const body = await req.json().catch(() => ({} as any));
 
     const {
@@ -30,7 +40,7 @@ Output should be:
 - Clear, concise, and practical for recruiters + hiring managers
 - Organized into sections (role summary, responsibilities, must-haves, nice-to-haves, screening questions, first 90 days)
 - Written in neutral, inclusive language
-`;
+`.trim();
 
     const userPrompt = `
 Create a structured role profile for a B2B SaaS role.
@@ -56,72 +66,16 @@ Nice-to-have skills / experience (raw):
 ${niceToHaves || "None provided."}
 
 Produce a clean, structured intake profile that a recruiter can use to align with the hiring manager and build a JD + interview plan.
-`;
+`.trim();
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "JobIntakeProfile",
-          strict: true,
-          schema: {
-            type: "object",
-            properties: {
-              roleSummary: {
-                type: "string",
-                description:
-                  "2–3 sentence summary of the role and why it exists.",
-              },
-              scope: {
-                type: "array",
-                items: { type: "string" },
-                description:
-                  "Bullets describing scope and boundaries of the role.",
-              },
-              responsibilities: {
-                type: "array",
-                items: { type: "string" },
-                description: "Key responsibilities / core work.",
-              },
-              mustHaves: {
-                type: "array",
-                items: { type: "string" },
-                description: "True must-have requirements.",
-              },
-              niceToHaves: {
-                type: "array",
-                items: { type: "string" },
-                description: "Nice-to-have experience / skills.",
-              },
-              screeningQuestions: {
-                type: "array",
-                items: { type: "string" },
-                description:
-                  "3–7 structured application or phone screen questions.",
-              },
-              first90Days: {
-                type: "array",
-                items: { type: "string" },
-                description: "How success is measured in the first 90 days.",
-              },
-            },
-            required: [
-              "roleSummary",
-              "scope",
-              "responsibilities",
-              "mustHaves",
-              "niceToHaves",
-              "screeningQuestions",
-              "first90Days",
-            ],
-          },
-        },
-      },
+      response_format: { type: "json_object" },
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
+      temperature: 0.3,
     });
 
     const rawContent = completion.choices[0]?.message?.content;
@@ -134,7 +88,27 @@ Produce a clean, structured intake profile that a recruiter can use to align wit
       );
     }
 
-    const parsed = JSON.parse(rawContent);
+    // Expected shape (for reference):
+    // {
+    //   roleSummary: string,
+    //   scope: string[],
+    //   responsibilities: string[],
+    //   mustHaves: string[],
+    //   niceToHaves: string[],
+    //   screeningQuestions: string[],
+    //   first90Days: string[]
+    // }
+    let parsed: any;
+    try {
+      parsed = JSON.parse(rawContent);
+    } catch (e) {
+      console.error("[AI Job Intake] Failed to parse JSON:", e, rawContent);
+      return NextResponse.json(
+        { error: "AI returned invalid JSON" },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json(parsed);
   } catch (err) {
     console.error("[AI Job Intake] Error:", err);

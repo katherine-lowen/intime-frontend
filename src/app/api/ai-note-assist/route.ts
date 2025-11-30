@@ -2,16 +2,34 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const apiKey = process.env.OPENAI_API_KEY;
+const openai = apiKey ? new OpenAI({ apiKey }) : null;
 
 export async function POST(req: Request) {
   try {
-    const { text, mode } = (await req.json()) as {
-      text: string;
-      mode?: "polish" | "shorten";
-    };
+    if (!openai) {
+      console.error("AI note assist error: Missing OPENAI_API_KEY");
+      return NextResponse.json(
+        {
+          error:
+            "AI is not configured yet. Set OPENAI_API_KEY to enable note assistance.",
+        },
+        { status: 500 },
+      );
+    }
+
+    let parsed: { text?: string; mode?: "polish" | "shorten" } = {};
+    try {
+      parsed = (await req.json()) as {
+        text?: string;
+        mode?: "polish" | "shorten";
+      };
+    } catch {
+      // ignore, we'll validate below
+    }
+
+    const text = parsed.text ?? "";
+    const mode = parsed.mode;
 
     if (!text || !text.trim()) {
       return NextResponse.json(
@@ -41,7 +59,7 @@ export async function POST(req: Request) {
       temperature: 0.3,
     });
 
-    const newText = completion.choices[0].message.content ?? text;
+    const newText = completion.choices[0]?.message?.content ?? text;
 
     return NextResponse.json({ text: newText.trim() });
   } catch (err) {

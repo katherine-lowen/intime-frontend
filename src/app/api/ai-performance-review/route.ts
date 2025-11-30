@@ -2,11 +2,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
+const apiKey = process.env.OPENAI_API_KEY;
+const openai = apiKey ? new OpenAI({ apiKey }) : null;
 
 export async function POST(req: NextRequest) {
+  if (!openai) {
+    console.error("[AI Performance Review] Missing OPENAI_API_KEY");
+    return NextResponse.json(
+      {
+        error:
+          "AI is not configured yet. Set OPENAI_API_KEY to enable performance review generation.",
+      },
+      { status: 500 },
+    );
+  }
+
   try {
     const body = await req.json().catch(() => ({} as any));
 
@@ -32,7 +42,7 @@ Your job: turn messy manager + self + peer feedback into a structured written re
 - Maps to a typical 3–5 point rating scale (e.g. Below / Meets / Exceeds)
 
 You output JSON ONLY (no markdown), following the provided schema.
-`;
+`.trim();
 
     const userPrompt = `
 Create a structured performance review for:
@@ -60,7 +70,7 @@ Calibration / comp context (if any):
 ${calibrationContext || "None provided."}
 
 Return a structured review that would help a manager finalize their written review and talking points.
-`;
+`.trim();
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
@@ -71,6 +81,7 @@ Return a structured review that would help a manager finalize their written revi
           strict: true,
           schema: {
             type: "object",
+            additionalProperties: false,
             properties: {
               overallSummary: {
                 type: "string",
@@ -134,6 +145,7 @@ Return a structured review that would help a manager finalize their written revi
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
+      temperature: 0.25,
     });
 
     const rawContent = completion.choices[0]?.message?.content;
@@ -142,17 +154,30 @@ Return a structured review that would help a manager finalize their written revi
       console.error("[AI Performance Review] Unexpected content:", rawContent);
       return NextResponse.json(
         { error: "Unexpected AI response format" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
-    const parsed = JSON.parse(rawContent);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(rawContent);
+    } catch (e) {
+      console.error(
+        "[AI Performance Review] Failed to parse JSON:",
+        rawContent,
+      );
+      return NextResponse.json(
+        { error: "Failed to parse AI response" },
+        { status: 500 },
+      );
+    }
+
     return NextResponse.json(parsed);
   } catch (err) {
     console.error("[AI Performance Review] Error:", err);
     return NextResponse.json(
       { error: "Failed to generate performance review" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

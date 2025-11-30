@@ -3,9 +3,10 @@ import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import api from "@/lib/api";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const apiKey = process.env.OPENAI_API_KEY;
+
+// Make OpenAI client nullable so we don't crash if the key is missing
+const openai = apiKey ? new OpenAI({ apiKey }) : null;
 
 type MoatNote = {
   id: string;
@@ -67,6 +68,17 @@ function splitNotes(notes: MoatNote[] = []) {
 
 export async function POST(req: Request) {
   try {
+    // ✅ Guard: if the key isn't configured, fail gracefully instead of crashing
+    if (!openai) {
+      console.error(
+        "[AI candidate scorecard] Missing OPENAI_API_KEY in environment"
+      );
+      return NextResponse.json(
+        { error: "AI not configured on server (missing OPENAI_API_KEY)" },
+        { status: 500 }
+      );
+    }
+
     const { candidateId } = (await req.json()) as { candidateId?: string };
 
     if (!candidateId) {

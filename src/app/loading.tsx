@@ -1,13 +1,22 @@
-// src/app/loading.tsx
-export default function Loading() {
+// src/app/layout.tsx
+import "./globals.css";
+import type { ReactNode } from "react";
+import { IdentitySync } from "@/components/IdentitySync";
+import { AppFrame } from "@/components/AppFrame";
+
+export const metadata = {
+  title: "Intime HR Platform",
+  description: "Intime HRIS · People, hiring, and time-aware insights.",
+};
+
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="mx-auto max-w-6xl p-6">
-      <div className="h-8 w-56 animate-pulse rounded bg-neutral-200" />
-      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {[...Array(4)].map((_, i) => (
-          <div key={i} className="h-28 animate-pulse rounded-2xl bg-neutral-200" />
-        ))}
-      </div>
-    </div>
+    <html lang="en">
+      <body className="bg-slate-50 text-slate-900 antialiased">
+        {/* Sync Supabase user -> localStorage */}
+        <IdentitySync />
+        <AppFrame>{children}</AppFrame>
+      </body>
+    </html>
   );
 }
