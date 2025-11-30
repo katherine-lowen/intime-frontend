@@ -3,6 +3,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
+import CalendarMonth, {
+  type CalendarEvent,
+} from "@/components/calendar-month";
 
 type TimeOffStatus = "REQUESTED" | "APPROVED" | "DENIED" | "CANCELLED";
 
@@ -31,91 +34,26 @@ type TimeOffRequest = {
   employeeId: string;
   type: TimeOffType;
   status: TimeOffStatus;
-  startDate: string;
-  endDate: string;
+  startDate: string; // ISO date
+  endDate: string; // ISO date
   employee: EmployeeSummary | null;
   policy: PolicySummary | null;
 };
 
-type CalendarDay = {
-  date: Date;
-  label: string;
-  key: string; // yyyy-mm-dd
-  inCurrentMonth: boolean;
-};
-
-// ---------- date helpers ----------
-
-// format local date into yyyy-mm-dd for stable keys
-function toLocalKey(d: Date): string {
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function buildMonthGrid(year: number, monthIndex: number): CalendarDay[] {
-  // monthIndex is 0-based
-  const firstOfMonth = new Date(year, monthIndex, 1);
-  const startWeekday = firstOfMonth.getDay(); // 0 = Sun
-  const startDate = new Date(year, monthIndex, 1 - startWeekday);
-
-  const days: CalendarDay[] = [];
-  for (let i = 0; i < 42; i++) {
-    const d = new Date(startDate);
-    d.setDate(startDate.getDate() + i);
-    const inCurrentMonth = d.getMonth() === monthIndex;
-    days.push({
-      date: d,
-      label: String(d.getDate()),
-      key: toLocalKey(d),
-      inCurrentMonth,
-    });
-  }
-  return days;
-}
-
-// expand each PTO request into per-day buckets
-function bucketRequestsByDay(requests: TimeOffRequest[]) {
-  const map: Record<string, TimeOffRequest[]> = {};
-
-  for (const r of requests) {
-    const start = new Date(r.startDate);
-    const end = new Date(r.endDate);
-    if (
-      Number.isNaN(start.getTime()) ||
-      Number.isNaN(end.getTime()) ||
-      end < start
-    ) {
-      continue;
-    }
-
-    const current = new Date(start);
-    while (current <= end) {
-      const key = toLocalKey(current);
-      if (!map[key]) map[key] = [];
-      map[key].push(r);
-      current.setDate(current.getDate() + 1);
-    }
-  }
-
-  return map;
-}
-
-// ---------- main page ----------
-
 export default function TimeOffCalendarPage() {
-  const today = new Date();
-  const [visibleYear, setVisibleYear] = useState(today.getFullYear());
-  const [visibleMonth, setVisibleMonth] = useState(today.getMonth()); // 0 = Jan
   const [requests, setRequests] = useState<TimeOffRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // simple filter: show all vs approved-only
   const [statusFilter, setStatusFilter] = useState<"ALL" | "APPROVED_ONLY">(
     "ALL"
   );
+
+  // day drawer state
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const [selectedRequests, setSelectedRequests] = useState<TimeOffRequest[]>([]);
+  const [mutatingId, setMutatingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -151,49 +89,85 @@ export default function TimeOffCalendarPage() {
     return requests;
   }, [requests, statusFilter]);
 
-  const dayBuckets = useMemo(
-    () => bucketRequestsByDay(filteredRequests),
+  // Map backend requests → calendar events (with meta = full request)
+  const events: CalendarEvent[] = useMemo(
+    () =>
+      filteredRequests.map((r) => {
+        const name = r.employee
+          ? `${r.employee.firstName} ${r.employee.lastName}`
+          : `Employee ${r.employeeId.slice(0, 6)}`;
+
+        return {
+          id: r.id,
+          title: `${name} · ${r.type.toLowerCase()}`,
+          start: r.startDate,
+          end: r.endDate,
+          status: r.status,
+          kind: r.type,
+          meta: r,
+        };
+      }),
     [filteredRequests]
   );
 
-  const days = useMemo(
-    () => buildMonthGrid(visibleYear, visibleMonth),
-    [visibleYear, visibleMonth]
-  );
+  function handleDayClick(date: Date, eventsForDay: CalendarEvent[]) {
+    const reqs: TimeOffRequest[] = [];
 
-  const monthLabel = useMemo(() => {
-    return new Date(visibleYear, visibleMonth, 1).toLocaleString(undefined, {
-      month: "long",
-      year: "numeric",
-    });
-  }, [visibleYear, visibleMonth]);
-
-  function goPrevMonth() {
-    setVisibleMonth((prev) => {
-      if (prev === 0) {
-        setVisibleYear((y) => y - 1);
-        return 11;
+    for (const e of eventsForDay) {
+      if (e.meta) {
+        reqs.push(e.meta as TimeOffRequest);
+      } else {
+        const fallback = filteredRequests.find((r) => r.id === e.id);
+        if (fallback) reqs.push(fallback);
       }
-      return prev - 1;
-    });
+    }
+
+    setSelectedDay(date);
+    setSelectedRequests(reqs);
+    setActionError(null);
   }
 
-  function goNextMonth() {
-    setVisibleMonth((prev) => {
-      if (prev === 11) {
-        setVisibleYear((y) => y + 1);
-        return 0;
-      }
-      return prev + 1;
-    });
+  function closeDrawer() {
+    setSelectedDay(null);
+    setSelectedRequests([]);
+    setActionError(null);
   }
 
-  const totalVisibleDaysWithPto = days.filter(
-    (d) => dayBuckets[d.key]?.length
-  ).length;
+  async function updateStatus(
+    req: TimeOffRequest,
+    newStatus: TimeOffStatus
+  ): Promise<void> {
+    if (req.status === newStatus) return;
+
+    setMutatingId(req.id);
+    setActionError(null);
+
+    try {
+      // NOTE: adjust this URL if your backend uses a different route
+      const updated = await api.patch<TimeOffRequest>(
+        `/timeoff/requests/${req.id}/status`,
+        { status: newStatus }
+      );
+
+      // Update global list
+      setRequests((prev) =>
+        prev.map((r) => (r.id === req.id ? updated : r))
+      );
+
+      // Update currently selected day view
+      setSelectedRequests((prev) =>
+        prev.map((r) => (r.id === req.id ? updated : r))
+      );
+    } catch (e: any) {
+      console.error("[TimeOffCalendarPage] failed to update status", e);
+      setActionError("Failed to update request status. Please try again.");
+    } finally {
+      setMutatingId(null);
+    }
+  }
 
   return (
-    <main className="p-6 space-y-6">
+    <main className="space-y-6 p-6">
       {/* Header */}
       <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
@@ -208,7 +182,7 @@ export default function TimeOffCalendarPage() {
         <div className="flex flex-col items-start gap-2 text-xs md:flex-row md:items-center md:gap-3">
           <div className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-50">
             <span className="mr-2 inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-            {totalVisibleDaysWithPto} days with time off this month
+            {filteredRequests.length} time off requests shown
           </div>
 
           <div className="flex items-center gap-2">
@@ -235,183 +209,144 @@ export default function TimeOffCalendarPage() {
         </div>
       )}
 
-      {/* Month nav + legend */}
-      <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-slate-100 pb-3 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={goPrevMonth}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-600 hover:bg-slate-50"
-            >
-              ‹
-            </button>
-            <div>
-              <div className="text-sm font-semibold text-slate-900">
-                {monthLabel}
-              </div>
-              <div className="text-[11px] text-slate-500">
-                Sunday–Saturday view · click a day to see details
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={goNextMonth}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-600 hover:bg-slate-50"
-            >
-              ›
-            </button>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              Approved
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-amber-700">
-              <span className="h-2 w-2 rounded-full bg-amber-500" />
-              Requested
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-2 py-0.5 text-slate-600">
-              <span className="h-2 w-2 rounded-full bg-slate-400" />
-              Other statuses
-            </span>
-          </div>
-        </div>
-
-        {/* Calendar grid */}
-        <div className="grid grid-cols-7 gap-1 text-xs">
-          {/* weekday header */}
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((w) => (
-            <div
-              key={w}
-              className="px-2 py-1 text-center text-[11px] font-medium uppercase tracking-wide text-slate-400"
-            >
-              {w}
-            </div>
-          ))}
-
-          {days.map((day) => {
-            const dayRequests = dayBuckets[day.key] || [];
-
-            const hasApproved = dayRequests.some(
-              (r) => r.status === "APPROVED"
-            );
-            const hasRequested = dayRequests.some(
-              (r) => r.status === "REQUESTED"
-            );
-
-            const borderClass = day.inCurrentMonth
-              ? "border-slate-200"
-              : "border-slate-100";
-            const bgClass = day.inCurrentMonth
-              ? "bg-white"
-              : "bg-slate-50";
-
-            return (
-              <DayCell
-                key={day.key}
-                day={day}
-                requests={dayRequests}
-                borderClass={borderClass}
-                bgClass={bgClass}
-                hasApproved={hasApproved}
-                hasRequested={hasRequested}
-              />
-            );
-          })}
-        </div>
-      </section>
-    </main>
-  );
-}
-
-type DayCellProps = {
-  day: CalendarDay;
-  requests: TimeOffRequest[];
-  borderClass: string;
-  bgClass: string;
-  hasApproved: boolean;
-  hasRequested: boolean;
-};
-
-function DayCell({
-  day,
-  requests,
-  borderClass,
-  bgClass,
-  hasApproved,
-  hasRequested,
-}: DayCellProps) {
-  const total = requests.length;
-
-  // up to 2 people names as chips
-  const topPeople = requests.slice(0, 2);
-  const extraCount =
-    total > 2 ? total - 2 : 0;
-
-  // badge color priority
-  let badgeClass =
-    "bg-slate-100 text-slate-700 border-slate-200";
-  if (hasApproved) {
-    badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-200";
-  } else if (hasRequested) {
-    badgeClass = "bg-amber-50 text-amber-700 border-amber-200";
-  }
-
-  return (
-    <div
-      className={`group flex min-h-[88px] flex-col rounded-xl border ${borderClass} ${bgClass} p-1.5 text-[11px]`}
-    >
-      <div className="flex items-center justify-between">
-        <span
-          className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-medium ${
-            day.inCurrentMonth
-              ? "text-slate-900"
-              : "text-slate-400"
-          }`}
-        >
-          {day.label}
-        </span>
-
-        {total > 0 && (
-          <span
-            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${badgeClass}`}
-          >
-            {total} out
-          </span>
-        )}
-      </div>
-
-      {total === 0 ? (
-        <div className="mt-2 flex-1 text-[10px] text-slate-300">
-          —
+      {loading ? (
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-6 text-sm text-slate-500 shadow-sm">
+          Loading time off calendar…
         </div>
       ) : (
-        <div className="mt-1 flex-1 space-y-0.5">
-          {topPeople.map((r) => {
-            const name = r.employee
-              ? `${r.employee.firstName} ${r.employee.lastName}`
-              : `#${r.employeeId.slice(0, 6)}`;
-            return (
-              <div
-                key={r.id}
-                className="truncate rounded-md bg-slate-900/5 px-1.5 py-0.5 text-[10px] text-slate-700"
-              >
-                {name}
-                <span className="ml-1 text-[9px] uppercase tracking-wide text-slate-400">
-                  · {r.type.toLowerCase()}
-                </span>
+        <CalendarMonth
+          initialMonth={new Date()}
+          events={events}
+          onDayClick={handleDayClick}
+        />
+      )}
+
+      {/* Side drawer for selected day */}
+      {selectedDay && (
+        <div className="fixed inset-0 z-40 flex items-start justify-end bg-black/20">
+          <div className="h-full w-full max-w-md border-l border-slate-200 bg-white shadow-xl">
+            <div className="flex items-start justify-between border-b border-slate-100 px-4 py-3">
+              <div>
+                <div className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                  Day details
+                </div>
+                <div className="text-sm font-semibold text-slate-900">
+                  {selectedDay.toLocaleDateString(undefined, {
+                    weekday: "long",
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                </div>
               </div>
-            );
-          })}
-          {extraCount > 0 && (
-            <div className="text-[10px] text-slate-500">
-              +{extraCount} more
+              <button
+                type="button"
+                onClick={closeDrawer}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50"
+              >
+                ✕
+              </button>
             </div>
-          )}
+
+            <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-3 text-sm">
+              {actionError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700">
+                  {actionError}
+                </div>
+              )}
+
+              {selectedRequests.length === 0 ? (
+                <div className="mt-4 text-xs text-slate-500">
+                  No one is out on this day (based on current filters).
+                </div>
+              ) : (
+                selectedRequests.map((r) => {
+                  const name = r.employee
+                    ? `${r.employee.firstName} ${r.employee.lastName}`
+                    : `Employee ${r.employeeId.slice(0, 6)}`;
+
+                  const statusBadge =
+                    r.status === "APPROVED"
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : r.status === "REQUESTED"
+                      ? "bg-amber-50 text-amber-700 border-amber-200"
+                      : r.status === "DENIED"
+                      ? "bg-rose-50 text-rose-700 border-rose-200"
+                      : "bg-slate-50 text-slate-600 border-slate-200";
+
+                  return (
+                    <div
+                      key={r.id}
+                      className="rounded-xl border border-slate-200 bg-slate-50/60 p-3"
+                    >
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <div className="font-medium text-slate-900">
+                          {name}
+                        </div>
+                        <span
+                          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusBadge}`}
+                        >
+                          {r.status.toLowerCase()}
+                        </span>
+                      </div>
+
+                      <div className="text-xs text-slate-600">
+                        <div className="flex flex-wrap gap-1">
+                          <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                            {r.type.toLowerCase()}
+                          </span>
+                          {r.policy && (
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-700">
+                              {r.policy.name}
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-1 text-[11px] text-slate-500">
+                          {new Date(r.startDate).toLocaleDateString()} –{" "}
+                          {new Date(r.endDate).toLocaleDateString()}
+                        </div>
+                      </div>
+
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => updateStatus(r, "APPROVED")}
+                          disabled={
+                            mutatingId === r.id || r.status === "APPROVED"
+                          }
+                          className="inline-flex items-center rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateStatus(r, "DENIED")}
+                          disabled={
+                            mutatingId === r.id || r.status === "DENIED"
+                          }
+                          className="inline-flex items-center rounded-full bg-rose-600 px-3 py-1 text-[11px] font-medium text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Deny
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateStatus(r, "CANCELLED")}
+                          disabled={
+                            mutatingId === r.id || r.status === "CANCELLED"
+                          }
+                          className="inline-flex items-center rounded-full border border-slate-300 bg-white px-3 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
         </div>
       )}
-    </div>
+    </main>
   );
 }
