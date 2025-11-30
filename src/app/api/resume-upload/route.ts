@@ -5,7 +5,10 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 export const runtime = "nodejs"; // needed so we can use Buffers + pdf-parse
 
-async function extractTextFromBuffer(buffer: Buffer, ext: string): Promise<string> {
+async function extractTextFromBuffer(
+  buffer: Buffer,
+  ext: string,
+): Promise<string> {
   try {
     if (ext === "pdf") {
       // Dynamic import avoids TS / CJS interop issues
@@ -17,6 +20,14 @@ async function extractTextFromBuffer(buffer: Buffer, ext: string): Promise<strin
 
     if (ext === "txt") {
       return buffer.toString("utf8");
+    }
+
+    if (ext === "docx") {
+      // Use mammoth to extract raw text from Word docs
+      const mammothModule = await import("mammoth");
+      const mammoth: any = (mammothModule as any).default || mammothModule;
+      const { value } = await mammoth.extractRawText({ buffer });
+      return value || "";
     }
 
     // Unsupported type for now — we still store the file, just no text
@@ -69,7 +80,7 @@ export async function POST(req: Request) {
       data: { publicUrl },
     } = supabase.storage.from("resumes").getPublicUrl(path);
 
-    // 2) Best-effort text extraction
+    // 2) Best-effort text extraction (PDF, DOCX, TXT)
     const text = await extractTextFromBuffer(buffer, ext);
 
     return NextResponse.json(
