@@ -52,6 +52,14 @@ function statusBadgeClasses(status?: EmployeeStatus | null) {
   }
 }
 
+// Shared helper to normalize IDs (matches detail page expectation)
+function getCanonicalId(e: Employee): string | null {
+  const clean = (v?: string) =>
+    v && v !== "undefined" && v.trim() !== "" ? v : null;
+
+  return clean(e.employeeId) ?? clean(e.id) ?? null;
+}
+
 export default async function PeoplePage() {
   let employees: Employee[] = [];
   let loadError: string | null = null;
@@ -177,18 +185,27 @@ export default async function PeoplePage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {employees.map((e) => {
-                const id = e.employeeId || e.id || "";
+                const canonicalId = getCanonicalId(e);
                 const fullName = `${e.firstName} ${e.lastName}`.trim();
+                const rowKey =
+                  canonicalId || e.id || e.employeeId || fullName || e.email || Math.random().toString();
+
                 return (
-                  <tr key={id || fullName || e.email || Math.random()}>
+                  <tr key={rowKey}>
                     <td className="px-4 py-3">
                       <div className="flex flex-col">
-                        <Link
-                          href={id ? `/people/${id}` : "#"}
-                          className="text-sm font-medium text-slate-900 hover:text-indigo-600"
-                        >
-                          {fullName || "Unnamed"}
-                        </Link>
+                        {canonicalId ? (
+                          <Link
+                            href={`/people/${canonicalId}`}
+                            className="text-sm font-medium text-slate-900 hover:text-indigo-600"
+                          >
+                            {fullName || "Unnamed"}
+                          </Link>
+                        ) : (
+                          <span className="text-sm font-medium text-slate-900">
+                            {fullName || "Unnamed"}
+                          </span>
+                        )}
                         {e.email && (
                           <span className="text-xs text-slate-500">
                             {e.email}
@@ -215,9 +232,9 @@ export default async function PeoplePage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right text-xs">
-                      {id ? (
+                      {canonicalId ? (
                         <Link
-                          href={`/people/${id}`}
+                          href={`/people/${canonicalId}`}
                           className="rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-700 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
                         >
                           Open profile

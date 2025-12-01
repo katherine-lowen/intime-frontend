@@ -8,6 +8,8 @@ import PayrollCompCard from "@/components/payroll-comp-card";
 import EmployeeTimeoffPolicyCard from "@/components/employee-timeoff-policy-card";
 import { PerformancePanel } from "./performance-panel";
 
+export const dynamic = "force-dynamic";
+
 type EmployeeStatus = "ACTIVE" | "ON_LEAVE" | "CONTRACTOR" | "ALUMNI";
 
 type PayType = "SALARY" | "HOURLY" | "CONTRACTOR";
@@ -155,6 +157,7 @@ async function tryResolveEmployeeFromList(id: string): Promise<Employee | null> 
   try {
     const list = await api.get<EmployeeListItem[]>("/employees");
 
+    // Match on either employeeId or id
     const match = list.find((e) => e.employeeId === id || e.id === id);
     if (!match) return null;
 
@@ -191,10 +194,18 @@ async function tryResolveEmployeeFromList(id: string): Promise<Employee | null> 
 
 // Unified resolver: detail endpoint first, then list
 async function getEmployeeById(id: string): Promise<Employee | null> {
-  const fromDetail = await tryGetEmployeeDetail(id);
+  const cleanId = (id ?? "").trim();
+
+  // 🔒 Hard guard: never call /employees/undefined or empty
+  if (!cleanId || cleanId === "undefined") {
+    console.warn("[people/[id]] Invalid employee id param:", id);
+    return null;
+  }
+
+  const fromDetail = await tryGetEmployeeDetail(cleanId);
   if (fromDetail) return fromDetail;
 
-  const fromList = await tryResolveEmployeeFromList(id);
+  const fromList = await tryResolveEmployeeFromList(cleanId);
   return fromList;
 }
 
@@ -313,44 +324,18 @@ function computePtoUsedThisYear(requests: TimeOffRequestLite[]): number {
     .reduce((sum, r) => sum + countDaysInclusive(r.startDate, r.endDate), 0);
 }
 
-export const dynamic = "force-dynamic";
+// -------- PAGE COMPONENT (Next 15: params is a Promise) --------
 
 export default async function PersonPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  const { id: employeeIdFromUrl } = params;
+  // In Next 15+, params is a Promise in async server components
+  const resolvedParams = await params;
+  const employeeIdFromUrl = (resolvedParams.id ?? "").toString();
 
-  if (
-    !employeeIdFromUrl ||
-    employeeIdFromUrl === "undefined" ||
-    employeeIdFromUrl.trim() === ""
-  ) {
-    return (
-      <AuthGate>
-        <main className="mx-auto max-w-3xl px-6 py-8">
-          <h1 className="text-xl font-semibold text-slate-900">
-            No employee selected
-          </h1>
-          <p className="mt-2 text-sm text-slate-600">
-            This page needs a valid employee ID in the URL. Go back to the
-            People hub and open someone from the list.
-          </p>
-          <div className="mt-4">
-            <Link
-              href="/people"
-              className="inline-flex items-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
-            >
-              ← Back to People hub
-            </Link>
-          </div>
-        </main>
-      </AuthGate>
-    );
-  }
-
-  // 1️⃣ Try detail endpoint, then list fallback
+  // Always attempt to load the employee; no "no employee selected" guard
   const employee = await getEmployeeById(employeeIdFromUrl);
 
   if (!employee) {

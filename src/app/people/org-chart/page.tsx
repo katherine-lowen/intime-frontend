@@ -39,7 +39,7 @@ type OrgNode = {
     firstName: string;
     lastName: string;
   } | null;
-  reports: OrgNode[];
+    reports: OrgNode[];
 };
 
 async function fetchEmployees(): Promise<EmployeeListItem[]> {
@@ -51,16 +51,28 @@ async function fetchEmployees(): Promise<EmployeeListItem[]> {
   }
 }
 
+// Helper to normalize IDs and avoid "undefined" / empty strings
+function normalizeId(primary?: string | null, fallback?: string | null): string | null {
+  const clean = (v?: string | null) =>
+    v && v !== "undefined" && v.trim() !== "" ? v : null;
+
+  return clean(primary) ?? clean(fallback);
+}
+
 function buildOrgTree(employees: EmployeeListItem[]): OrgNode[] {
   if (!employees.length) return [];
 
   // Build base nodes with canonical ids
   const nodes = employees
     .filter((e) => e.status !== "ALUMNI") // hide alumni for v1
-    .map<OrgNode>((e) => {
-      const canonicalId = e.employeeId ?? e.id ?? "";
-      const managerCanonicalId =
-        e.manager?.employeeId ?? e.manager?.id ?? undefined;
+    .map<OrgNode | null>((e) => {
+      const canonicalId = normalizeId(e.employeeId ?? null, e.id ?? null);
+      if (!canonicalId) return null;
+
+      const managerCanonicalId = normalizeId(
+        e.manager?.employeeId ?? null,
+        e.manager?.id ?? null,
+      );
 
       return {
         canonicalId,
@@ -80,7 +92,7 @@ function buildOrgTree(employees: EmployeeListItem[]): OrgNode[] {
         reports: [],
       };
     })
-    .filter((n) => n.canonicalId !== ""); // discard any broken ones
+    .filter((n): n is OrgNode => n !== null); // discard any broken ones
 
   const byId = new Map<string, OrgNode>();
   for (const node of nodes) {

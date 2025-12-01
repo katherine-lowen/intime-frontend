@@ -1,6 +1,7 @@
 // src/app/operations/page.tsx
 import api from "@/lib/api";
 import { AuthGate } from "@/components/dev-auth-gate";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -423,6 +424,62 @@ export default async function OperationsPage() {
                 </div>
               </>
             )}
+          </div>
+        </section>
+
+        {/* THIRD ROW: TEAM HEATMAP LINK */}
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">
+                Team load & coverage
+              </h2>
+              <p className="mt-1 text-xs text-slate-500 max-w-xl">
+                Visualize which teams and people are overloaded based on PTO,
+                approvals, and recent review activity. Use the heatmap to spot
+                burnout risk and coverage gaps before they show up in Slack.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/operations/team-heatmap"
+                className="inline-flex items-center rounded-full border border-slate-200 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-50 shadow-sm hover:bg-slate-800"
+              >
+                Open team heatmap
+              </Link>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 text-xs text-slate-600 sm:grid-cols-3">
+            <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-3">
+              <div className="text-[10px] uppercase tracking-wide text-slate-500">
+                What you&apos;ll see
+              </div>
+              <p className="mt-1">
+                Each employee gets a load score based on upcoming PTO, pending
+                approvals, and recent review activity – rendered as a
+                color-coded heatmap.
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-3">
+              <div className="text-[10px] uppercase tracking-wide text-slate-500">
+                How to use it
+              </div>
+              <p className="mt-1">
+                Look for clusters of &quot;very busy&quot; people in the same
+                teams or reporting lines. That&apos;s where to add support or
+                slow hiring/initiatives.
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-3">
+              <div className="text-[10px] uppercase tracking-wide text-slate-500">
+                Who it&apos;s for
+              </div>
+              <p className="mt-1">
+                Great for People Ops and leadership who want a single picture of
+                workload, instead of chasing spreadsheets and one-off updates.
+              </p>
+            </div>
           </div>
         </section>
 
