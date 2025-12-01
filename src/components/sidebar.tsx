@@ -131,6 +131,12 @@ const PLATFORM_FLYOUT_ITEMS: FlyoutItem[] = [
     icon: "💸",
   },
   {
+    href: "/learning",
+    label: "Learning",
+    description: "Learning hub for courses and content.",
+    icon: "📚",
+  },
+  {
     href: "/employee-documents",
     label: "Employee documents",
     description: "Contracts, paperwork, and files.",
@@ -205,6 +211,7 @@ const SECTIONS: NavSection[] = [
       // Flyout anchor
       { href: "/operations", label: "Operations", icon: "⚙️" },
       { href: "/payroll", label: "Payroll", icon: "💸" },
+      { href: "/learning", label: "Learning", icon: "📚" },
       { href: "/employee-documents", label: "Documents", icon: "📂" },
       { href: "/obsession", label: "Obsession", icon: "🧠" },
       { href: "/settings", label: "Settings", icon: "⚙︎" },
@@ -269,7 +276,6 @@ export function Sidebar({
     </>
   );
 }
-
 
 /* ------------------------------
    SHARED SIDEBAR CONTENT
