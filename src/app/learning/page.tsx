@@ -40,7 +40,17 @@ type Assignment = {
 
 async function fetchCourses(): Promise<Course[]> {
   try {
-    return await api.get<Course[]>("/learning/courses");
+    // Backend can return richer course objects; we only use a subset
+    const raw = await api.get<any[]>("/learning/courses");
+    return raw.map((c) => ({
+      id: String(c.id),
+      title: c.title ?? "Untitled course",
+      category: c.category ?? null,
+      difficulty: null, // can wire to c.level later if you want
+      estMinutes: c.estimatedMinutes ?? null,
+      activeLearners: c.activeLearners ?? null,
+      completionRate: c.completionRate ?? null,
+    }));
   } catch (err) {
     console.error("Failed to load /learning/courses, using fallback", err);
     // Fallback sample data so UI looks alive
@@ -78,7 +88,27 @@ async function fetchCourses(): Promise<Course[]> {
 
 async function fetchLearningPaths(): Promise<LearningPath[]> {
   try {
-    return await api.get<LearningPath[]>("/learning/paths");
+    const raw = await api.get<any[]>("/learning/paths");
+    return raw.map((p) => {
+      const items = Array.isArray(p.items) ? p.items : [];
+      const durations = items
+        .map((it: any) => it.course?.estimatedMinutes as number | undefined)
+        .filter((n): n is number => typeof n === "number" && n > 0);
+
+      const totalMinutes =
+        durations.length > 0
+          ? durations.reduce((a, b) => a + b, 0)
+          : p.avgDurationMinutes ?? 0;
+
+      return {
+        id: String(p.id),
+        name: p.name ?? "Untitled path",
+        audience: p.audience ?? "All employees",
+        useCase: p.useCase ?? "Onboarding",
+        courseCount: items.length || p.courseCount || 0,
+        avgDurationMinutes: totalMinutes,
+      };
+    });
   } catch (err) {
     console.error("Failed to load /learning/paths, using fallback", err);
     return [
@@ -112,7 +142,42 @@ async function fetchLearningPaths(): Promise<LearningPath[]> {
 
 async function fetchAssignments(): Promise<Assignment[]> {
   try {
-    return await api.get<Assignment[]>("/learning/assignments");
+    const raw = await api.get<any[]>("/learning/assignments");
+    const now = new Date();
+
+    return raw.map((a) => {
+      const employee = a.employee || {};
+      const course = a.course || {};
+      const path = a.path || {};
+      const dueIso: string | undefined = a.dueDate ?? a.due_at;
+
+      // Map backend status → UI status
+      let status: AssignmentStatus = "NOT_STARTED";
+      if (a.status === "IN_PROGRESS") status = "IN_PROGRESS";
+      else if (a.status === "COMPLETED") status = "COMPLETED";
+
+      // Overdue if not completed and due date in the past
+      if (
+        dueIso &&
+        status !== "COMPLETED" &&
+        !Number.isNaN(new Date(dueIso).getTime()) &&
+        new Date(dueIso) < now
+      ) {
+        status = "OVERDUE";
+      }
+
+      return {
+        id: String(a.id),
+        learnerName:
+          `${employee.firstName ?? ""} ${employee.lastName ?? ""}`.trim() ||
+          "Unnamed employee",
+        learnerRole: employee.title ?? employee.role ?? null,
+        pathName: path.name ?? null,
+        courseTitle: course.title ?? a.courseTitle ?? "Untitled course",
+        dueDate: dueIso ?? null,
+        status,
+      };
+    });
   } catch (err) {
     console.error("Failed to load /learning/assignments, using fallback", err);
     return [
@@ -122,7 +187,9 @@ async function fetchAssignments(): Promise<Assignment[]> {
         learnerRole: "CTO",
         pathName: "Annual compliance & security",
         courseTitle: "Security & Data Protection",
-        dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+        dueDate: new Date(
+          Date.now() + 3 * 24 * 60 * 60 * 1000,
+        ).toISOString(),
         status: "IN_PROGRESS",
       },
       {
@@ -131,7 +198,9 @@ async function fetchAssignments(): Promise<Assignment[]> {
         learnerRole: "Marketing",
         pathName: "New hire onboarding",
         courseTitle: "Intime 101: Working Here",
-        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        dueDate: new Date(
+          Date.now() + 7 * 24 * 60 * 60 * 1000,
+        ).toISOString(),
         status: "NOT_STARTED",
       },
       {
@@ -140,7 +209,9 @@ async function fetchAssignments(): Promise<Assignment[]> {
         learnerRole: "People Ops",
         pathName: "First-time people managers",
         courseTitle: "Manager Essentials: 1:1s & Feedback",
-        dueDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+        dueDate: new Date(
+          Date.now() - 2 * 24 * 60 * 60 * 1000,
+        ).toISOString(),
         status: "OVERDUE",
       },
     ];
@@ -216,9 +287,8 @@ export default async function LearningPage() {
               Learning
             </h1>
             <p className="text-sm text-slate-600">
-              Connect employee development to your HR workflows. Create
-              learning paths, assign training, and track completion — all inside
-              Intime.
+              Connect employee development to your HR workflows. Create learning
+              paths, assign training, and track completion — all inside Intime.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -333,7 +403,8 @@ export default async function LearningPage() {
                     </div>
                     <div className="text-right text-[11px] text-slate-500">
                       <div>
-                        {p.courseCount} course{p.courseCount === 1 ? "" : "s"}
+                        {p.courseCount} course
+                        {p.courseCount === 1 ? "" : "s"}
                       </div>
                       <div>
                         ~{Math.round(p.avgDurationMinutes / 5) * 5} min total
