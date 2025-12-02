@@ -109,10 +109,10 @@ export default async function DashboardPage() {
                       Live
                     </span>
                   </div>
-                  <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+                  <h1 className="font-semibold text-display-32 text-neutral-900">
                     One place for people, time, and hiring health.
                   </h1>
-                  <p className="mt-1 text-sm text-slate-600">
+                  <p className="mt-1 text-body-14 text-neutral-600">
                     Your headcount, hiring pipeline, and time-aware events in a
                     single snapshot. See what needs your attention today.
                   </p>
@@ -133,14 +133,14 @@ export default async function DashboardPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <Link
                     href="/people/new"
-                    className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-slate-50 shadow-sm hover:bg-slate-800"
+                    className="inline-flex items-center gap-2 rounded-full bg-neutral-900 px-4 py-2 text-[11px] font-semibold text-neutral-50 shadow-sm hover:bg-neutral-800"
                   >
                     Add first employee
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                   <Link
                     href="/jobs/new"
-                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50"
+                    className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-4 py-2 text-[11px] font-semibold text-neutral-800 hover:bg-neutral-50"
                   >
                     Create a role
                   </Link>
@@ -194,7 +194,7 @@ export default async function DashboardPage() {
               </div>
 
               {recent.length === 0 ? (
-                <p className="text-sm text-slate-500">
+                <p className="text-xs text-slate-500">
                   No events in the last 7 days. As you start logging hires, time
                   off, and changes, this panel shows where activity is picking
                   up.
@@ -238,7 +238,7 @@ export default async function DashboardPage() {
             <div className="space-y-4">
               {/* Workspaces */}
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
                   Workspaces
                 </div>
                 <div className="grid gap-2 text-xs">
@@ -263,7 +263,7 @@ export default async function DashboardPage() {
                 </div>
               </div>
 
-              {/* New AI Org Time Insights card */}
+              {/* AI Org Time Insights card */}
               <AiOrgTimeInsights
                 employees={employees}
                 openRoles={openRoles}

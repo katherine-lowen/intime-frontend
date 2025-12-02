@@ -219,10 +219,10 @@ export default async function OperationsPage() {
         {/* HEADER */}
         <section className="flex flex-wrap items-center justify-between gap-3">
           <div className="space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+            <h1 className="font-semibold text-display-32 text-neutral-900">
               Org overview
             </h1>
-            <p className="text-sm text-slate-600">
+            <p className="text-body-14 text-neutral-600">
               HRIS view of your headcount, time off, onboarding, and key dates —
               in one place.
             </p>
@@ -541,80 +541,81 @@ export default async function OperationsPage() {
               </ul>
             )}
           </div>
-{/* Upcoming birthdays — 🎂 themed with confetti */}
-<div className="relative rounded-2xl border border-rose-100 bg-gradient-to-br from-rose-50 via-pink-50 to-orange-50 p-5 shadow-sm overflow-visible">
-  <div className="flex items-start justify-between gap-3">
-    <div>
-      <div className="inline-flex items-center gap-2 rounded-full bg-white/70 px-3 py-1 text-[11px] font-medium text-rose-700 shadow-sm">
-        <span>🎂</span>
-        <span>Birthday radar</span>
-      </div>
-      <h2 className="mt-3 text-sm font-semibold text-rose-900">
-        Upcoming birthdays
-      </h2>
-      <p className="mt-1 text-xs text-rose-700/80">
-        Plan shout-outs, cards, and cake before the day sneaks up on you.
-      </p>
-    </div>
 
-    <div className="flex flex-col items-end gap-1">
-      <span className="text-[11px] font-medium text-rose-600">
-        {topBirthdays.length} coming up
-      </span>
-
-      {/* BIG, OBVIOUS CONFETTI */}
-      <div className="h-20 w-20">
-        <LottieConfetti />
-      </div>
-    </div>
-  </div>
-
-  {topBirthdays.length === 0 ? (
-    <p className="mt-4 text-xs text-rose-700/80">
-      No birthdays detected yet. As you add employee birth dates to People
-      profiles, upcoming birthdays will appear here with enough time to
-      celebrate properly. 🎉
-    </p>
-  ) : (
-    <ul className="mt-4 space-y-2 text-xs text-rose-900/90">
-      {topBirthdays.map((b) => (
-        <li
-          key={b.id}
-          className="flex items-center justify-between gap-3 rounded-xl border border-rose-100 bg-white/70 px-3 py-2 backdrop-blur"
-        >
-          <div className="flex min-w-0 items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-rose-100 text-sm">
-              🎉
-            </div>
-            <div className="min-w-0">
-              <div className="truncate font-medium">
-                {b.firstName} {b.lastName}
-              </div>
-              {b.department && (
-                <div className="truncate text-[11px] text-rose-700/80">
-                  {b.department}
+          {/* Upcoming birthdays — 🎂 themed with confetti */}
+          <div className="relative overflow-visible rounded-2xl border border-rose-100 bg-gradient-to-br from-rose-50 via-pink-50 to-orange-50 p-5 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="inline-flex items-center gap-2 rounded-full bg-white/70 px-3 py-1 text-[11px] font-medium text-rose-700 shadow-sm">
+                  <span>🎂</span>
+                  <span>Birthday radar</span>
                 </div>
-              )}
-            </div>
-          </div>
-          <div className="text-right text-xs text-rose-700">
-            <div className="font-semibold">
-              {formatShortDate(b.birthday)}
-            </div>
-          </div>
-        </li>
-      ))}
-    </ul>
-  )}
+                <h2 className="mt-3 text-sm font-semibold text-rose-900">
+                  Upcoming birthdays
+                </h2>
+                <p className="mt-1 text-xs text-rose-700/80">
+                  Plan shout-outs, cards, and cake before the day sneaks up on
+                  you.
+                </p>
+              </div>
 
-  {topBirthdays.length > 0 && (
-    <p className="mt-3 text-[11px] text-rose-700/80">
-      Tip: Use this as your weekly &quot;who&apos;s up next&quot; list
-      for Slack shout-outs or manager nudges.
-    </p>
-  )}
-</div>
+              <div className="flex flex-col items-end gap-1">
+                <span className="text-[11px] font-medium text-rose-600">
+                  {topBirthdays.length} coming up
+                </span>
 
+                {/* BIG, OBVIOUS CONFETTI */}
+                <div className="h-20 w-20">
+                  <LottieConfetti />
+                </div>
+              </div>
+            </div>
+
+            {topBirthdays.length === 0 ? (
+              <p className="mt-4 text-xs text-rose-700/80">
+                No birthdays detected yet. As you add employee birth dates to
+                People profiles, upcoming birthdays will appear here with enough
+                time to celebrate properly. 🎉
+              </p>
+            ) : (
+              <ul className="mt-4 space-y-2 text-xs text-rose-900/90">
+                {topBirthdays.map((b) => (
+                  <li
+                    key={b.id}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-rose-100 bg-white/70 px-3 py-2 backdrop-blur"
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-rose-100 text-sm">
+                        🎉
+                      </div>
+                      <div className="min-w-0">
+                        <div className="truncate font-medium">
+                          {b.firstName} {b.lastName}
+                        </div>
+                        {b.department && (
+                          <div className="truncate text-[11px] text-rose-700/80">
+                            {b.department}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right text-xs text-rose-700">
+                      <div className="font-semibold">
+                        {formatShortDate(b.birthday)}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {topBirthdays.length > 0 && (
+              <p className="mt-3 text-[11px] text-rose-700/80">
+                Tip: Use this as your weekly &quot;who&apos;s up next&quot;
+                list for Slack shout-outs or manager nudges.
+              </p>
+            )}
+          </div>
         </section>
 
         {/* TEAM HEATMAP LINK */}
@@ -684,10 +685,10 @@ export default async function OperationsPage() {
                 {topBirthdays.length > 0 && (
                   <>
                     You also have{" "}
-                      <span className="font-semibold">
-                        {topBirthdays.length} upcoming birthday
-                        {topBirthdays.length === 1 ? "" : "s"}
-                      </span>{" "}
+                    <span className="font-semibold">
+                      {topBirthdays.length} upcoming birthday
+                      {topBirthdays.length === 1 ? "" : "s"}
+                    </span>{" "}
                     in the next window — a low-effort way to boost morale is to
                     plan shout-outs and small celebrations ahead of time.
                   </>
