@@ -33,7 +33,6 @@ export type CalendarEvent = {
     | "JURY_DUTY"
     | "PARENTAL_LEAVE"
     | string;
-  // optional arbitrary metadata (we’ll use this for the full TimeOffRequest)
   meta?: unknown;
 };
 
@@ -46,7 +45,6 @@ function groupEventsByDay(
     const start = parseISO(e.start);
     const end = e.end ? parseISO(e.end) : start;
 
-    // Spread the event across all days in its range
     const daysInRange = eachDayOfInterval({ start, end });
     for (const day of daysInRange) {
       const key = format(day, "yyyy-MM-dd");
@@ -112,14 +110,14 @@ export default function CalendarMonth({
         <div className="flex items-center gap-2">
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             onClick={() => setMonth((m) => subMonths(m, 1))}
           >
             ← Prev
           </Button>
           <Button
             size="sm"
-            variant="outline"
+            variant="primary"
             className="text-xs"
             onClick={() => setMonth(new Date())}
           >
@@ -130,7 +128,7 @@ export default function CalendarMonth({
           </div>
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             onClick={() => setMonth((m) => addMonths(m, 1))}
           >
             Next →

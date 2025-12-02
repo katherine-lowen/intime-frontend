@@ -3,66 +3,73 @@ module.exports = {
   content: ["./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
+      // ---- COLORS (from your design system) ----
       colors: {
+        // Brand
         brand: {
-          primary: "#2C6DF9",
-          primaryDark: "#1F4DB7",
-          primarySoft: "#E7EEF9",
+          primary: "#2563EB",      // Brand / Primary
+          primaryDark: "#1D4ED8",  // Brand / Primary Dark
+          primarySoft: "#EFF4FF",  // Brand / Primary Soft
         },
 
+        // Neutral scale
         neutral: {
-          900: "#0F172A",
-          700: "#334155",
-          500: "#64748B",
-          300: "#CBD5E1",
-          100: "#F1F5F9",
-          50:  "#F8FAFC",
+          900: "#020617", // Neutral / 900
+          700: "#334155", // Neutral / 700
+          500: "#64748B", // Neutral / 500
+          300: "#CBD5F5", // Neutral / 300
+          100: "#E5E7EB", // Neutral / 100
+          50:  "#F9FAFB", // Neutral / 50
         },
 
+        // Semantic
         semantic: {
-          success: "#22C55E",
-          successBg: "#ECFDF5",
-
-          warning: "#FACC15",
-          warningBg: "#FFFBEB",
-
-          error: "#EF4444",
-          errorBg: "#FEF2F2",
+          success: "#16A34A",   // Success
+          successBg: "#DCFCE7", // Success Bg
+          warning: "#F97316",   // Warning
+          warningBg: "#FFEDD5", // Warning Bg
+          error: "#DC2626",     // Error
+          errorBg: "#FEE2E2",   // Error Bg
         },
       },
 
+      // ---- TYPOGRAPHY ----
+      fontFamily: {
+        // You can swap "system-ui" with Inter via next/font later
+        sans: [
+          "system-ui",
+          "-apple-system",
+          "BlinkMacSystemFont",
+          "Segoe UI",
+          "sans-serif",
+        ],
+      },
       fontSize: {
-        // Display Sizes
-        "display-32": ["32px", { lineHeight: "40px", fontWeight: "600" }],
+        // Display / 32
+        "display-32": ["2rem", { lineHeight: "2.5rem", letterSpacing: "-0.02em" }],
 
-        // Headings
-        "heading-24": ["24px", { lineHeight: "32px", fontWeight: "600" }],
-        "heading-20": ["20px", { lineHeight: "28px", fontWeight: "600" }],
-        "heading-18": ["18px", { lineHeight: "24px", fontWeight: "600" }],
+        // Heading / 24 / 20 / 18
+        "heading-24": ["1.5rem", { lineHeight: "2rem", letterSpacing: "-0.01em" }],
+        "heading-20": ["1.25rem", { lineHeight: "1.75rem", letterSpacing: "-0.01em" }],
+        "heading-18": ["1.125rem", { lineHeight: "1.5rem", letterSpacing: "-0.01em" }],
 
-        // Body
-        "body-16": ["16px", { lineHeight: "24px" }],
-        "body-14": ["14px", { lineHeight: "20px" }],
-        "bodyMedium-16": ["16px", { lineHeight: "24px", fontWeight: "500" }],
-        "bodyMedium-14": ["14px", { lineHeight: "20px", fontWeight: "500" }],
+        // Body / 16 / 14
+        "body-16": ["1rem", { lineHeight: "1.5rem" }],
+        "body-14": ["0.875rem", { lineHeight: "1.4rem" }],
 
         // Label / Caption / Badge
-        "label-12": ["12px", { lineHeight: "16px", fontWeight: "500" }],
-        "caption-12": ["12px", { lineHeight: "16px" }],
-        "badge-11": ["11px", { lineHeight: "14px", fontWeight: "500" }],
+        "label-12": ["0.75rem", { lineHeight: "1rem", letterSpacing: "0.04em" }],
+        "caption-12": ["0.75rem", { lineHeight: "1rem" }],
+        "badge-11": ["0.6875rem", { lineHeight: "1rem", letterSpacing: "0.08em" }],
       },
 
       borderRadius: {
-        sm: "6px",
-        md: "8px",
-        lg: "12px",
-        xl: "16px",
-        "2xl": "24px",
+        DEFAULT: "12px",
+        md: "14px",
+        lg: "16px",
       },
-
       boxShadow: {
-        card: "0px 1px 2px rgba(16, 24, 40, 0.06), 0px 4px 12px rgba(16, 24, 40, 0.04)",
-        focus: "0 0 0 2px rgba(44, 109, 249, 0.4)",
+        card: "0 1px 2px rgba(16,24,40,.06), 0 8px 28px rgba(2,8,20,.05)",
       },
     },
   },

@@ -1,4 +1,3 @@
-// src/app/payroll/page.tsx
 import Link from "next/link";
 import { AuthGate } from "@/components/dev-auth-gate";
 
@@ -34,8 +33,6 @@ async function getPayrollExport(): Promise<PayrollRow[]> {
   });
 
   if (res.status === 404) {
-    // Backend route not wired yet or no export for this org.
-    // For demo/YC mode, just treat this as "no data yet".
     console.warn("Payroll export endpoint returned 404 – treating as empty.");
     return [];
   }
@@ -48,7 +45,6 @@ async function getPayrollExport(): Promise<PayrollRow[]> {
 
   return (await res.json()) as PayrollRow[];
 }
-
 
 function formatMoney(cents: number | null | undefined, currency: string | null | undefined) {
   if (!cents && cents !== 0) return "—";
@@ -121,10 +117,6 @@ function formatDate(value: string | null | undefined) {
   return d.toLocaleDateString();
 }
 
-async function downloadCsv() {
-  // This function is only used client-side via <form>, but TS needs it here.
-}
-
 export default async function PayrollPage() {
   let rows: PayrollRow[] = [];
   let error: string | null = null;
@@ -141,12 +133,11 @@ export default async function PayrollPage() {
 
   const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
   const orgId = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
-  const csvUrl = `${baseUrl}/payroll/export`; // same endpoint; CSV can come later
+  const csvUrl = `${baseUrl}/payroll/export`;
 
   return (
     <AuthGate>
       <main className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-8">
-        {/* HEADER */}
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-xs text-slate-400">
@@ -154,10 +145,10 @@ export default async function PayrollPage() {
               <span className="text-slate-500">/</span>
               <span>Payroll</span>
             </div>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">
+            <h1 className="mt-1 font-semibold text-display-32 text-neutral-900">
               Payroll export
             </h1>
-            <p className="text-sm text-slate-600">
+            <p className="text-body-14 text-neutral-600">
               A clean export of active employees, compensation, and identifiers
               for Gusto, ADP, Rippling, or your provider of choice.
             </p>
@@ -170,11 +161,8 @@ export default async function PayrollPage() {
             >
               Open payroll settings
             </Link>
-            <form
-              action={csvUrl}
-              method="GET"
-              className="inline-flex"
-            >
+
+            <form action={csvUrl} method="GET" className="inline-flex">
               <input type="hidden" name="orgId" value={orgId} />
               <button
                 type="submit"
@@ -186,7 +174,6 @@ export default async function PayrollPage() {
           </div>
         </header>
 
-        {/* STATS */}
         <section className="grid gap-3 sm:grid-cols-3">
           <StatCard
             label="Active employees in export"
@@ -205,7 +192,6 @@ export default async function PayrollPage() {
           />
         </section>
 
-        {/* TABLE */}
         <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
             <div>

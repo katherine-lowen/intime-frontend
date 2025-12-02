@@ -16,6 +16,7 @@
     "@nestjs/platform-express": "^11.1.8",
     "@radix-ui/react-slot": "^1.2.3",
     "@supabase/supabase-js": "^2.86.0",
+    "@vercel/analytics": "^1.6.1",
     "@vercel/speed-insights": "^1.2.0",
     "axios": "^1.13.1",
     "class-variance-authority": "^0.7.1",
