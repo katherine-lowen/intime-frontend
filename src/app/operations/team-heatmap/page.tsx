@@ -31,7 +31,7 @@ type MetricKey =
 const metricLabels: Record<MetricKey, string> = {
   loadScore: "Overall Load Score",
   upcomingPtoDays: "Upcoming PTO Days (30d)",
-  pendingReviewsToGive: "Pending Reviews to Give", // still placeholder
+  pendingReviewsToGive: "Pending Reviews to Give",
   pendingReviewsAsReviewee: "Reviews Completed (last 30d)",
   openTimeOffRequestsToApprove: "Open Time-Off Approvals",
 };
@@ -41,7 +41,7 @@ export default function TeamHeatmapPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedDepartment, setSelectedDepartment] = useState<string | "ALL">(
-    "ALL"
+    "ALL",
   );
   const [metric, setMetric] = useState<MetricKey>("loadScore");
 
@@ -104,7 +104,7 @@ export default function TeamHeatmapPage() {
   const metricValues = filtered.map((e) =>
     metric === "loadScore"
       ? e.loadScore
-      : e.metrics[metric as Exclude<MetricKey, "loadScore">]
+      : e.metrics[metric as Exclude<MetricKey, "loadScore">],
   );
 
   const maxValue = metricValues.length ? Math.max(...metricValues) : 0;
@@ -137,8 +137,7 @@ export default function TeamHeatmapPage() {
           <div className="flex flex-col text-xs text-slate-500">
             <span className="font-medium text-slate-600">Legend</span>
             <div className="mt-1 flex items-center gap-1">
-              <span className="h-3 w-5 rounded bg-neutral-50" />{" "}
-              <span>Idle</span>
+              <span className="h-3 w-5 rounded bg-neutral-50" /> <span>Idle</span>
               <span className="h-3 w-5 rounded bg-emerald-200" />{" "}
               <span>Light</span>
               <span className="h-3 w-5 rounded bg-amber-200" />{" "}
@@ -168,7 +167,7 @@ export default function TeamHeatmapPage() {
                 <option key={d} value={d}>
                   {d}
                 </option>
-              )
+              ),
             )}
           </select>
         </div>
@@ -244,12 +243,15 @@ export default function TeamHeatmapPage() {
                         ];
 
                   return (
-                    <tr key={emp.employeeId} className="border-t border-slate-100">
+                    <tr
+                      key={emp.employeeId}
+                      className="border-t border-slate-100"
+                    >
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-900">
                         <div className="flex items-center gap-2">
                           <div
-                            className={`h-7 w-7 rounded-full text-xs font-medium text-slate-800 flex items-center justify-center ${getIntensityClass(
-                              value
+                            className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium text-slate-800 ${getIntensityClass(
+                              value,
                             )}`}
                           >
                             {emp.firstName[0]}
@@ -276,7 +278,7 @@ export default function TeamHeatmapPage() {
                       <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-900">
                         <span
                           className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getIntensityClass(
-                            value
+                            value,
                           )}`}
                         >
                           {value.toFixed(1)}
