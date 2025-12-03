@@ -2,17 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ---------- Base / Typography ---------- */
-@layer base {
-  :root {
-    color-scheme: light;
-  }
+/* ========================================
+   BASE / TYPOGRAPHY
+======================================== */
 
+@layer base {
   html,
   body {
     @apply bg-slate-50 text-slate-900 antialiased;
     font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
       "SF Pro Display", Inter, sans-serif;
+    font-feature-settings: "ss01", "cv05";
   }
 
   a {
@@ -24,7 +24,10 @@
   }
 }
 
-/* ---------- App-level background ---------- */
+/* ========================================
+   APP-LEVEL BACKGROUND
+======================================== */
+
 @layer utilities {
   .bg-app-gradient {
     background:
@@ -42,7 +45,10 @@
   }
 }
 
-/* ---------- Reusable components ---------- */
+/* ========================================
+   REUSABLE COMPONENTS
+======================================== */
+
 @layer components {
   .card {
     @apply rounded-xl border border-slate-200/80 bg-white/90 shadow-sm;
@@ -93,4 +99,519 @@
   .field-helper {
     @apply text-[11px] text-slate-500;
   }
+}
+
+/* ========================================
+   4-LAYER DEPTH SYSTEM (FIGMA)
+======================================== */
+
+/* Layer 1: Atmosphere (noise + gradient fog) */
+.atmosphere-layer {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at top right, rgba(59, 130, 246, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at bottom left, rgba(139, 92, 246, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at center, rgba(6, 182, 212, 0.04) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.atmosphere-layer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg width='200' height='200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' /%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E");
+  opacity: 0.5;
+}
+
+/* Layer 2: Surface (subtle material canvas) */
+.surface-layer {
+  background: linear-gradient(180deg, #fafbfc 0%, #f8f9fb 100%);
+}
+
+/* Layer 3: Glass (frosted panels with refraction) */
+.glass-panel-3d {
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow:
+    0 0 0 0.5px rgba(255, 255, 255, 0.5) inset,
+    0 2px 8px rgba(0, 0, 0, 0.02),
+    0 8px 24px rgba(0, 0, 0, 0.04),
+    0 16px 48px rgba(0, 0, 0, 0.06),
+    0 32px 64px rgba(0, 0, 0, 0.08);
+}
+
+.glass-panel-deep {
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(32px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.6) inset,
+    0 4px 16px rgba(0, 0, 0, 0.03),
+    0 12px 32px rgba(0, 0, 0, 0.05),
+    0 24px 56px rgba(0, 0, 0, 0.07);
+}
+
+/* Layer 4: AI Glow */
+.ai-glow-layer {
+  box-shadow:
+    0 0 40px rgba(99, 102, 241, 0.12),
+    0 0 80px rgba(139, 92, 246, 0.08),
+    0 0 120px rgba(6, 182, 212, 0.06);
+}
+
+/* ========================================
+   GLASS & REFRACTION EFFECTS
+======================================== */
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow:
+    0 0 0 0.5px rgba(255, 255, 255, 0.5) inset,
+    0 1px 3px rgba(0, 0, 0, 0.02),
+    0 8px 20px rgba(0, 0, 0, 0.04),
+    0 16px 40px rgba(0, 0, 0, 0.06);
+}
+
+.glass-dark-ai {
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(32px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+    0 8px 24px rgba(0, 0, 0, 0.2),
+    0 16px 48px rgba(0, 0, 0, 0.15);
+}
+
+/* Inner reflection highlight */
+.inner-reflection {
+  position: relative;
+}
+
+.inner-reflection::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.4) 0%, transparent 100%);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* ========================================
+   HOLOGRAPHIC & GRADIENT EFFECTS
+======================================== */
+
+.holographic-edge {
+  position: relative;
+}
+
+.holographic-edge::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg,
+    rgba(99, 102, 241, 0.4) 0%,
+    rgba(139, 92, 246, 0.4) 25%,
+    rgba(6, 182, 212, 0.4) 50%,
+    rgba(167, 139, 250, 0.4) 75%,
+    rgba(99, 102, 241, 0.4) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.gradient-text-animated {
+  background: linear-gradient(135deg, #1e293b 0%, #3b82f6 50%, #8b5cf6 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradient-shift 8s ease infinite;
+}
+
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* ========================================
+   3D DEPTH & PARALLAX
+======================================== */
+
+.card-3d {
+  transform-style: preserve-3d;
+  transition: transform 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.card-3d:hover {
+  transform: translateZ(12px) translateY(-4px);
+}
+
+.float-3d {
+  animation: float-3d 6s ease-in-out infinite;
+}
+
+@keyframes float-3d {
+  0%, 100% {
+    transform: translateY(0px) translateZ(0px);
+  }
+  50% {
+    transform: translateY(-8px) translateZ(4px);
+  }
+}
+
+.parallax-hover {
+  transition: transform 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.parallax-hover:hover {
+  transform: translate(2px, -2px) scale(1.01);
+}
+
+/* ========================================
+   BUTTONS & INTERACTIVE ELEMENTS
+======================================== */
+
+.btn-primary-gradient {
+  background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.3) inset,
+    0 2px 8px rgba(59, 130, 246, 0.2),
+    0 8px 24px rgba(59, 130, 246, 0.15);
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.btn-primary-gradient:hover {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.4) inset,
+    0 4px 12px rgba(59, 130, 246, 0.25),
+    0 12px 32px rgba(59, 130, 246, 0.2);
+  transform: translateY(-2px) scale(1.02);
+}
+
+.btn-primary-gradient:active {
+  transform: translateY(0) scale(0.98);
+  transition: all 0.12s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.btn-holographic {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow:
+    0 0 0 0.5px rgba(255, 255, 255, 0.5) inset,
+    0 2px 8px rgba(0, 0, 0, 0.04),
+    0 8px 20px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.btn-holographic:hover {
+  background: rgba(255, 255, 255, 0.8);
+  transform: translateY(-2px) scale(1.02);
+}
+
+/* ========================================
+   PILLS & FILTERS
+======================================== */
+
+.pill-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.pill-shimmer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+  animation: shimmer-pass 3s infinite;
+}
+
+@keyframes shimmer-pass {
+  0% { left: -100%; }
+  50%, 100% { left: 200%; }
+}
+
+.pill-tilt:hover {
+  transform: rotate(2deg) translateY(-1px);
+}
+
+/* ========================================
+   PARTICLES & LIGHT EFFECTS
+======================================== */
+
+.particle-field {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.particle {
+  position: absolute;
+  border-radius: 50%;
+  animation: particle-float 8s ease-in-out infinite;
+  opacity: 0.3;
+}
+
+@keyframes particle-float {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.2;
+  }
+  25% {
+    transform: translate(20px, -30px) scale(1.2);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translate(-10px, -50px) scale(0.8);
+    opacity: 0.6;
+  }
+  75% {
+    transform: translate(30px, -20px) scale(1.1);
+    opacity: 0.3;
+  }
+}
+
+/* Light beam caustics */
+.light-caustics {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 20% 30%, rgba(99, 102, 241, 0.15) 0%, transparent 40%),
+    radial-gradient(ellipse at 80% 70%, rgba(6, 182, 212, 0.12) 0%, transparent 40%),
+    radial-gradient(ellipse at 50% 50%, rgba(139, 92, 246, 0.1) 0%, transparent 50%);
+  animation: caustics-drift 12s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes caustics-drift {
+  0%, 100% {
+    opacity: 0.6;
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translate(10px, -10px) scale(1.05);
+  }
+}
+
+/* Background pulse */
+.pulse-slow {
+  animation: pulse-slow 4s ease-in-out infinite;
+}
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.8; }
+}
+
+/* Neural network pattern */
+.neural-pattern {
+  background-image:
+    radial-gradient(circle at 20% 50%, rgba(99, 102, 241, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(6, 182, 212, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 60% 80%, rgba(139, 92, 246, 0.09) 0%, transparent 50%);
+  animation: neural-pulse 8s ease-in-out infinite;
+}
+
+@keyframes neural-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.7; }
+}
+
+/* ========================================
+   SWEEPING SHIMMER
+======================================== */
+
+.sweep-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.sweep-shimmer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(90deg,
+    transparent,
+    rgba(255, 255, 255, 0.1),
+    transparent
+  );
+  animation: sweep 12s ease-in-out infinite;
+}
+
+@keyframes sweep {
+  0% { left: -100%; }
+  10%, 90% { left: 200%; }
+  100% { left: 200%; }
+}
+
+/* ========================================
+   ORBS & GRADIENTS
+======================================== */
+
+.orb-gradient-blue {
+  background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
+  box-shadow:
+    0 0 20px rgba(59, 130, 246, 0.3),
+    0 0 40px rgba(6, 182, 212, 0.2) inset;
+}
+
+.orb-gradient-purple {
+  background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);
+  box-shadow:
+    0 0 20px rgba(139, 92, 246, 0.3),
+    0 0 40px rgba(167, 139, 250, 0.2) inset;
+}
+
+.orb-gradient-emerald {
+  background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+  box-shadow:
+    0 0 20px rgba(16, 185, 129, 0.3),
+    0 0 40px rgba(52, 211, 153, 0.2) inset;
+}
+
+.orb-gradient-amber {
+  background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+  box-shadow:
+    0 0 20px rgba(245, 158, 11, 0.3),
+    0 0 40px rgba(251, 191, 36, 0.2) inset;
+}
+
+.orb-gradient-cyan {
+  background: linear-gradient(135deg, #06b6d4 0%, #22d3ee 100%);
+  box-shadow:
+    0 0 20px rgba(6, 182, 212, 0.3),
+    0 0 40px rgba(34, 211, 238, 0.2) inset;
+}
+
+.orb-gradient-ai {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%);
+  box-shadow:
+    0 0 30px rgba(99, 102, 241, 0.4),
+    0 0 60px rgba(139, 92, 246, 0.3),
+    0 0 80px rgba(6, 182, 212, 0.2) inset;
+  animation: orb-pulse 4s ease-in-out infinite;
+}
+
+@keyframes orb-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 30px rgba(99, 102, 241, 0.4),
+      0 0 60px rgba(139, 92, 246, 0.3),
+      0 0 80px rgba(6, 182, 212, 0.2) inset;
+  }
+  50% {
+    box-shadow:
+      0 0 40px rgba(99, 102, 241, 0.5),
+      0 0 80px rgba(139, 92, 246, 0.4),
+      0 0 100px rgba(6, 182, 212, 0.3) inset;
+  }
+}
+
+/* ========================================
+   TIMELINE STYLES
+======================================== */
+
+.timeline-line {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(180deg,
+    transparent 0%,
+    rgba(148, 163, 184, 0.3) 10%,
+    rgba(148, 163, 184, 0.3) 90%,
+    transparent 100%
+  );
+}
+
+.timeline-node-pulse {
+  animation: node-pulse 2s ease-in-out infinite;
+}
+
+@keyframes node-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(59, 130, 246, 0);
+  }
+}
+
+/* ========================================
+   SCROLLBAR
+======================================== */
+
+.scrollbar-glass::-webkit-scrollbar {
+  width: 10px;
+}
+
+.scrollbar-glass::-webkit-scrollbar-track {
+  background: rgba(241, 245, 249, 0.4);
+  border-radius: 5px;
+  backdrop-filter: blur(8px);
+}
+
+.scrollbar-glass::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.4);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  backdrop-filter: blur(8px);
+}
+
+.scrollbar-glass::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.6);
+  background-clip: padding-box;
+}
+
+/* ========================================
+   GLOW EFFECTS
+======================================== */
+
+.glow-bloom {
+  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.glow-bloom:hover {
+  filter: brightness(1.1) drop-shadow(0 0 20px rgba(99, 102, 241, 0.4));
+}
+
+.micro-shimmer {
+  background:
+    linear-gradient(135deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.05) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+  background-size: 200% 100%;
+  animation: micro-shimmer-anim 3s ease-in-out infinite;
+}
+
+@keyframes micro-shimmer-anim {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
 }
