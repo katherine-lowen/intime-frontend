@@ -1,7 +1,10 @@
+// src/app/operations/components/TeamLoadCoverageCard.tsx
 "use client";
 
+import React, { useEffect, useState } from "react";
 import { Shield, AlertCircle, Info, ArrowUpRight } from "lucide-react";
 import { motion } from "motion/react";
+import api from "@/lib/api";
 
 type RiskLevel = "low" | "medium" | "high";
 
@@ -22,147 +25,260 @@ interface TeamCapacity {
   nextConflict: string | null;
 }
 
+// This matches the backend `TeamHeatmapEmployee` type from analytics.service.ts
+type TeamHeatmapEmployee = {
+  employeeId: string;
+  firstName: string;
+  lastName: string;
+  department: string | null;
+  managerName?: string | null;
+  metrics: {
+    upcomingPtoDays: number;
+    pendingReviewsToGive: number;
+    pendingReviewsAsReviewee: number;
+    openTimeOffRequestsToApprove: number;
+  };
+  loadScore: number;
+};
+
+// ----- Demo fallback data (what you had before) -----
+const DEMO_TEAMS: TeamCapacity[] = [
+  {
+    name: "Engineering",
+    days: [
+      { day: "Mon", capacity: 95 },
+      { day: "Tue", capacity: 92 },
+      { day: "Wed", capacity: 78 },
+      { day: "Thu", capacity: 93 },
+      { day: "Fri", capacity: 91 },
+      { day: "Sat", capacity: 0 },
+      { day: "Sun", capacity: 0 },
+    ],
+    riskLevel: "medium",
+    available: 32,
+    total: 35,
+    conflicts: 0,
+    hiringPipeline: "1 starts Monday",
+    avgCapacity: 91,
+    nextConflict: "Dec 11 (Wed)",
+  },
+  {
+    name: "Product",
+    days: [
+      { day: "Mon", capacity: 94 },
+      { day: "Tue", capacity: 88 },
+      { day: "Wed", capacity: 95 },
+      { day: "Thu", capacity: 89 },
+      { day: "Fri", capacity: 92 },
+      { day: "Sat", capacity: 0 },
+      { day: "Sun", capacity: 0 },
+    ],
+    riskLevel: "low",
+    available: 17,
+    total: 18,
+    conflicts: 0,
+    hiringPipeline: "none",
+    avgCapacity: 92,
+    nextConflict: null,
+  },
+  {
+    name: "Design",
+    days: [
+      { day: "Mon", capacity: 67 },
+      { day: "Tue", capacity: 59 },
+      { day: "Wed", capacity: 59 },
+      { day: "Thu", capacity: 75 },
+      { day: "Fri", capacity: 92 },
+      { day: "Sat", capacity: 0 },
+      { day: "Sun", capacity: 0 },
+    ],
+    riskLevel: "high",
+    available: 8,
+    total: 12,
+    conflicts: 2,
+    hiringPipeline: "none",
+    avgCapacity: 70,
+    nextConflict: "Dec 10-11 (Tue-Wed)",
+  },
+  {
+    name: "Sales",
+    days: [
+      { day: "Mon", capacity: 95 },
+      { day: "Tue", capacity: 91 },
+      { day: "Wed", capacity: 95 },
+      { day: "Thu", capacity: 82 },
+      { day: "Fri", capacity: 95 },
+      { day: "Sat", capacity: 0 },
+      { day: "Sun", capacity: 0 },
+    ],
+    riskLevel: "low",
+    available: 20,
+    total: 22,
+    conflicts: 0,
+    hiringPipeline: "none",
+    avgCapacity: 92,
+    nextConflict: "Dec 12 (Thu)",
+  },
+];
+
+const getRiskBadge = (level: RiskLevel) => {
+  switch (level) {
+    case "low":
+      return {
+        label: "Low Risk",
+        color: "#2C6DF9",
+        bg: "#EFF6FF",
+        border: "#BFDBFE",
+      };
+    case "medium":
+      return {
+        label: "Medium Risk",
+        color: "#F59E0B",
+        bg: "#FFFBEB",
+        border: "#FDE68A",
+      };
+    case "high":
+      return {
+        label: "High Risk",
+        color: "#EF4444",
+        bg: "#FEF2F2",
+        border: "#FECACA",
+      };
+  }
+};
+
+const getCapacityColor = (capacity: number) => {
+  if (capacity >= 80) return "#2C6DF9";
+  if (capacity >= 60) return "#F59E0B";
+  return "#EF4444";
+};
+
+const getCapacityRange = (days: DayCapacity[]) => {
+  const workDays = days.filter((d) => d.capacity > 0);
+  const min = Math.min(...workDays.map((d) => d.capacity));
+  const max = Math.max(...workDays.map((d) => d.capacity));
+  return `${min}–${max}%`;
+};
+
+// Build *approximate* team capacity from backend heatmap data
+function buildTeamsFromHeatmap(data: TeamHeatmapEmployee[]): TeamCapacity[] {
+  if (!data.length) return DEMO_TEAMS;
+
+  const byDept = new Map<string, TeamHeatmapEmployee[]>();
+
+  for (const emp of data) {
+    const dept = emp.department || "Unassigned";
+    if (!byDept.has(dept)) byDept.set(dept, []);
+    byDept.get(dept)!.push(emp);
+  }
+
+  const daysOfWeek = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+  const teams: TeamCapacity[] = Array.from(byDept.entries()).map(
+    ([name, employees]) => {
+      const total = employees.length;
+
+      const withUpcomingPto = employees.filter(
+        (e) => e.metrics.upcomingPtoDays > 0,
+      ).length;
+
+      const avgUpcomingPto =
+        employees.reduce((sum, e) => sum + e.metrics.upcomingPtoDays, 0) /
+        Math.max(total, 1);
+
+      const available = Math.max(total - withUpcomingPto, 0);
+      const conflicts = withUpcomingPto;
+
+      // Simple capacity estimate: fewer PTO days → higher capacity
+      let avgCapacity = 100 - avgUpcomingPto * 4;
+      avgCapacity = Math.max(50, Math.min(100, Math.round(avgCapacity)));
+
+      let riskLevel: RiskLevel = "low";
+      if (avgCapacity < 80 && avgCapacity >= 60) riskLevel = "medium";
+      if (avgCapacity < 60) riskLevel = "high";
+
+      const days: DayCapacity[] = daysOfWeek.map((day) => ({
+        day,
+        // Just spread the same avg capacity across Mon–Fri, 0 on weekend
+        capacity: day === "Sat" || day === "Sun" ? 0 : avgCapacity,
+      }));
+
+      return {
+        name,
+        days,
+        riskLevel,
+        available,
+        total,
+        conflicts,
+        hiringPipeline: "—", // you can wire this later if you track starts
+        avgCapacity,
+        nextConflict: null, // backend doesn’t expose dates yet
+      };
+    },
+  );
+
+  return teams;
+}
+
 export function TeamLoadCoverageCard() {
-  const teams: TeamCapacity[] = [
-    {
-      name: "Engineering",
-      days: [
-        { day: "Mon", capacity: 95 },
-        { day: "Tue", capacity: 92 },
-        { day: "Wed", capacity: 78 },
-        { day: "Thu", capacity: 93 },
-        { day: "Fri", capacity: 91 },
-        { day: "Sat", capacity: 0 },
-        { day: "Sun", capacity: 0 },
-      ],
-      riskLevel: "medium",
-      available: 32,
-      total: 35,
-      conflicts: 0,
-      hiringPipeline: "1 starts Monday",
-      avgCapacity: 91,
-      nextConflict: "Dec 11 (Wed)",
-    },
-    {
-      name: "Product",
-      days: [
-        { day: "Mon", capacity: 94 },
-        { day: "Tue", capacity: 88 },
-        { day: "Wed", capacity: 95 },
-        { day: "Thu", capacity: 89 },
-        { day: "Fri", capacity: 92 },
-        { day: "Sat", capacity: 0 },
-        { day: "Sun", capacity: 0 },
-      ],
-      riskLevel: "low",
-      available: 17,
-      total: 18,
-      conflicts: 0,
-      hiringPipeline: "none",
-      avgCapacity: 92,
-      nextConflict: null,
-    },
-    {
-      name: "Design",
-      days: [
-        { day: "Mon", capacity: 67 },
-        { day: "Tue", capacity: 59 },
-        { day: "Wed", capacity: 59 },
-        { day: "Thu", capacity: 75 },
-        { day: "Fri", capacity: 92 },
-        { day: "Sat", capacity: 0 },
-        { day: "Sun", capacity: 0 },
-      ],
-      riskLevel: "high",
-      available: 8,
-      total: 12,
-      conflicts: 2,
-      hiringPipeline: "none",
-      avgCapacity: 70,
-      nextConflict: "Dec 10-11 (Tue-Wed)",
-    },
-    {
-      name: "Sales",
-      days: [
-        { day: "Mon", capacity: 95 },
-        { day: "Tue", capacity: 91 },
-        { day: "Wed", capacity: 95 },
-        { day: "Thu", capacity: 82 },
-        { day: "Fri", capacity: 95 },
-        { day: "Sat", capacity: 0 },
-        { day: "Sun", capacity: 0 },
-      ],
-      riskLevel: "low",
-      available: 20,
-      total: 22,
-      conflicts: 0,
-      hiringPipeline: "none",
-      avgCapacity: 92,
-      nextConflict: "Dec 12 (Thu)",
-    },
-  ];
+  const [teams, setTeams] = useState<TeamCapacity[] | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
 
-  const getRiskBadge = (level: RiskLevel) => {
-    switch (level) {
-      case "low":
-        return {
-          label: "Low Risk",
-          color: "#2C6DF9",
-          bg: "#EFF6FF",
-          border: "#BFDBFE",
-        };
-      case "medium":
-        return {
-          label: "Medium Risk",
-          color: "#F59E0B",
-          bg: "#FFFBEB",
-          border: "#FDE68A",
-        };
-      case "high":
-        return {
-          label: "High Risk",
-          color: "#EF4444",
-          bg: "#FEF2F2",
-          border: "#FECACA",
-        };
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const data = (await api.get(
+          "/analytics/team-heatmap",
+        )) as TeamHeatmapEmployee[];
+
+        if (!cancelled && Array.isArray(data)) {
+          setTeams(buildTeamsFromHeatmap(data));
+        }
+      } catch (err) {
+        console.error("[TeamLoadCoverageCard] Failed to load heatmap:", err);
+        if (!cancelled) {
+          // Fallback to demo data if API fails (404, 500, etc.)
+          setTeams(DEMO_TEAMS);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
-  };
 
-  const getCapacityColor = (capacity: number) => {
-    if (capacity >= 80) return "#2C6DF9";
-    if (capacity >= 60) return "#F59E0B";
-    return "#EF4444";
-  };
+    load();
 
-  const getCapacityRange = (days: DayCapacity[]) => {
-    const workDays = days.filter((d) => d.capacity > 0);
-    const min = Math.min(...workDays.map((d) => d.capacity));
-    const max = Math.max(...workDays.map((d) => d.capacity));
-    return `${min}–${max}%`;
-  };
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const displayTeams = teams ?? DEMO_TEAMS;
 
   const insights = [
     {
       severity: "critical",
-      title: "Design expected to drop below minimum staffing Tue–Wed (59%)",
-      description: "2 overlapping PTO periods creating capacity gap",
+      title:
+        "Teams with lowest capacity should be monitored for overlapping PTO",
+      description:
+        "Use Intime to adjust coverage before capacity drops below minimum thresholds.",
       color: "#EF4444",
     },
     {
       severity: "warning",
-      title: "Engineering capacity dips on Wed due to 2 overlapping PTO entries",
-      description: "Capacity drops to 78% — still above minimum threshold",
+      title: "Teams with medium capacity may be impacted by upcoming leave",
+      description:
+        "Review planned PTO and adjust staffing or hiring where needed.",
       color: "#F59E0B",
     },
     {
       severity: "healthy",
-      title: "Product capacity stable (88–95%) all week",
-      description: "No conflicts detected in next 7 days",
+      title: "High capacity teams are healthy for the next 30 days",
+      description: "No major conflicts detected from upcoming time off.",
       color: "#2C6DF9",
     },
   ];
-
-  const DefinitionIcon = AlertCircle; // you imported it, might as well use it if needed later
 
   return (
     <motion.div
@@ -193,19 +309,26 @@ export function TeamLoadCoverageCard() {
               strokeWidth={2}
             />
             <div className="leading-relaxed text-[#4B5563]">
-              <strong className="text-[#111827]">Capacity</strong> = Available working
-              staff / Required minimum staffing ·{" "}
-              <strong className="text-[#111827]">Risk</strong> = PTO + overlapping
-              leave + pipeline starts/stops + historical patterns
+              <strong className="text-[#111827]">Capacity</strong> = Available
+              working staff / Required minimum staffing ·{" "}
+              <strong className="text-[#111827]">Risk</strong> = PTO +
+              overlapping leave + pipeline starts/stops + historical patterns
             </div>
           </div>
         </div>
       </div>
 
       <div className="p-6">
+        {/* Loading state */}
+        {loading && (
+          <div className="mb-4 text-sm text-[#6B7280]">
+            Loading real-time capacity…
+          </div>
+        )}
+
         {/* Team Status Rows */}
         <div className="mb-6 space-y-3">
-          {teams.map((team, index) => {
+          {displayTeams.map((team, index) => {
             const badge = getRiskBadge(team.riskLevel);
             const workDays = team.days.filter((d) => d.capacity > 0);
             const maxCapacity = Math.max(...workDays.map((d) => d.capacity));
@@ -224,7 +347,7 @@ export function TeamLoadCoverageCard() {
                       <span className="text-[#111827]">{team.name}</span>
                       {badge && (
                         <span
-                          className="rounded px-2 py-1 text-xs border"
+                          className="rounded border px-2 py-1 text-xs"
                           style={{
                             color: badge.color,
                             backgroundColor: badge.bg,
@@ -250,6 +373,9 @@ export function TeamLoadCoverageCard() {
                           </strong>
                         </span>
                       )}
+                    </div>
+                    <div className="mt-1 text-xs text-[#6B7280]">
+                      {team.available}/{team.total} active
                     </div>
                   </div>
                 </div>
@@ -281,7 +407,9 @@ export function TeamLoadCoverageCard() {
                               }}
                             />
                           </div>
-                          <span className="text-xs text-[#6B7280]">{day.day}</span>
+                          <span className="text-xs text-[#6B7280]">
+                            {day.day}
+                          </span>
                         </div>
                       );
                     })}
@@ -306,50 +434,6 @@ export function TeamLoadCoverageCard() {
           })}
         </div>
 
-        {/* Department Snapshots */}
-        <div className="mb-6">
-          <h3 className="mb-3 text-[#111827]">Department Snapshots</h3>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {teams.map((team, index) => (
-              <motion.div
-                key={`${team.name}-snapshot`}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 + index * 0.05 }}
-                className="rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] p-4"
-              >
-                <div className="mb-3 text-[#111827]">{team.name}</div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between border-b border-[#E5E7EB] py-1">
-                    <span className="text-[#6B7280]">Availability</span>
-                    <span className="text-[#111827]">
-                      {team.available}/{team.total} active
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between border-b border-[#E5E7EB] py-1">
-                    <span className="text-[#6B7280]">Conflicts</span>
-                    <span className="text-[#111827]">{team.conflicts}</span>
-                  </div>
-                  <div className="flex items-center justify-between border-b border-[#E5E7EB] py-1">
-                    <span className="text-[#6B7280]">Hiring pipeline</span>
-                    <span className="text-[#111827]">
-                      {team.hiringPipeline}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between py-1">
-                    <span className="text-[#6B7280]">
-                      Avg capacity next 7 days
-                    </span>
-                    <span className="text-[#111827]">
-                      {team.avgCapacity}%
-                    </span>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-
         {/* Insights Section */}
         <div>
           <h3 className="mb-3 text-[#111827]">Insights</h3>
@@ -362,7 +446,6 @@ export function TeamLoadCoverageCard() {
                 transition={{ delay: 0.5 + index * 0.1 }}
                 className="relative rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3 pl-4"
               >
-                {/* Left border strip */}
                 <div
                   className="absolute left-0 top-0 bottom-0 w-1 rounded-l-lg"
                   style={{ backgroundColor: insight.color }}
