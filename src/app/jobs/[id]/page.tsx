@@ -96,9 +96,10 @@ function mapJobToUI(job: JobFromApi): JobDataForUI {
 export default async function JobDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 }) {
-  const { id: jobId } = await params;
+  const jobId = params.id;
+
 
   if (!jobId) {
     throw new Error("Missing job id in route params");
