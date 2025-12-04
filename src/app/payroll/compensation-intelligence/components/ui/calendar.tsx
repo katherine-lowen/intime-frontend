@@ -13,6 +13,22 @@ function Calendar({
   showOutsideDays = true,
   ...props
 }: React.ComponentProps<typeof DayPicker>) {
+  // Cast to any so TS doesn't try to enforce CustomComponents' exact keys
+  const navComponents: any = {
+    IconLeft: ({ className: iconClassName, ...iconProps }: any) => (
+      <ChevronLeft
+        className={cn("size-4", iconClassName)}
+        {...iconProps}
+      />
+    ),
+    IconRight: ({ className: iconClassName, ...iconProps }: any) => (
+      <ChevronRight
+        className={cn("size-4", iconClassName)}
+        {...iconProps}
+      />
+    ),
+  };
+
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
@@ -59,22 +75,7 @@ function Calendar({
         day_hidden: "invisible",
         ...classNames,
       }}
-      components={
-        {
-          IconLeft: ({ className, ...iconProps }) => (
-            <ChevronLeft
-              className={cn("size-4", className)}
-              {...iconProps}
-            />
-          ),
-          IconRight: ({ className, ...iconProps }) => (
-            <ChevronRight
-              className={cn("size-4", className)}
-              {...iconProps}
-            />
-          ),
-        } as any
-      }
+      components={navComponents}
       {...props}
     />
   );
