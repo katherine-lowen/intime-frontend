@@ -40,7 +40,7 @@ async function getJob(jobId: string): Promise<JobFromApi | null> {
     const job = await api.get<JobFromApi>(`/jobs/${jobId}`);
     return job;
   } catch (err) {
-    console.error("Failed to load job from API", jobId, err);
+    console.error("Failed to load job from API", { jobId, err });
     return null;
   }
 }
@@ -102,36 +102,19 @@ export default async function JobDetailPage({
 }) {
   const jobId = params.id;
 
-  if (!jobId) {
-    // If this ever happens, render a safe fallback instead of throwing
-    return (
-      <AuthGate>
-        <main className="p-6">
-          <h1 className="text-lg font-semibold text-slate-900">
-            Job not found
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            This job is missing an ID in the URL.
-          </p>
-        </main>
-      </AuthGate>
-    );
-  }
-
   const job = await getJob(jobId);
 
   if (!job) {
-    // API failed (404, env mismatch, etc.) → don’t crash the server render
     return (
       <AuthGate>
         <main className="p-6">
           <h1 className="text-lg font-semibold text-slate-900">
             Job not available
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            We couldn&apos;t load this job from the API. It may have been
-            removed, or there could be a configuration issue with the
-            production environment.
+          <p className="mt-1 text-sm text-slate-500 max-w-md">
+            We couldn&apos;t load this job from the API in the production
+            environment. It may have been removed, or there could be a
+            configuration issue with the backend URL or organization ID.
           </p>
         </main>
       </AuthGate>
