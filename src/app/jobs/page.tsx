@@ -8,7 +8,8 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8080";
 const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
 
 type Job = {
-  id: string;
+  id?: string;        // may be missing in some API responses
+  jobId?: string;     // fallback for older API responses
   title: string;
   status: string;
   location?: string | null;
@@ -59,10 +60,15 @@ async function getJobs(): Promise<Job[]> {
   }
 }
 
+function isOpen(status: string | undefined) {
+  if (!status) return false;
+  return status.toUpperCase() === "OPEN";
+}
+
 export default async function JobsPage() {
   const jobs = await getJobs();
 
-  const openCount = jobs.filter((j) => j.status === "OPEN").length;
+  const openCount = jobs.filter((j) => isOpen(j.status)).length;
 
   return (
     <AuthGate>
@@ -137,32 +143,45 @@ export default async function JobsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
-                  {jobs.map((job) => (
-                    <tr key={job.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-2">
-                        <Link
-                          href={`/jobs/${job.id}`}
-                          className="font-medium text-slate-900 hover:underline"
-                        >
-                          {job.title}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-2 text-slate-600">
-                        {job.department || "—"}
-                      </td>
-                      <td className="px-4 py-2 text-slate-600">
-                        {job.location || "—"}
-                      </td>
-                      <td className="px-4 py-2 text-xs">
-                        <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
-                          {job.status || "DRAFT"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2 text-right text-slate-600">
-                        {job.applicantsCount ?? 0}
-                      </td>
-                    </tr>
-                  ))}
+                  {jobs.map((job) => {
+                    const effectiveId = job.id ?? job.jobId ?? "";
+
+                    return (
+                      <tr
+                        key={effectiveId || job.title}
+                        className="hover:bg-slate-50"
+                      >
+                        <td className="px-4 py-2">
+                          {effectiveId ? (
+                            <Link
+                              href={`/jobs/${effectiveId}`}
+                              className="font-medium text-slate-900 hover:underline"
+                            >
+                              {job.title}
+                            </Link>
+                          ) : (
+                            <span className="font-medium text-slate-400">
+                              {job.title} (no id)
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2 text-slate-600">
+                          {job.department || "—"}
+                        </td>
+                        <td className="px-4 py-2 text-slate-600">
+                          {job.location || "—"}
+                        </td>
+                        <td className="px-4 py-2 text-xs">
+                          <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+                            {job.status || "DRAFT"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 text-right text-slate-600">
+                          {job.applicantsCount ?? 0}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

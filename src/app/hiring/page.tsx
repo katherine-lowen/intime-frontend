@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
 type JobStatus = "OPEN" | "CLOSED" | "DRAFT" | "PAUSED";
 
 type Job = {
-  id: string;
+  id?: string; // may be missing in some API shapes
+  jobId?: string; // fallback for older API responses
   title: string;
   status: JobStatus | string;
   location?: string | null;
@@ -153,9 +154,11 @@ export default async function HiringWorkspacePage() {
     {},
   );
 
-  const jobsWithApplicants = jobs.filter(
-    (j) => (j.applicantsCount ?? candidatesByJob[j.id]?.length ?? 0) > 0,
-  );
+  const jobsWithApplicants = jobs.filter((j) => {
+    const key = j.id ?? j.jobId ?? "";
+    const count = j.applicantsCount ?? (key ? candidatesByJob[key]?.length ?? 0 : 0);
+    return count > 0;
+  });
 
   return (
     <AuthGate>
@@ -278,10 +281,11 @@ export default async function HiringWorkspacePage() {
                   </thead>
                   <tbody>
                     {jobs.map((job) => {
+                      const effectiveId = job.id ?? job.jobId ?? "";
                       const count =
                         job.applicantsCount ??
-                        candidatesByJob[job.id]?.length ??
-                        0;
+                        (effectiveId ? candidatesByJob[effectiveId]?.length ?? 0 : 0);
+
                       const statusLabel = formatStatus(job.status);
 
                       let statusClass =
@@ -302,7 +306,7 @@ export default async function HiringWorkspacePage() {
 
                       return (
                         <tr
-                          key={job.id}
+                          key={effectiveId || job.title}
                           className="border-b last:border-b-0 hover:bg-slate-50/70"
                         >
                           <td className="px-4 py-2">
@@ -345,18 +349,26 @@ export default async function HiringWorkspacePage() {
                           </td>
                           <td className="px-4 py-2 text-right text-xs">
                             <div className="inline-flex gap-2">
-                              <Link
-                                href={`/jobs/${job.id}`}
-                                className="text-indigo-600 hover:underline"
-                              >
-                                Open
-                              </Link>
-                              <Link
-                                href={`/jobs/${job.id}/edit`}
-                                className="text-slate-500 hover:text-slate-700"
-                              >
-                                Edit
-                              </Link>
+                              {effectiveId ? (
+                                <>
+                                  <Link
+                                    href={`/jobs/${effectiveId}`}
+                                    className="text-indigo-600 hover:underline"
+                                  >
+                                    Open
+                                  </Link>
+                                  <Link
+                                    href={`/jobs/${effectiveId}/edit`}
+                                    className="text-slate-500 hover:text-slate-700"
+                                  >
+                                    Edit
+                                  </Link>
+                                </>
+                              ) : (
+                                <span className="text-slate-400">
+                                  Missing job ID
+                                </span>
+                              )}
                             </div>
                           </td>
                         </tr>
