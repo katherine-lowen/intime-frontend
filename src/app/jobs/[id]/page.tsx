@@ -1,3 +1,4 @@
+// src/app/jobs/[id]/page.tsx
 import { AuthGate } from "@/components/dev-auth-gate";
 import JobAtsClient from "./JobsAtsClient";
 
@@ -13,12 +14,6 @@ type JobFromApi = {
   department?: string | null;
   description?: string | null;
   createdAt?: string;
-
-  publishToJobBoard?: boolean;
-  compensationMin?: number | null;
-  compensationMax?: number | null;
-  compensationCurrency?: string | null;
-  compensationNotes?: string | null;
 };
 
 type JobDataForUI = {
@@ -34,14 +29,18 @@ type JobDataForUI = {
   boardStatus: string;
 };
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8080";
+// Pull API + ORG directly from env
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 const ORG_ID =
-  process.env.NEXT_PUBLIC_ORG_ID || "demo-org";
+  process.env.NEXT_PUBLIC_ORG_ID ||
+  process.env.DEFAULT_ORG_ID ||
+  "demo-org";
 
-async function getJob(jobId: string): Promise<JobFromApi | null> {
+async function fetchJob(jobId: string): Promise<JobFromApi | null> {
+  const url = `${API_URL}/jobs/${encodeURIComponent(jobId)}`;
+
   try {
-    const res = await fetch(`${API_URL}/jobs/${encodeURIComponent(jobId)}`, {
+    const res = await fetch(url, {
       headers: {
         "Content-Type": "application/json",
         "X-Org-Id": ORG_ID,
@@ -50,25 +49,24 @@ async function getJob(jobId: string): Promise<JobFromApi | null> {
     });
 
     if (!res.ok) {
-      console.error("Failed to load job from API", {
+      const body = await res.text().catch(() => "");
+
+      console.error("FAILED JOB FETCH", {
+        url,
         jobId,
         status: res.status,
         statusText: res.statusText,
         API_URL,
         ORG_ID,
+        body: body.slice(0, 400),
       });
+
       return null;
     }
 
-    const job = (await res.json()) as JobFromApi;
-    return job;
+    return (await res.json()) as JobFromApi;
   } catch (err) {
-    console.error("Failed to load job from API (network or other error)", {
-      jobId,
-      API_URL,
-      ORG_ID,
-      err,
-    });
+    console.error("JOB FETCH ERROR", { url, jobId, API_URL, ORG_ID, err });
     return null;
   }
 }
@@ -76,7 +74,6 @@ async function getJob(jobId: string): Promise<JobFromApi | null> {
 function formatDate(dateStr?: string) {
   if (!dateStr) return "—";
   const dt = new Date(dateStr);
-  if (Number.isNaN(dt.getTime())) return "—";
   return dt.toLocaleDateString(undefined, {
     year: "numeric",
     month: "short",
@@ -84,76 +81,52 @@ function formatDate(dateStr?: string) {
   });
 }
 
-function formatComp(job: JobFromApi): string {
-  const { compensationMin, compensationMax, compensationCurrency } = job;
-
-  if (compensationMin == null && compensationMax == null) {
-    return "Not set";
-  }
-
-  const currency = compensationCurrency || "USD";
-
-  if (compensationMin != null && compensationMax != null) {
-    return `${currency} ${compensationMin.toLocaleString()}–${compensationMax.toLocaleString()} (annual)`;
-  }
-
-  if (compensationMin != null) {
-    return `${currency} ${compensationMin.toLocaleString()}+ (annual)`;
-  }
-
-  return `${currency} up to ${compensationMax!.toLocaleString()} (annual)`;
-}
-
-function mapJobToUI(job: JobFromApi): JobDataForUI {
-  return {
-    id: job.id,
-    title: job.title,
-    status: job.status === "OPEN" ? "Active" : job.status,
-    department: job.department ?? "Not specified",
-    location: job.location ?? "Not specified",
-    createdDate: job.createdAt ? formatDate(job.createdAt) : "—",
-    roleOverview:
-      job.description?.split("\n\n")[0] ??
-      "Add a short overview for this role in the job description.",
-    compensationBand: formatComp(job),
-    description: job.description ?? "",
-    boardStatus: job.publishToJobBoard
-      ? "Published on your careers page"
-      : "Not yet published",
-  };
-}
-
-export default async function JobDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function JobDetailPage({ params }: { params: { id: string } }) {
   const jobId = params.id;
-
-  const job = await getJob(jobId);
+  const job = await fetchJob(jobId);
 
   if (!job) {
     return (
       <AuthGate>
-        <main className="p-6">
-          <h1 className="text-lg font-semibold text-slate-900">
-            Job not available
-          </h1>
-          <p className="mt-1 text-sm text-slate-500 max-w-md">
-            We couldn&apos;t load this job from the API in the production
-            environment. It may have been removed, or there could be a
-            configuration issue with the backend URL or organization ID.
+        <main className="p-6 space-y-4">
+          <h1 className="text-lg font-semibold">Job not available</h1>
+          <p className="text-sm text-slate-500">
+            This job could not be loaded. Check the debug info below.
+          </p>
+
+          {/* 🔥 ALWAYS SHOW DEBUG INFO */}
+          <div className="rounded-lg bg-black text-lime-300 text-xs p-3 font-mono">
+            <div className="font-bold text-pink-400 mb-1">DEBUG INFO</div>
+            <div>jobId: {jobId}</div>
+            <div>API_URL: {API_URL}</div>
+            <div>ORG_ID: {ORG_ID}</div>
+            <div>fetch URL: {`${API_URL}/jobs/${jobId}`}</div>
+          </div>
+
+          <p className="text-[11px] text-slate-500">
+            Now check Vercel logs for “FAILED JOB FETCH” or “JOB FETCH ERROR”.
           </p>
         </main>
       </AuthGate>
     );
   }
 
-  const jobDataForUI = mapJobToUI(job);
+  const uiData: JobDataForUI = {
+    id: job.id,
+    title: job.title,
+    status: job.status,
+    department: job.department ?? "Not specified",
+    location: job.location ?? "Not specified",
+    createdDate: job.createdAt ? formatDate(job.createdAt) : "—",
+    roleOverview: job.description?.split("\n\n")[0] ?? "",
+    compensationBand: "Not implemented",
+    description: job.description ?? "",
+    boardStatus: "Unknown",
+  };
 
   return (
     <AuthGate>
-      <JobAtsClient jobId={jobId} jobData={jobDataForUI} />
+      <JobAtsClient jobId={jobId} jobData={uiData} />
     </AuthGate>
   );
 }
