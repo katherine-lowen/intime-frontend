@@ -16,8 +16,9 @@ type Job = {
   applicantsCount?: number;
 };
 
+// 👇 Match the backend shape: { data, total, page, limit, pages }
 type JobsListResponse = {
-  items: Job[];
+  data: Job[];
   total: number;
   page: number;
   limit: number;
@@ -29,13 +30,14 @@ async function getJobs(): Promise<Job[]> {
     // ask for a reasonable page size
     const data = await api.get<JobsListResponse | Job[]>("/jobs?limit=100");
 
-    // Handle both possible shapes:
+    // Backend v1: plain array
     if (Array.isArray(data)) {
       return data;
     }
 
-    if (data && Array.isArray((data as JobsListResponse).items)) {
-      return (data as JobsListResponse).items;
+    // Backend v2: paginated shape { data: Job[]; ... }
+    if (data && Array.isArray((data as JobsListResponse).data)) {
+      return (data as JobsListResponse).data;
     }
 
     return [];
@@ -99,9 +101,7 @@ export default async function JobsPage() {
         {/* Table */}
         <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-900">
-              All jobs
-            </h2>
+            <h2 className="text-sm font-semibold text-slate-900">All jobs</h2>
             <span className="text-[11px] text-slate-500">
               {jobs.length} role{jobs.length === 1 ? "" : "s"}
             </span>
