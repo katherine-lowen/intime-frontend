@@ -121,6 +121,13 @@ function formatStatus(status: JobStatus | string) {
   }
 }
 
+// Normalize IDs so we never treat "undefined" as a real id
+function normalizeId(raw?: string | null): string {
+  if (!raw) return "";
+  if (raw === "undefined") return "";
+  return raw;
+}
+
 export default async function HiringWorkspacePage() {
   let jobs: Job[] = [];
   let candidates: Candidate[] = [];
@@ -145,7 +152,8 @@ export default async function HiringWorkspacePage() {
   // Map jobId -> candidates[]
   const candidatesByJob = candidates.reduce<Record<string, Candidate[]>>(
     (acc, c) => {
-      const key = c.jobId || c.job?.id;
+      const rawKey = c.jobId || c.job?.id || "";
+      const key = normalizeId(rawKey);
       if (!key) return acc;
       if (!acc[key]) acc[key] = [];
       acc[key].push(c);
@@ -155,7 +163,8 @@ export default async function HiringWorkspacePage() {
   );
 
   const jobsWithApplicants = jobs.filter((j) => {
-    const key = j.id ?? j.jobId ?? "";
+    const rawKey = j.id ?? j.jobId ?? "";
+    const key = normalizeId(rawKey);
     const count = j.applicantsCount ?? (key ? candidatesByJob[key]?.length ?? 0 : 0);
     return count > 0;
   });
@@ -281,10 +290,14 @@ export default async function HiringWorkspacePage() {
                   </thead>
                   <tbody>
                     {jobs.map((job) => {
-                      const effectiveId = job.id ?? job.jobId ?? "";
+                      const rawId = job.id ?? job.jobId ?? "";
+                      const effectiveId = normalizeId(rawId);
+
                       const count =
                         job.applicantsCount ??
-                        (effectiveId ? candidatesByJob[effectiveId]?.length ?? 0 : 0);
+                        (effectiveId
+                          ? candidatesByJob[effectiveId]?.length ?? 0
+                          : 0);
 
                       const statusLabel = formatStatus(job.status);
 
@@ -311,7 +324,16 @@ export default async function HiringWorkspacePage() {
                         >
                           <td className="px-4 py-2">
                             <div className="font-medium text-slate-900">
-                              {job.title}
+                              {effectiveId ? (
+                                <Link
+                                  href={`/jobs/${effectiveId}`}
+                                  className="hover:underline"
+                                >
+                                  {job.title}
+                                </Link>
+                              ) : (
+                                job.title
+                              )}
                             </div>
                             <div className="text-xs text-slate-500">
                               {job.description
@@ -365,7 +387,7 @@ export default async function HiringWorkspacePage() {
                                   </Link>
                                 </>
                               ) : (
-                                <span className="text-slate-400">
+                                <span className="text-slate-400 text-[11px]">
                                   Missing job ID
                                 </span>
                               )}

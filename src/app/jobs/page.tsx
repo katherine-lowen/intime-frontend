@@ -65,6 +65,13 @@ function isOpen(status: string | undefined) {
   return status.toUpperCase() === "OPEN";
 }
 
+// Normalize IDs so "undefined" is treated as missing
+function normalizeId(raw?: string | null): string {
+  if (!raw) return "";
+  if (raw === "undefined") return "";
+  return raw;
+}
+
 export default async function JobsPage() {
   const jobs = await getJobs();
 
@@ -144,7 +151,8 @@ export default async function JobsPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {jobs.map((job) => {
-                    const effectiveId = job.id ?? job.jobId ?? "";
+                    const rawId = job.id ?? job.jobId ?? "";
+                    const effectiveId = normalizeId(rawId);
 
                     return (
                       <tr
