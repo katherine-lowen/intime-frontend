@@ -1,597 +1,320 @@
 // src/app/learning/page.tsx
-import api from "@/lib/api";
+"use client";
+
+import React from "react";
+import { BookOpen, Users, TrendingUp, Clock, Plus } from "lucide-react";
 import { AuthGate } from "@/components/dev-auth-gate";
-import Link from "next/link";
 
-export const dynamic = "force-dynamic";
+import { StatCard } from "./components/stat-card";
+import { LearningPathItem } from "./components/learning-path-item";
+import { AssignmentRow } from "./components/assignment-row";
+import { CourseCard } from "./components/course-card";
 
-type Course = {
-  id: string;
-  title: string;
-  category?: string | null;
-  difficulty?: "BEGINNER" | "INTERMEDIATE" | "ADVANCED" | null;
-  estMinutes?: number | null;
-  activeLearners?: number | null;
-  completionRate?: number | null; // 0–1
-};
+export default function LearningPage() {
+  const learningPaths = [
+    {
+      id: 1,
+      name: "New hire onboarding",
+      audience: "All new employees",
+      useCase: "Onboarding",
+      courseCount: 4,
+      duration: "~90 min",
+    },
+    {
+      id: 2,
+      name: "Manager essentials",
+      audience: "Team leads & managers",
+      useCase: "Role transition",
+      courseCount: 6,
+      duration: "~180 min",
+    },
+    {
+      id: 3,
+      name: "Annual compliance",
+      audience: "All employees",
+      useCase: "Recurring training",
+      courseCount: 3,
+      duration: "~45 min",
+    },
+    {
+      id: 4,
+      name: "Security fundamentals",
+      audience: "Engineering & Product",
+      useCase: "Department-specific",
+      courseCount: 5,
+      duration: "~120 min",
+    },
+  ];
 
-type LearningPath = {
-  id: string;
-  name: string;
-  audience: string; // e.g. "New hires", "People managers"
-  useCase: string; // e.g. "Onboarding", "Promotion", "Compliance"
-  courseCount: number;
-  avgDurationMinutes: number;
-};
+  const assignments = [
+    {
+      id: 1,
+      learnerName: "Sarah Chen",
+      learnerAvatar: "SC",
+      pathOrCourse: "New hire onboarding",
+      due: "Dec 15, 2025",
+      status: "in-progress" as const,
+    },
+    {
+      id: 2,
+      learnerName: "Michael Torres",
+      learnerAvatar: "MT",
+      pathOrCourse: "Annual compliance",
+      due: "Dec 8, 2025",
+      status: "overdue" as const,
+    },
+    {
+      id: 3,
+      learnerName: "Emma Wilson",
+      learnerAvatar: "EW",
+      pathOrCourse: "Manager essentials",
+      due: "Dec 20, 2025",
+      status: "completed" as const,
+    },
+    {
+      id: 4,
+      learnerName: "James Park",
+      learnerAvatar: "JP",
+      pathOrCourse: "Security fundamentals",
+      due: "Dec 18, 2025",
+      status: "in-progress" as const,
+    },
+    {
+      id: 5,
+      learnerName: "Lisa Anderson",
+      learnerAvatar: "LA",
+      pathOrCourse: "Annual compliance",
+      due: "Dec 5, 2025",
+      status: "overdue" as const,
+    },
+    {
+      id: 6,
+      learnerName: "David Kim",
+      learnerAvatar: "DK",
+      pathOrCourse: "New hire onboarding",
+      due: "Dec 22, 2025",
+      status: "not-started" as const,
+    },
+  ];
 
-type AssignmentStatus = "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "OVERDUE";
-
-type Assignment = {
-  id: string;
-  learnerName: string;
-  learnerRole?: string | null;
-  pathName?: string | null;
-  courseTitle: string;
-  dueDate?: string | null; // ISO
-  status: AssignmentStatus;
-};
-
-// ---- Fetch helpers with safe fallbacks ----
-
-async function fetchCourses(): Promise<Course[]> {
-  try {
-    // Backend can return richer course objects; we only use a subset
-    const raw = await api.get<any[]>("/learning/courses");
-    return raw.map((c) => ({
-      id: String(c.id),
-      title: c.title ?? "Untitled course",
-      category: c.category ?? null,
-      difficulty: null, // can wire to c.level later if you want
-      estMinutes: c.estimatedMinutes ?? null,
-      activeLearners: c.activeLearners ?? null,
-      completionRate: c.completionRate ?? null,
-    }));
-  } catch (err) {
-    console.error("Failed to load /learning/courses, using fallback", err);
-    // Fallback sample data so UI looks alive
-    return [
-      {
-        id: "c1",
-        title: "Intime 101: Working Here",
-        category: "Onboarding",
-        difficulty: "BEGINNER",
-        estMinutes: 25,
-        activeLearners: 6,
-        completionRate: 0.92,
-      },
-      {
-        id: "c2",
-        title: "Security & Data Protection",
-        category: "Compliance",
-        difficulty: "INTERMEDIATE",
-        estMinutes: 40,
-        activeLearners: 4,
-        completionRate: 0.78,
-      },
-      {
-        id: "c3",
-        title: "Manager Essentials: 1:1s & Feedback",
-        category: "Managers",
-        difficulty: "INTERMEDIATE",
-        estMinutes: 35,
-        activeLearners: 2,
-        completionRate: 0.63,
-      },
-    ];
-  }
-}
-
-async function fetchLearningPaths(): Promise<LearningPath[]> {
-  try {
-    const raw = await api.get<any[]>("/learning/paths");
-    return raw.map((p) => {
-      const items = Array.isArray(p.items) ? p.items : [];
-      const durations = items
-        .map((it: any) => it.course?.estimatedMinutes as number | undefined)
-        .filter((n): n is number => typeof n === "number" && n > 0);
-
-      const totalMinutes =
-        durations.length > 0
-          ? durations.reduce((a, b) => a + b, 0)
-          : p.avgDurationMinutes ?? 0;
-
-      return {
-        id: String(p.id),
-        name: p.name ?? "Untitled path",
-        audience: p.audience ?? "All employees",
-        useCase: p.useCase ?? "Onboarding",
-        courseCount: items.length || p.courseCount || 0,
-        avgDurationMinutes: totalMinutes,
-      };
-    });
-  } catch (err) {
-    console.error("Failed to load /learning/paths, using fallback", err);
-    return [
-      {
-        id: "lp1",
-        name: "New hire onboarding",
-        audience: "All new employees",
-        useCase: "Onboarding",
-        courseCount: 4,
-        avgDurationMinutes: 90,
-      },
-      {
-        id: "lp2",
-        name: "First-time people managers",
-        audience: "New managers",
-        useCase: "Promotion",
-        courseCount: 5,
-        avgDurationMinutes: 120,
-      },
-      {
-        id: "lp3",
-        name: "Annual compliance & security",
-        audience: "Entire org",
-        useCase: "Compliance",
-        courseCount: 3,
-        avgDurationMinutes: 75,
-      },
-    ];
-  }
-}
-
-async function fetchAssignments(): Promise<Assignment[]> {
-  try {
-    const raw = await api.get<any[]>("/learning/assignments");
-    const now = new Date();
-
-    return raw.map((a) => {
-      const employee = a.employee || {};
-      const course = a.course || {};
-      const path = a.path || {};
-      const dueIso: string | undefined = a.dueDate ?? a.due_at;
-
-      // Map backend status → UI status
-      let status: AssignmentStatus = "NOT_STARTED";
-      if (a.status === "IN_PROGRESS") status = "IN_PROGRESS";
-      else if (a.status === "COMPLETED") status = "COMPLETED";
-
-      // Overdue if not completed and due date in the past
-      if (
-        dueIso &&
-        status !== "COMPLETED" &&
-        !Number.isNaN(new Date(dueIso).getTime()) &&
-        new Date(dueIso) < now
-      ) {
-        status = "OVERDUE";
-      }
-
-      return {
-        id: String(a.id),
-        learnerName:
-          `${employee.firstName ?? ""} ${employee.lastName ?? ""}`.trim() ||
-          "Unnamed employee",
-        learnerRole: employee.title ?? employee.role ?? null,
-        pathName: path.name ?? null,
-        courseTitle: course.title ?? a.courseTitle ?? "Untitled course",
-        dueDate: dueIso ?? null,
-        status,
-      };
-    });
-  } catch (err) {
-    console.error("Failed to load /learning/assignments, using fallback", err);
-    return [
-      {
-        id: "a1",
-        learnerName: "Steven Meoni",
-        learnerRole: "CTO",
-        pathName: "Annual compliance & security",
-        courseTitle: "Security & Data Protection",
-        dueDate: new Date(
-          Date.now() + 3 * 24 * 60 * 60 * 1000,
-        ).toISOString(),
-        status: "IN_PROGRESS",
-      },
-      {
-        id: "a2",
-        learnerName: "Test Person",
-        learnerRole: "Marketing",
-        pathName: "New hire onboarding",
-        courseTitle: "Intime 101: Working Here",
-        dueDate: new Date(
-          Date.now() + 7 * 24 * 60 * 60 * 1000,
-        ).toISOString(),
-        status: "NOT_STARTED",
-      },
-      {
-        id: "a3",
-        learnerName: "Another Employee",
-        learnerRole: "People Ops",
-        pathName: "First-time people managers",
-        courseTitle: "Manager Essentials: 1:1s & Feedback",
-        dueDate: new Date(
-          Date.now() - 2 * 24 * 60 * 60 * 1000,
-        ).toISOString(),
-        status: "OVERDUE",
-      },
-    ];
-  }
-}
-
-// ---- Helpers ----
-
-function formatShortDate(iso?: string | null) {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function summarizeLearning(
-  courses: Course[],
-  assignments: Assignment[],
-): {
-  totalCourses: number;
-  activeLearners: number;
-  avgCompletionRate: number; // 0–1
-  inProgress: number;
-  overdue: number;
-} {
-  const totalCourses = courses.length;
-
-  const activeLearners = courses.reduce(
-    (sum, c) => sum + (c.activeLearners ?? 0),
-    0,
-  );
-
-  const completionRates = courses
-    .map((c) => c.completionRate)
-    .filter((v): v is number => typeof v === "number");
-
-  const avgCompletionRate =
-    completionRates.length > 0
-      ? completionRates.reduce((a, b) => a + b, 0) / completionRates.length
-      : 0;
-
-  let inProgress = 0;
-  let overdue = 0;
-  for (const a of assignments) {
-    if (a.status === "IN_PROGRESS") inProgress += 1;
-    if (a.status === "OVERDUE") overdue += 1;
-  }
-
-  return { totalCourses, activeLearners, avgCompletionRate, inProgress, overdue };
-}
-
-// ---- Page ----
-
-export default async function LearningPage() {
-  const [courses, paths, assignments] = await Promise.all([
-    fetchCourses(),
-    fetchLearningPaths(),
-    fetchAssignments(),
-  ]);
-
-  const summary = summarizeLearning(courses, assignments);
+  const courses = [
+    {
+      id: 1,
+      title: "Security & Data Protection",
+      category: "Security",
+      difficulty: "Beginner" as const,
+      duration: "~35 min",
+      learnerCount: 6,
+      completionRate: 78,
+    },
+    {
+      id: 2,
+      title: "Effective 1:1 Conversations",
+      category: "Management",
+      difficulty: "Intermediate" as const,
+      duration: "~50 min",
+      learnerCount: 12,
+      completionRate: 92,
+    },
+    {
+      id: 3,
+      title: "Product Strategy Basics",
+      category: "Product",
+      difficulty: "Intermediate" as const,
+      duration: "~65 min",
+      learnerCount: 8,
+      completionRate: 88,
+    },
+    {
+      id: 4,
+      title: "Compliance Training 2025",
+      category: "Compliance",
+      difficulty: "Beginner" as const,
+      duration: "~25 min",
+      learnerCount: 37,
+      completionRate: 84,
+    },
+    {
+      id: 5,
+      title: "Advanced SQL for Analysts",
+      category: "Technical",
+      difficulty: "Advanced" as const,
+      duration: "~120 min",
+      learnerCount: 4,
+      completionRate: 75,
+    },
+    {
+      id: 6,
+      title: "Feedback & Performance Reviews",
+      category: "Management",
+      difficulty: "Intermediate" as const,
+      duration: "~45 min",
+      learnerCount: 11,
+      completionRate: 95,
+    },
+  ];
 
   return (
     <AuthGate>
-      <main className="mx-auto max-w-6xl space-y-8 px-6 py-8">
-        {/* HEADER */}
-        <section className="flex flex-wrap items-center justify-between gap-3">
-          <div className="space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-              Learning
-            </h1>
-            <p className="text-sm text-slate-600">
-              Connect employee development to your HR workflows. Create learning
-              paths, assign training, and track completion — all inside Intime.
-            </p>
+      <div className="min-h-screen bg-slate-50">
+        {/* Sticky header bar */}
+        <div className="sticky top-0 z-10 border-b border-slate-200 bg-white">
+          <div className="mx-auto max-w-[1400px] px-8 py-6">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="text-xs text-slate-500">People</span>
+                  <span className="text-xs text-slate-300">→</span>
+                  <span className="text-xs text-slate-900">Learning</span>
+                </div>
+                <h1 className="mb-2 text-slate-900">Learning</h1>
+                <p className="max-w-2xl text-sm text-slate-600">
+                  Connect employee development to your HR workflows. Create
+                  learning paths, assign training, and track completion — all
+                  inside Intime.
+                </p>
+              </div>
+              <div className="ml-6 flex items-start gap-2">
+                <span className="inline-flex items-center rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1.5 text-xs text-indigo-700">
+                  HRIS · Learning
+                </span>
+                <span className="inline-flex items-center rounded-full border border-amber-100 bg-amber-50 px-3 py-1.5 text-xs text-amber-700">
+                  Early preview
+                </span>
+              </div>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">
-              HRIS · Learning
-            </span>
-            <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">
-              Early preview
-            </span>
-          </div>
-        </section>
+        </div>
 
-        {/* TOP ROW: SUMMARY STATS */}
-        <section className="grid gap-4 md:grid-cols-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="text-[11px] uppercase tracking-wide text-slate-500">
-              Active courses
-            </div>
-            <div className="mt-1 text-2xl font-semibold text-slate-900">
-              {summary.totalCourses}
-            </div>
-            <p className="mt-1 text-[11px] text-slate-500">
-              Structured, trackable content
-            </p>
+        {/* Main content */}
+        <div className="mx-auto max-w-[1400px] px-8 py-8">
+          {/* Row 1: Summary metrics */}
+          <div className="mb-8 grid grid-cols-4 gap-4">
+            <StatCard
+              title="Active courses"
+              value="12"
+              caption="Structured, trackable content"
+              icon={BookOpen}
+            />
+            <StatCard
+              title="Active learners"
+              value="37"
+              caption="People currently assigned or in progress"
+              icon={Users}
+            />
+            <StatCard
+              title="Avg completion rate"
+              value="84%"
+              caption="Across all active courses"
+              icon={TrendingUp}
+              progressBar={84}
+            />
+            <StatCard
+              title="In progress · Overdue"
+              value="10"
+              caption="Use this as your weekly follow-up list"
+              icon={Clock}
+              badge={{ text: "3 overdue", variant: "danger" }}
+            />
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="text-[11px] uppercase tracking-wide text-slate-500">
-              Active learners
-            </div>
-            <div className="mt-1 text-2xl font-semibold text-slate-900">
-              {summary.activeLearners}
-            </div>
-            <p className="mt-1 text-[11px] text-slate-500">
-              People currently assigned or in progress
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="text-[11px] uppercase tracking-wide text-slate-500">
-              Avg completion rate
-            </div>
-            <div className="mt-1 text-2xl font-semibold text-slate-900">
-              {Math.round(summary.avgCompletionRate * 100)}%
-            </div>
-            <p className="mt-1 text-[11px] text-slate-500">
-              Across all active courses
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="text-[11px] uppercase tracking-wide text-slate-500">
-              In progress · Overdue
-            </div>
-            <div className="mt-1 flex items-baseline gap-2 text-slate-900">
-              <span className="text-2xl font-semibold">
-                {summary.inProgress}
-              </span>
-              <span className="text-xs text-amber-600">
-                {summary.overdue} overdue
-              </span>
-            </div>
-            <p className="mt-1 text-[11px] text-slate-500">
-              Use this as your weekly follow-up list
-            </p>
-          </div>
-        </section>
-
-        {/* SECOND ROW: LEARNING PATHS + ASSIGNMENTS */}
-        <section className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1.7fr)]">
-          {/* Learning paths */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <div>
-                <h2 className="text-sm font-semibold text-slate-900">
-                  Learning paths by lifecycle
-                </h2>
-                <p className="mt-1 text-xs text-slate-500">
+          {/* Row 2: Two main panels */}
+          <div className="mb-8 grid grid-cols-12 gap-6">
+            {/* Left panel: Learning paths */}
+            <div className="col-span-5">
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="mb-1 flex items-start justify-between">
+                  <h2 className="text-lg text-slate-900">
+                    Learning paths by lifecycle
+                  </h2>
+                  <button className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs text-white transition-colors hover:bg-indigo-700">
+                    <Plus className="h-3.5 w-3.5" />
+                    New learning path
+                  </button>
+                </div>
+                <p className="mb-6 text-xs text-slate-600">
                   Bundle courses into paths for onboarding, promotions, and
                   recurring training.
                 </p>
+
+                <div className="mb-6 space-y-3">
+                  {learningPaths.map((path) => (
+                    <LearningPathItem key={path.id} {...path} />
+                  ))}
+                </div>
+
+                <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+                  <div className="mb-2 flex items-start gap-2">
+                    <div className="mt-1.5 h-1 w-1 rounded-full bg-indigo-600" />
+                    <span className="text-xs text-indigo-900">
+                      Where this is headed
+                    </span>
+                  </div>
+                  <p className="ml-3 text-xs leading-relaxed text-indigo-800">
+                    Soon, you&apos;ll auto-assign paths based on role, location,
+                    or performance triggers. Think &quot;promote to manager →
+                    assign Manager essentials&quot; without manual work.
+                  </p>
+                </div>
               </div>
-              <Link
-                href="#"
-                className="inline-flex items-center rounded-full border border-slate-200 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-50 hover:bg-slate-800"
-              >
-                New learning path
-              </Link>
             </div>
 
-            {paths.length === 0 ? (
-              <p className="mt-2 text-xs text-slate-500">
-                No learning paths yet. Start by grouping a few courses into a
-                &quot;New hire onboarding&quot; path.
-              </p>
-            ) : (
-              <ul className="mt-2 space-y-2 text-xs text-slate-700">
-                {paths.map((p) => (
-                  <li
-                    key={p.id}
-                    className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-2"
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium text-slate-900">
-                        {p.name}
-                      </div>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                        <span>{p.audience}</span>
-                        <span className="h-0.5 w-0.5 rounded-full bg-slate-400" />
-                        <span>{p.useCase}</span>
-                      </div>
-                    </div>
-                    <div className="text-right text-[11px] text-slate-500">
-                      <div>
-                        {p.courseCount} course
-                        {p.courseCount === 1 ? "" : "s"}
-                      </div>
-                      <div>
-                        ~{Math.round(p.avgDurationMinutes / 5) * 5} min total
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
+            {/* Right panel: Assignments */}
+            <div className="col-span-7">
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h2 className="mb-1 text-lg text-slate-900">
+                  Assignments &amp; follow-ups
+                </h2>
+                <p className="mb-6 text-xs text-slate-600">
+                  Who&apos;s been assigned what, and where you might need to
+                  nudge.
+                </p>
 
-            <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
-              <div className="font-medium text-slate-700">
-                Where this is headed
+                <div className="overflow-hidden rounded-xl border border-slate-200">
+                  <div className="grid grid-cols-12 gap-4 border-b border-slate-200 bg-slate-50 px-4 py-2.5">
+                    <div className="col-span-4 text-xs uppercase tracking-wide text-slate-700">
+                      Learner
+                    </div>
+                    <div className="col-span-4 text-xs uppercase tracking-wide text-slate-700">
+                      Path / Course
+                    </div>
+                    <div className="col-span-2 text-xs uppercase tracking-wide text-slate-700">
+                      Due
+                    </div>
+                    <div className="col-span-2 text-xs uppercase tracking-wide text-slate-700">
+                      Status
+                    </div>
+                  </div>
+                  <div className="divide-y divide-slate-100">
+                    {assignments.map((assignment) => (
+                      <AssignmentRow key={assignment.id} {...assignment} />
+                    ))}
+                  </div>
+                </div>
               </div>
-              <p className="mt-1">
-                Intime will eventually let you auto-assign paths based on role
-                changes, locations, or performance outcomes — similar to how
-                Remote Learning plugs into their HRIS.
-              </p>
             </div>
           </div>
 
-          {/* Assignments */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="mb-3 flex items-center justify-between gap-2">
+          {/* Row 3: Course catalog */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mb-1 flex items-start justify-between">
               <div>
-                <h2 className="text-sm font-semibold text-slate-900">
-                  Assignments &amp; follow-ups
-                </h2>
-                <p className="mt-1 text-xs text-slate-500">
-                  Who&apos;s been assigned what, and where you might need to
-                  nudge.
+                <h2 className="mb-1 text-lg text-slate-900">Course catalog</h2>
+                <p className="text-xs text-slate-600">
+                  Your internal library of training content. Start scrappy with
+                  a few essential courses, expand over time.
                 </p>
               </div>
             </div>
 
-            {assignments.length === 0 ? (
-              <p className="mt-2 text-xs text-slate-500">
-                No assignments yet. Once you assign courses or paths to
-                employees, they will appear here grouped by status.
-              </p>
-            ) : (
-              <div className="mt-2 overflow-hidden rounded-xl border border-slate-100">
-                <table className="min-w-full border-collapse text-xs">
-                  <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th className="px-3 py-2 text-left font-medium">
-                        Learner
-                      </th>
-                      <th className="px-3 py-2 text-left font-medium">
-                        Path / Course
-                      </th>
-                      <th className="px-3 py-2 text-left font-medium">
-                        Due
-                      </th>
-                      <th className="px-3 py-2 text-left font-medium">
-                        Status
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 bg-white text-slate-700">
-                    {assignments.map((a) => {
-                      const statusLabel = a.status
-                        .toLowerCase()
-                        .replace("_", " ");
-                      let statusClasses =
-                        "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium";
-                      if (a.status === "COMPLETED") {
-                        statusClasses +=
-                          " bg-emerald-50 text-emerald-700 border border-emerald-100";
-                      } else if (a.status === "OVERDUE") {
-                        statusClasses +=
-                          " bg-rose-50 text-rose-700 border border-rose-100";
-                      } else if (a.status === "IN_PROGRESS") {
-                        statusClasses +=
-                          " bg-amber-50 text-amber-700 border border-amber-100";
-                      } else {
-                        statusClasses +=
-                          " bg-slate-50 text-slate-700 border border-slate-100";
-                      }
-
-                      return (
-                        <tr key={a.id}>
-                          <td className="max-w-[160px] px-3 py-2 align-top">
-                            <div className="truncate text-xs font-medium text-slate-900">
-                              {a.learnerName}
-                            </div>
-                            {a.learnerRole && (
-                              <div className="truncate text-[11px] text-slate-500">
-                                {a.learnerRole}
-                              </div>
-                            )}
-                          </td>
-                          <td className="max-w-[220px] px-3 py-2 align-top">
-                            <div className="truncate text-xs font-medium text-slate-900">
-                              {a.courseTitle}
-                            </div>
-                            {a.pathName && (
-                              <div className="truncate text-[11px] text-slate-500">
-                                {a.pathName}
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 align-top text-[11px] text-slate-500">
-                            {formatShortDate(a.dueDate)}
-                          </td>
-                          <td className="px-3 py-2 align-top">
-                            <span className={statusClasses}>
-                              {statusLabel}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* THIRD ROW: COURSE CATALOG */}
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold text-slate-900">
-                Course catalog
-              </h2>
-              <p className="mt-1 text-xs text-slate-500">
-                Your internal library of training content. Start scrappy with a
-                few essential courses, expand over time.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <button className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100">
-                Import SCORM / video (future)
-              </button>
-              <button className="rounded-full border border-slate-200 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-50 hover:bg-slate-800">
-                New course
-              </button>
-            </div>
-          </div>
-
-          {courses.length === 0 ? (
-            <p className="mt-2 text-xs text-slate-500">
-              No courses yet. Create your first course for onboarding or
-              security training — these usually have the highest impact.
-            </p>
-          ) : (
-            <div className="grid gap-3 md:grid-cols-3">
-              {courses.map((c) => (
-                <div
-                  key={c.id}
-                  className="flex flex-col rounded-xl border border-slate-100 bg-slate-50 p-3"
-                >
-                  <div className="text-sm font-semibold text-slate-900">
-                    {c.title}
-                  </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                    {c.category && <span>{c.category}</span>}
-                    {c.difficulty && (
-                      <>
-                        <span className="h-0.5 w-0.5 rounded-full bg-slate-400" />
-                        <span>
-                          {c.difficulty.toLowerCase().replace("_", " ")}
-                        </span>
-                      </>
-                    )}
-                  </div>
-                  <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
-                    <span>
-                      ~{c.estMinutes ?? 30} min •{" "}
-                      {c.activeLearners ?? 0} learner
-                      {c.activeLearners === 1 ? "" : "s"}
-                    </span>
-                    <span>
-                      {c.completionRate != null
-                        ? `${Math.round(c.completionRate * 100)}% completed`
-                        : "—"}
-                    </span>
-                  </div>
-                </div>
+            <div className="mt-6 grid grid-cols-3 gap-4">
+              {courses.map((course) => (
+                <CourseCard key={course.id} {...course} />
               ))}
             </div>
-          )}
-        </section>
-      </main>
+          </div>
+        </div>
+      </div>
     </AuthGate>
   );
 }
