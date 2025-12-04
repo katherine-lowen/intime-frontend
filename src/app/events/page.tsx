@@ -82,63 +82,74 @@ export default async function EventsPage() {
         </div>
       ) : (
         <ul className="mt-2 divide-y rounded border bg-white/60">
-          {sorted.map((evt) => (
-            <li key={evt.id} className="px-4 py-3 text-sm flex gap-4">
-              <div className="mt-1 h-2 w-2 rounded-full bg-black" />
-              <div className="flex-1 space-y-1">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="font-medium">
-                    {evt.summary || evt.type}
+          {sorted.map((evt) => {
+            // Be defensive about how job id might be stored
+            const effectiveJobId =
+              evt.jobId ??
+              (evt as any).jobId ??
+              (evt as any).job?.id ??
+              "";
+
+            return (
+              <li key={evt.id} className="px-4 py-3 text-sm flex gap-4">
+                <div className="mt-1 h-2 w-2 rounded-full bg-black" />
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-medium">
+                      {evt.summary || evt.type}
+                    </div>
+                    <span className="text-[11px] text-neutral-500 whitespace-nowrap">
+                      {(evt.startsAt || evt.createdAt)
+                        ? new Date(
+                            evt.startsAt || evt.createdAt!,
+                          ).toLocaleString()
+                        : ""}
+                    </span>
                   </div>
-                  <span className="text-[11px] text-neutral-500 whitespace-nowrap">
-                    {(evt.startsAt || evt.createdAt)
-                      ? new Date(evt.startsAt || evt.createdAt!).toLocaleString()
-                      : ""}
-                  </span>
+
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-neutral-500">
+                    <span className="uppercase tracking-wide rounded-full border px-2 py-0.5">
+                      {evt.type.replace(/_/g, " ")}
+                    </span>
+
+                    <span>·</span>
+                    <span>{evt.source}</span>
+
+                    {typeof evt.rating === "number" && (
+                      <>
+                        <span>·</span>
+                        <span>Rating: {evt.rating.toFixed(1)}</span>
+                      </>
+                    )}
+
+                    {effectiveJobId ? (
+                      <>
+                        <span>·</span>
+                        <Link
+                          href={`/jobs/${effectiveJobId}`}
+                          className="underline decoration-dotted"
+                        >
+                          View job
+                        </Link>
+                      </>
+                    ) : null}
+
+                    {evt.employeeId && (
+                      <>
+                        <span>·</span>
+                        <Link
+                          href={`/people/${evt.employeeId}`}
+                          className="underline decoration-dotted"
+                        >
+                          View person
+                        </Link>
+                      </>
+                    )}
+                  </div>
                 </div>
-
-                <div className="flex flex-wrap items-center gap-2 text-[11px] text-neutral-500">
-                  <span className="uppercase tracking-wide rounded-full border px-2 py-0.5">
-                    {evt.type.replace(/_/g, " ")}
-                  </span>
-
-                  <span>·</span>
-                  <span>{evt.source}</span>
-
-                  {typeof evt.rating === "number" && (
-                    <>
-                      <span>·</span>
-                      <span>Rating: {evt.rating.toFixed(1)}</span>
-                    </>
-                  )}
-
-                  {evt.jobId && (
-                    <>
-                      <span>·</span>
-                      <Link
-                        href={`/jobs/${evt.jobId}`}
-                        className="underline decoration-dotted"
-                      >
-                        View job
-                      </Link>
-                    </>
-                  )}
-
-                  {evt.employeeId && (
-                    <>
-                      <span>·</span>
-                      <Link
-                        href={`/people/${evt.employeeId}`}
-                        className="underline decoration-dotted"
-                      >
-                        View person
-                      </Link>
-                    </>
-                  )}
-                </div>
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
     </main>

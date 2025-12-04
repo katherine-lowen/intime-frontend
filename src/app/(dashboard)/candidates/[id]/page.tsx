@@ -15,6 +15,13 @@ type CandidateNote = {
   createdAt?: string;
 };
 
+type CandidateJob = {
+  id: string;
+  title: string;
+  department?: string | null;
+  description?: string | null;
+};
+
 type Candidate = {
   id: string;
   name: string;
@@ -25,12 +32,9 @@ type Candidate = {
   linkedinUrl?: string | null;
   resumeText?: string | null;
   createdAt?: string;
-  job?: {
-    id: string;
-    title: string;
-    department?: string | null;
-    description?: string | null;
-  } | null;
+  job?: CandidateJob | null;
+  // some APIs may also return a top-level jobId
+  jobId?: string | null;
 
   candidateNotes?: CandidateNote[]; // from Prisma include
 };
@@ -46,6 +50,10 @@ type PageProps = {
 export default async function CandidateDetailPage({ params }: PageProps) {
   const candidate = await getCandidate(params.id);
   const notes = candidate.candidateNotes ?? [];
+
+  // Be defensive about how the job might be linked
+  const effectiveJobId =
+    candidate.job?.id ?? candidate.jobId ?? (candidate as any).jobId ?? "";
 
   return (
     <main className="flex flex-col gap-6 p-6">
@@ -80,9 +88,9 @@ export default async function CandidateDetailPage({ params }: PageProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          {candidate.job && (
+          {effectiveJobId && candidate.job && (
             <Link
-              href={`/jobs/${candidate.job.id}`}
+              href={`/jobs/${effectiveJobId}`}
               className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-100 hover:bg-slate-800"
             >
               View job • {candidate.job.title}
