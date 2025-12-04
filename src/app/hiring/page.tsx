@@ -181,6 +181,12 @@ export default async function HiringWorkspacePage() {
               + Open new role
             </Link>
             <Link
+              href="/jobs"
+              className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50"
+            >
+              View jobs workspace
+            </Link>
+            <Link
               href="/candidates"
               className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50"
             >
@@ -378,6 +384,13 @@ export default async function HiringWorkspacePage() {
                   className="flex items-center justify-between rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 font-medium text-indigo-700 hover:bg-indigo-100"
                 >
                   <span>+ Open a new role</span>
+                  <span>→</span>
+                </Link>
+                <Link
+                  href="/jobs"
+                  className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-medium text-slate-700 hover:bg-slate-100"
+                >
+                  <span>Open jobs workspace</span>
                   <span>→</span>
                 </Link>
                 <Link
