@@ -1,4 +1,3 @@
-import api from "@/lib/api";
 import { AuthGate } from "@/components/dev-auth-gate";
 import JobAtsClient from "./JobsAtsClient";
 
@@ -35,12 +34,41 @@ type JobDataForUI = {
   boardStatus: string;
 };
 
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8080";
+const ORG_ID =
+  process.env.NEXT_PUBLIC_ORG_ID || "demo-org";
+
 async function getJob(jobId: string): Promise<JobFromApi | null> {
   try {
-    const job = await api.get<JobFromApi>(`/jobs/${jobId}`);
+    const res = await fetch(`${API_URL}/jobs/${encodeURIComponent(jobId)}`, {
+      headers: {
+        "Content-Type": "application/json",
+        "X-Org-Id": ORG_ID,
+      },
+      cache: "no-store",
+    });
+
+    if (!res.ok) {
+      console.error("Failed to load job from API", {
+        jobId,
+        status: res.status,
+        statusText: res.statusText,
+        API_URL,
+        ORG_ID,
+      });
+      return null;
+    }
+
+    const job = (await res.json()) as JobFromApi;
     return job;
   } catch (err) {
-    console.error("Failed to load job from API", { jobId, err });
+    console.error("Failed to load job from API (network or other error)", {
+      jobId,
+      API_URL,
+      ORG_ID,
+      err,
+    });
     return null;
   }
 }
