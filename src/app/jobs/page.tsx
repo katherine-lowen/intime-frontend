@@ -30,7 +30,7 @@ type JobsListResponse = {
 async function getJobs(): Promise<Job[]> {
   try {
     const res = await fetch(`${API_URL}/jobs?limit=100`, {
-      cache: "no-store", // 🚫 no caching – always hit backend
+      cache: "no-store",
       headers: {
         "x-org-id": ORG_ID,
       },
@@ -43,15 +43,8 @@ async function getJobs(): Promise<Job[]> {
 
     const data: JobsListResponse | Job[] = await res.json();
 
-    if (Array.isArray(data)) {
-      // backend returns a plain array
-      return data;
-    }
-
-    if (data && Array.isArray(data.data)) {
-      // backend returns paginated shape
-      return data.data;
-    }
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.data)) return data.data;
 
     return [];
   } catch (err) {
@@ -61,11 +54,10 @@ async function getJobs(): Promise<Job[]> {
 }
 
 function isOpen(status: string | undefined) {
-  if (!status) return false;
-  return status.toUpperCase() === "OPEN";
+  return status?.toUpperCase() === "OPEN";
 }
 
-// Normalize IDs so "undefined" is treated as missing
+// Normalize IDs so undefined / "undefined" → empty string
 function normalizeId(raw?: string | null): string {
   if (!raw) return "";
   if (raw === "undefined") return "";
@@ -74,7 +66,6 @@ function normalizeId(raw?: string | null): string {
 
 export default async function JobsPage() {
   const jobs = await getJobs();
-
   const openCount = jobs.filter((j) => isOpen(j.status)).length;
 
   return (
@@ -93,6 +84,7 @@ export default async function JobsPage() {
               Track open roles, their status, and active requisitions.
             </p>
           </div>
+
           <Link
             href="/jobs/new"
             className="inline-flex items-center rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700"
@@ -109,12 +101,14 @@ export default async function JobsPage() {
               {jobs.length}
             </div>
           </div>
+
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="text-xs text-slate-500">Open</div>
             <div className="mt-1 text-2xl font-semibold text-slate-900">
               {openCount}
             </div>
           </div>
+
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="text-xs text-slate-500">Closed / draft</div>
             <div className="mt-1 text-2xl font-semibold text-slate-900">
@@ -149,6 +143,7 @@ export default async function JobsPage() {
                     <th className="px-4 py-2 text-right">Applicants</th>
                   </tr>
                 </thead>
+
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {jobs.map((job) => {
                     const rawId = job.id ?? job.jobId ?? "";
@@ -172,18 +167,30 @@ export default async function JobsPage() {
                               {job.title} (no id)
                             </span>
                           )}
+
+                          {/* DEBUG OUTPUT */}
+                          <div className="mt-0.5 text-[10px] text-amber-700">
+                            rawId: {String(rawId) || "(empty)"}
+                          </div>
+                          <div className="text-[10px] text-pink-700">
+                            effectiveId: {effectiveId || "(none)"}
+                          </div>
                         </td>
+
                         <td className="px-4 py-2 text-slate-600">
                           {job.department || "—"}
                         </td>
+
                         <td className="px-4 py-2 text-slate-600">
                           {job.location || "—"}
                         </td>
+
                         <td className="px-4 py-2 text-xs">
                           <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
                             {job.status || "DRAFT"}
                           </span>
                         </td>
+
                         <td className="px-4 py-2 text-right text-slate-600">
                           {job.applicantsCount ?? 0}
                         </td>
