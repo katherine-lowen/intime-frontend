@@ -493,29 +493,38 @@ function AICompInsightsSection() {
               <Sparkles className="h-3.5 w-3.5" />
               AI Compensation Insights
               <span className="rounded-full bg-violet-700 px-2 py-0.5 text-[10px] text-violet-50">
-                Coming soon
+                Preview
               </span>
             </div>
             <p className="max-w-2xl text-sm text-slate-800">
-              Intime will soon surface anomalies in pay changes, missing
-              identifiers, and compliance gaps. Get intelligent recommendations
-              to optimize your payroll process and ensure accuracy.
+              Explore an AI-powered view of salary fairness, market
+              competitiveness, and pay equity across your org. This preview
+              uses demo data to show where Intime&apos;s compensation engine is
+              headed.
             </p>
             <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-slate-700">
               <span className="flex items-center gap-1">
                 <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
-                Anomaly detection
+                Market benchmarks
               </span>
               <span className="flex items-center gap-1">
                 <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
-                Compliance validation
+                Pay equity analysis
               </span>
               <span className="flex items-center gap-1">
                 <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
-                Smart recommendations
+                AI raise recommendations
               </span>
             </div>
           </div>
+
+          <Link
+            href="/payroll/compensation-intelligence"
+            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-medium text-slate-50 shadow-md shadow-slate-900/30 transition-all hover:-translate-y-0.5 hover:bg-slate-800"
+          >
+            <Sparkles className="h-4 w-4" />
+            Open Compensation Intelligence
+          </Link>
         </div>
       </div>
     </section>

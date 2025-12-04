@@ -1,9 +1,11 @@
 // src/app/jobs/page.tsx
 import Link from "next/link";
-import api from "@/lib/api";
 import { AuthGate } from "@/components/dev-auth-gate";
 
 export const dynamic = "force-dynamic";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8080";
+const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
 
 type Job = {
   id: string;
@@ -16,7 +18,6 @@ type Job = {
   applicantsCount?: number;
 };
 
-// 👇 Match the backend shape: { data, total, page, limit, pages }
 type JobsListResponse = {
   data: Job[];
   total: number;
@@ -27,17 +28,28 @@ type JobsListResponse = {
 
 async function getJobs(): Promise<Job[]> {
   try {
-    // ask for a reasonable page size
-    const data = await api.get<JobsListResponse | Job[]>("/jobs?limit=100");
+    const res = await fetch(`${API_URL}/jobs?limit=100`, {
+      cache: "no-store", // 🚫 no caching – always hit backend
+      headers: {
+        "x-org-id": ORG_ID,
+      },
+    });
 
-    // Backend v1: plain array
+    if (!res.ok) {
+      console.error("Failed to load /jobs", res.status, await res.text());
+      return [];
+    }
+
+    const data: JobsListResponse | Job[] = await res.json();
+
     if (Array.isArray(data)) {
+      // backend returns a plain array
       return data;
     }
 
-    // Backend v2: paginated shape { data: Job[]; ... }
-    if (data && Array.isArray((data as JobsListResponse).data)) {
-      return (data as JobsListResponse).data;
+    if (data && Array.isArray(data.data)) {
+      // backend returns paginated shape
+      return data.data;
     }
 
     return [];
@@ -54,7 +66,7 @@ export default async function JobsPage() {
 
   return (
     <AuthGate>
-      <main className="mx-auto max-w-6xl px-6 py-8 space-y-6">
+      <main className="mx-auto max-w-6xl space-y-6 px-6 py-8">
         {/* Header */}
         <section className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
