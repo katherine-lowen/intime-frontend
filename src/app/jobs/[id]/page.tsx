@@ -29,7 +29,6 @@ type JobDataForUI = {
   boardStatus: string;
 };
 
-// Pull API + ORG directly from env
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 const ORG_ID =
   process.env.NEXT_PUBLIC_ORG_ID ||
@@ -52,8 +51,8 @@ async function fetchJob(jobId: string): Promise<JobFromApi | null> {
       const body = await res.text().catch(() => "");
 
       console.error("FAILED JOB FETCH", {
-        url,
         jobId,
+        url,
         status: res.status,
         statusText: res.statusText,
         API_URL,
@@ -66,7 +65,12 @@ async function fetchJob(jobId: string): Promise<JobFromApi | null> {
 
     return (await res.json()) as JobFromApi;
   } catch (err) {
-    console.error("JOB FETCH ERROR", { url, jobId, API_URL, ORG_ID, err });
+    console.error("JOB FETCH ERROR", {
+      jobId,
+      API_URL,
+      ORG_ID,
+      err,
+    });
     return null;
   }
 }
@@ -81,8 +85,46 @@ function formatDate(dateStr?: string) {
   });
 }
 
-export default async function JobDetailPage({ params }: { params: { id: string } }) {
-  const jobId = params.id;
+export default async function JobDetailPage({
+  params,
+}: {
+  params: { id?: string };
+}) {
+  const rawParamId = params?.id;
+  // Treat missing or literal "undefined" as invalid
+  const jobId =
+    rawParamId && rawParamId !== "undefined" ? rawParamId : undefined;
+
+  // If we *still* don’t have a usable id, don’t even try to call the API
+  if (!jobId) {
+    return (
+      <AuthGate>
+        <main className="p-6 space-y-4">
+          <h1 className="text-lg font-semibold">Job not available</h1>
+          <p className="text-sm text-slate-500 max-w-md">
+            This page was loaded without a valid job ID in the URL. This
+            usually means the link that brought you here did not include a real
+            job id.
+          </p>
+
+          <div className="rounded-lg bg-black text-lime-300 text-xs p-3 font-mono space-y-1">
+            <div className="font-bold text-pink-400">DEBUG INFO</div>
+            <div>rawParamId: {String(rawParamId)}</div>
+            <div>jobId (normalized): (none)</div>
+            <div>API_URL: {API_URL}</div>
+            <div>ORG_ID: {ORG_ID}</div>
+            <div>fetch URL: (skipped because jobId is missing)</div>
+          </div>
+
+          <p className="text-[11px] text-slate-500">
+            Try going back to the Jobs or Hiring page, refresh the browser, and
+            click the job again so the app uses the latest links.
+          </p>
+        </main>
+      </AuthGate>
+    );
+  }
+
   const job = await fetchJob(jobId);
 
   if (!job) {
@@ -90,21 +132,29 @@ export default async function JobDetailPage({ params }: { params: { id: string }
       <AuthGate>
         <main className="p-6 space-y-4">
           <h1 className="text-lg font-semibold">Job not available</h1>
-          <p className="text-sm text-slate-500">
-            This job could not be loaded. Check the debug info below.
+          <p className="text-sm text-slate-500 max-w-md">
+            This job could not be loaded from the API.
           </p>
 
-          {/* 🔥 ALWAYS SHOW DEBUG INFO */}
-          <div className="rounded-lg bg-black text-lime-300 text-xs p-3 font-mono">
-            <div className="font-bold text-pink-400 mb-1">DEBUG INFO</div>
-            <div>jobId: {jobId}</div>
+          <div className="rounded-lg bg-black text-lime-300 text-xs p-3 font-mono space-y-1">
+            <div className="font-bold text-pink-400">DEBUG INFO</div>
+            <div>rawParamId: {String(rawParamId)}</div>
+            <div>jobId (normalized): {jobId}</div>
             <div>API_URL: {API_URL}</div>
             <div>ORG_ID: {ORG_ID}</div>
             <div>fetch URL: {`${API_URL}/jobs/${jobId}`}</div>
           </div>
 
           <p className="text-[11px] text-slate-500">
-            Now check Vercel logs for “FAILED JOB FETCH” or “JOB FETCH ERROR”.
+            Check Vercel logs for{" "}
+            <code className="rounded bg-slate-100 px-1 py-0.5 text-[10px]">
+              FAILED JOB FETCH
+            </code>{" "}
+            or{" "}
+            <code className="rounded bg-slate-100 px-1 py-0.5 text-[10px]">
+              JOB FETCH ERROR
+            </code>{" "}
+            to see the backend status and message.
           </p>
         </main>
       </AuthGate>
