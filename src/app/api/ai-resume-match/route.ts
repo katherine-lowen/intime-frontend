@@ -2,13 +2,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
+import mammoth from "mammoth";
 
 const apiKey = process.env.OPENAI_API_KEY;
 const openai = apiKey ? new OpenAI({ apiKey }) : null;
 
 // Supabase server client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 type AiMatchResult = {
@@ -53,21 +56,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ---- Supabase upload (if file present) ----
+    // ---- Supabase upload (if file present) + text extraction ----
     let resumeText = "";
     let resumeUrl: string | null = null;
 
     if (file && file.size > 0) {
       try {
-        // Upload to Supabase Storage
         const arrayBuffer = await file.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
 
-        const ext = file.name.split(".").pop() || "bin";
+        const ext = (file.name.split(".").pop() || "bin").toLowerCase();
         const path = `resumes/${Date.now()}-${Math.random()
           .toString(36)
           .slice(2)}.${ext}`;
 
+        // Upload to Supabase Storage
         const { error: uploadError } = await supabase.storage
           .from("resumes") // 👈 make sure this bucket exists
           .upload(path, buffer, {
@@ -85,8 +88,20 @@ export async function POST(req: NextRequest) {
           resumeUrl = publicData.publicUrl;
         }
 
-        // For .txt, this gives clean text; PDFs will be messy but still usable for now
-        resumeText = await file.text();
+        // ---- Text extraction for AI prompt ----
+        const isDocx =
+          file.type ===
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+          ext === "docx";
+
+        if (isDocx) {
+          // DOCX → clean text using mammoth
+          const { value } = await mammoth.extractRawText({ buffer });
+          resumeText = value || "";
+        } else {
+          // For .txt, this gives clean text; PDFs will be messy but still usable for now
+          resumeText = await file.text();
+        }
       } catch (err) {
         console.warn("[ai-resume-match] failed to upload/read file:", err);
       }
@@ -173,7 +188,7 @@ ${candidateProfile}
       suggestedNextStep:
         parsed.suggestedNextStep ||
         "No suggested next step was returned by the model.",
-      resumeUrl, // 👈 now wired to Supabase
+      resumeUrl, // 👈 Supabase URL if upload succeeded
     };
 
     return NextResponse.json(result);
