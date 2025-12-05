@@ -82,6 +82,7 @@
     "@tailwindcss/postcss": "^4.1.16",
     "@types/jest": "^30.0.0",
     "@types/node": "^20.19.25",
+    "@types/pdf-parse": "^1.1.5",
     "@types/react": "^19.2.3",
     "@types/react-dom": "^19.2.2",
     "autoprefixer": "^10.4.21",

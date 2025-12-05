@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
+import * as pdfParse from "pdf-parse";
 import mammoth from "mammoth";
 
 const apiKey = process.env.OPENAI_API_KEY;
@@ -22,6 +23,59 @@ type AiMatchResult = {
   suggestedNextStep: string;
   resumeUrl?: string | null;
 };
+
+// --- helper: robust text extraction for PDF/DOCX/TXT ------------------------
+
+async function extractResumeText(file: File): Promise<string> {
+  const arrayBuffer = await file.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  const ext = (file.name.split(".").pop() || "").toLowerCase();
+  const mime = file.type;
+
+  // PDF
+  if (mime === "application/pdf" || ext === "pdf") {
+    try {
+      // pdf-parse is CommonJS; support both .default and function export
+      const parser =
+        (pdfParse as any).default || (pdfParse as any);
+      const data = await parser(buffer);
+      return (data && (data as any).text) || "";
+    } catch (err) {
+      console.warn(
+        "[ai-resume-match] pdf-parse failed, falling back to utf8:",
+        err,
+      );
+      return buffer.toString("utf8");
+    }
+  }
+
+  // DOCX
+  if (
+    mime ===
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    ext === "docx"
+  ) {
+    try {
+      const result = await mammoth.extractRawText({ buffer });
+      return result.value || "";
+    } catch (err) {
+      console.warn(
+        "[ai-resume-match] mammoth failed, falling back to utf8:",
+        err,
+      );
+      return buffer.toString("utf8");
+    }
+  }
+
+  // Plain text or unknown: best-effort UTF-8
+  try {
+    return buffer.toString("utf8");
+  } catch {
+    return "";
+  }
+}
+
+// ---------------------------------------------------------------------------
 
 export async function POST(req: NextRequest) {
   if (!openai) {
@@ -65,21 +119,23 @@ export async function POST(req: NextRequest) {
         const arrayBuffer = await file.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
 
-        const ext = (file.name.split(".").pop() || "bin").toLowerCase();
+        const ext = file.name.split(".").pop() || "bin";
         const path = `resumes/${Date.now()}-${Math.random()
           .toString(36)
           .slice(2)}.${ext}`;
 
-        // Upload to Supabase Storage
         const { error: uploadError } = await supabase.storage
-          .from("resumes") // 👈 make sure this bucket exists
+          .from("resumes") // make sure this bucket exists
           .upload(path, buffer, {
             contentType: file.type || "application/octet-stream",
             upsert: false,
           });
 
         if (uploadError) {
-          console.error("[ai-resume-match] Supabase upload error:", uploadError);
+          console.error(
+            "[ai-resume-match] Supabase upload error:",
+            uploadError,
+          );
         } else {
           const { data: publicData } = supabase.storage
             .from("resumes")
@@ -88,22 +144,13 @@ export async function POST(req: NextRequest) {
           resumeUrl = publicData.publicUrl;
         }
 
-        // ---- Text extraction for AI prompt ----
-        const isDocx =
-          file.type ===
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-          ext === "docx";
-
-        if (isDocx) {
-          // DOCX → clean text using mammoth
-          const { value } = await mammoth.extractRawText({ buffer });
-          resumeText = value || "";
-        } else {
-          // For .txt, this gives clean text; PDFs will be messy but still usable for now
-          resumeText = await file.text();
-        }
+        // 🎯 Robust parsing for pdf/docx/txt
+        resumeText = await extractResumeText(file);
       } catch (err) {
-        console.warn("[ai-resume-match] failed to upload/read file:", err);
+        console.warn(
+          "[ai-resume-match] failed to upload/read file:",
+          err,
+        );
       }
     }
 
@@ -188,7 +235,7 @@ ${candidateProfile}
       suggestedNextStep:
         parsed.suggestedNextStep ||
         "No suggested next step was returned by the model.",
-      resumeUrl, // 👈 Supabase URL if upload succeeded
+      resumeUrl,
     };
 
     return NextResponse.json(result);
