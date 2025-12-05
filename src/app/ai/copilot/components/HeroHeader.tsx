@@ -18,7 +18,7 @@ export function HeroHeader() {
 
           {/* Title */}
           <h1 className="text-slate-50 mb-3 text-[22px]">
-            AI Workspace Copilot
+            AI Workspace
           </h1>
 
           {/* Subtitle */}

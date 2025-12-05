@@ -21,7 +21,7 @@ export function WorkspaceHeader({ onSuggestionClick }: WorkspaceHeaderProps) {
             <Sparkles className="w-6 h-6 text-indigo-400" />
           </div>
           <div className="flex-1">
-            <h1 className="text-slate-50 mb-1">AI Workspace Copilot</h1>
+            <h1 className="text-slate-50 mb-1">AI Workspace </h1>
             <p className="text-slate-400">
               Ask anything about your people, jobs, time, or organization.
             </p>

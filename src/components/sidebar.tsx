@@ -165,9 +165,9 @@ export function Sidebar({
             <NavItem icon={FolderOpen} label="Documents" href="/employee-documents" isCollapsed={isCollapsed} />
             <NavItem icon={Zap} label="Obsession" href="/obsession" isCollapsed={isCollapsed} />
 
-            {/* ⭐ SPECIAL AI COPILOT ITEM */}
+            {/* ⭐ SPECIAL AI WORKSPACE ITEM */}
             <a
-              href="/ai/copilot"
+              href="/ai/workspace"
               className={cn(
                 "relative flex items-center gap-3 rounded-xl px-3 py-2.5 group transition-all duration-300",
                 isCollapsed ? "justify-center" : "justify-start"
@@ -201,7 +201,7 @@ export function Sidebar({
                     "tracking-wide"
                   )}
                 >
-                  AI Copilot
+                  AI Workspace
                 </span>
               )}
             </a>

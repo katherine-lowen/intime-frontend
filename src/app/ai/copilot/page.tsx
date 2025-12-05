@@ -10,13 +10,21 @@ import { WorkforceSummaryCard } from "./components/cards/WorkforceSummaryCard";
 import { PTOInsightsCard } from "./components/cards/PTOInsightsCard";
 import { CandidateComparisonCard } from "./components/cards/CandidateComparisonCard";
 
-type CopilotComponent = "workforce" | "pto" | "candidate" | "job" | "plan";
+/** 
+ * Components your AI Workspace can choose to render 
+ */
+export type AIWorkspaceComponent =
+  | "workforce"
+  | "pto"
+  | "candidate"
+  | "job"
+  | "plan";
 
 interface Message {
   id: string;
   type: "user" | "ai";
   content: string;
-  component?: CopilotComponent;
+  component?: AIWorkspaceComponent;
 }
 
 // 🔧 Org context (can later be dynamic)
@@ -29,13 +37,13 @@ const ORG_CONTEXT = {
   industry: "B2B SaaS",
 };
 
-export default function CopilotPage() {
+export default function AIWorkspacePage() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
       type: "ai",
       content:
-        "Hello! I'm your **AI Workspace Copilot**. I can help you analyze your workforce, evaluate candidates, draft job descriptions, track PTO, and generate strategic plans.\n\nWhat would you like to explore today?",
+        "Hello! I'm your **AI Workspace**. I can help you analyze your workforce, evaluate candidates, draft job descriptions, track PTO, and generate strategic plans.\n\nWhat would you like to explore today?",
     },
   ]);
 
@@ -43,7 +51,7 @@ export default function CopilotPage() {
   const [isLoading, setIsLoading] = useState(false);
 
   // Render AI component cards below messages
-  const renderMessageComponent = (component?: CopilotComponent) => {
+  const renderMessageComponent = (component?: AIWorkspaceComponent) => {
     switch (component) {
       case "workforce":
         return <WorkforceSummaryCard />;
@@ -73,7 +81,7 @@ export default function CopilotPage() {
     setIsLoading(true);
 
     try {
-      const res = await fetch("/api/ai/copilot", {
+      const res = await fetch("/api/ai/workspace", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -82,11 +90,11 @@ export default function CopilotPage() {
         }),
       });
 
-      if (!res.ok) throw new Error("AI Copilot request failed");
+      if (!res.ok) throw new Error("AI Workspace request failed");
 
       const data: {
         reply: string;
-        component?: CopilotComponent;
+        component?: AIWorkspaceComponent;
       } = await res.json();
 
       const aiMessage: Message = {
@@ -98,7 +106,7 @@ export default function CopilotPage() {
 
       setMessages((prev) => [...prev, aiMessage]);
     } catch (err) {
-      console.error("[Copilot] error", err);
+      console.error("[Workspace] error", err);
       setMessages((prev) => [
         ...prev,
         {
@@ -136,7 +144,7 @@ export default function CopilotPage() {
 
           {isLoading && (
             <AIMessageCard content="Thinking about your workspace…">
-              {/* add shimmer loaders here if desired */}
+              {/* shimmer loaders */}
             </AIMessageCard>
           )}
         </div>

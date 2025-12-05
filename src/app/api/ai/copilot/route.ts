@@ -4,9 +4,9 @@ import OpenAI from "openai";
 const apiKey = process.env.OPENAI_API_KEY;
 const openai = apiKey ? new OpenAI({ apiKey }) : null;
 
-// System prompt defines how the Copilot behaves inside Intime
+// System prompt defines how the AI Workspace behaves inside Intime
 const SYSTEM_PROMPT = `
-You are Intime's AI Workspace Copilot — an AI assistant embedded in an HRIS + ATS.
+You are Intime's AI Workspace — an AI assistant embedded in an HRIS + ATS.
 Your job is to help users with:
 
 - Workforce summaries
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
       component: parsed.component ?? null,
     });
   } catch (err) {
-    console.error("[AI COPILOT ERROR]", err);
+    console.error("[AI WORKSPACE ERROR]", err);
     return NextResponse.json(
       {
         reply:
