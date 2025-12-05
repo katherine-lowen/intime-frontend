@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { Header } from "./components/Header";
 import { TabBar } from "./components/TabBar";
-import  PipelineTab  from "./components/PipelineTab";
+import { PipelineTab } from "./components/PipelineTab";
 import { ListViewTab } from "./components/ListViewTab";
 import { AIInsightsTab } from "./components/AIInsightsTab";
 import { JobDetailsTab } from "./components/JobDetailsTab";

@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { AuthGate } from "@/components/dev-auth-gate";
 import JobAtsClient from "./JobsAtsClient";
+import { PipelineTab } from "./components/PipelineTab";
+
 
 type JobStatus = "OPEN" | "CLOSED" | "DRAFT" | "PAUSED";
 
