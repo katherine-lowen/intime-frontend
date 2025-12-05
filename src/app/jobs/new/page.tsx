@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState, FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AuthGate } from "@/components/dev-auth-gate";
 import { logSubmission } from "@/lib/submissions";
 import {
@@ -45,6 +45,7 @@ type CreateJobPayload = {
 
 export default function NewJobPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [templates, setTemplates] = useState<ApplicationTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(true);
@@ -62,6 +63,10 @@ export default function NewJobPage() {
   const [compMax, setCompMax] = useState<string>("");
   const [compCurrency, setCompCurrency] = useState<string>("USD");
   const [compNotes, setCompNotes] = useState<string>("");
+
+  const [compAILoading, setCompAILoading] = useState(false);
+  const [compAIError, setCompAIError] = useState<string | null>(null);
+  const [compAIRationale, setCompAIRationale] = useState<string | null>(null);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -126,17 +131,100 @@ export default function NewJobPage() {
     };
   }, []);
 
+  // 🔹 If we arrive from the AI JD tool, prefill from localStorage draft
+  useEffect(() => {
+    const source = searchParams?.get("source");
+    if (source !== "ai-jd") return;
+    if (typeof window === "undefined") return;
+
+    try {
+      const raw = window.localStorage.getItem("intime_ai_jd_draft");
+      if (!raw) return;
+
+      const draft = JSON.parse(raw) as {
+        title?: string;
+        description?: string;
+        department?: string;
+        seniority?: string;
+        location?: string;
+      };
+
+      if (draft.title) {
+        setTitle((prev) => prev || draft.title || "");
+      }
+      if (draft.department) {
+        setDepartment((prev) => prev || draft.department || "");
+      }
+      if (draft.location) {
+        setLocation((prev) => prev || draft.location || "");
+      }
+      if (draft.description) {
+        setDescription((prev) => prev || draft.description || "");
+      }
+
+      window.localStorage.removeItem("intime_ai_jd_draft");
+    } catch (err) {
+      console.error("Failed to load AI JD draft", err);
+    }
+  }, [searchParams]);
+
   const isFormValid = title.trim().length > 0;
 
   const compensationPreview = (() => {
     if (!compMin && !compMax) return null;
     const min = compMin ? `$${Number(compMin).toLocaleString()}` : "";
     const max = compMax ? `$${Number(compMax).toLocaleString()}` : "";
-    if (min && max) return `${min}–${max}`;
-    if (min) return `${min}+`;
-    if (max) return `Up to ${max}`;
+    if (min && max) return `${min}–${max} ${compCurrency}`;
+    if (min) return `${min}+ ${compCurrency}`;
+    if (max) return `Up to ${max} ${compCurrency}`;
     return null;
   })();
+
+  async function handleAICompensation() {
+    if (!title && !description) {
+      setCompAIError("Add a role title or description first.");
+      return;
+    }
+
+    setCompAILoading(true);
+    setCompAIError(null);
+    setCompAIRationale(null);
+
+    try {
+      const res = await fetch("/api/ai/compensation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          location,
+          department,
+          description,
+        }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`HTTP ${res.status} – ${text}`);
+      }
+
+      const data = (await res.json()) as {
+        min?: number;
+        max?: number;
+        currency?: string;
+        rationale?: string;
+      };
+
+      if (data.min != null) setCompMin(String(Math.round(data.min)));
+      if (data.max != null) setCompMax(String(Math.round(data.max)));
+      if (data.currency) setCompCurrency(data.currency.toUpperCase());
+      if (data.rationale) setCompAIRationale(data.rationale);
+    } catch (e: any) {
+      console.error("AI compensation error", e);
+      setCompAIError(e?.message || "Failed to fetch AI range.");
+    } finally {
+      setCompAILoading(false);
+    }
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -159,7 +247,6 @@ export default function NewJobPage() {
       compensationNotes: compNotes.trim() || null,
     };
 
-    // 🔹 Log the attempt to Supabase
     await logSubmission({
       action: "create_job",
       payload,
@@ -184,14 +271,12 @@ export default function NewJobPage() {
       const job = await res.json();
       console.log("Created job response:", job);
 
-      // 🔹 Log success
       await logSubmission({
         action: "create_job",
         payload,
         status: "SUCCESS",
       });
 
-      // ❗ SAFEST: always go back to jobs list, don't rely on job.id
       router.push("/jobs");
     } catch (e: any) {
       console.error("Failed to create job", e);
@@ -224,7 +309,8 @@ export default function NewJobPage() {
                 Create a new job requisition
               </h1>
               <p className="max-w-2xl text-sm text-slate-600">
-                Define the essentials now — refine details and publish when ready.
+                Define the essentials now — refine details and publish when
+                ready.
               </p>
             </div>
             <button
@@ -393,28 +479,40 @@ export default function NewJobPage() {
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                 />
                 <p className="text-[11px] text-slate-400">
-                  You can refine this later before publishing to your careers page.
+                  You can refine this later before publishing to your careers
+                  page.
                 </p>
               </div>
             </section>
 
             {/* Compensation */}
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="mb-4 flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
-                  <DollarSign className="h-4 w-4" />
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                    <DollarSign className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-semibold text-slate-900">
+                      Compensation
+                      <span className="ml-2 text-[11px] font-normal uppercase tracking-wide text-slate-400">
+                        Optional
+                      </span>
+                    </h2>
+                    <p className="text-xs text-slate-500">
+                      Internal-only unless you publish it to your job board.
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-sm font-semibold text-slate-900">
-                    Compensation
-                    <span className="ml-2 text-[11px] font-normal uppercase tracking-wide text-slate-400">
-                      Optional
-                    </span>
-                  </h2>
-                  <p className="text-xs text-slate-500">
-                    Internal-only unless you publish it to your job board.
-                  </p>
-                </div>
+
+                <button
+                  type="button"
+                  onClick={handleAICompensation}
+                  disabled={compAILoading}
+                  className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {compAILoading ? "Asking AI…" : "Use AI market range"}
+                </button>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-3">
@@ -464,6 +562,21 @@ export default function NewJobPage() {
                 </div>
               )}
 
+              {compAIRationale && (
+                <p className="mt-2 text-[11px] text-slate-500">
+                  <span className="font-medium text-slate-700">
+                    AI rationale:
+                  </span>{" "}
+                  {compAIRationale}
+                </p>
+              )}
+
+              {compAIError && (
+                <p className="mt-2 text-[11px] text-rose-600">
+                  {compAIError}
+                </p>
+              )}
+
               <div className="mt-4 space-y-1">
                 <label className="text-xs font-medium text-slate-700">
                   Additional notes
@@ -495,12 +608,16 @@ export default function NewJobPage() {
                     Application template
                   </span>
                   {templatesLoading && (
-                    <span className="text-slate-500">Loading templates…</span>
+                    <span className="text-slate-500">
+                      Loading templates…
+                    </span>
                   )}
                 </div>
 
                 {templatesError && (
-                  <p className="text-[11px] text-amber-600">{templatesError}</p>
+                  <p className="text-[11px] text-amber-600">
+                    {templatesError}
+                  </p>
                 )}
 
                 {templates.length === 0 && !templatesLoading ? (
@@ -515,7 +632,9 @@ export default function NewJobPage() {
                       onChange={(e) => setTemplateId(e.target.value)}
                       className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                     >
-                      <option value="">No template — basic fields only</option>
+                      <option value="">
+                        No template — basic fields only
+                      </option>
                       {templates.map((t) => (
                         <option key={t.id} value={t.id}>
                           {t.name}
@@ -523,7 +642,8 @@ export default function NewJobPage() {
                       ))}
                     </select>
                     <p className="text-[11px] text-slate-400">
-                      Templates add structured questions to your application form.
+                      Templates add structured questions to your application
+                      form.
                     </p>
                     {templateId && (
                       <p className="text-[11px] text-slate-500">
@@ -603,7 +723,6 @@ export default function NewJobPage() {
                 type="submit"
                 form="" // uses the nearest form ancestor
                 onClick={(e) => {
-                  // ensure the nearest form submits
                   const form = (e.currentTarget.closest("form") ??
                     document.querySelector("form")) as HTMLFormElement | null;
                   if (form) {
