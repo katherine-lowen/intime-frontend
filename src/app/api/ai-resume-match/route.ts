@@ -1,197 +1,154 @@
 // src/app/api/ai-resume-match/route.ts
-import { NextResponse, type NextRequest } from "next/server";
-import { Buffer } from "node:buffer";
+import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
-import { createSupabaseServerClient } from "@/lib/supabase-server";
-import type { SupabaseClient } from "@supabase/supabase-js";
-
-export const runtime = "nodejs"; // needed for Buffer + pdf parsing
 
 const apiKey = process.env.OPENAI_API_KEY;
 const openai = apiKey ? new OpenAI({ apiKey }) : null;
 
-async function extractPdfText(buffer: Buffer): Promise<string> {
-  // dynamic import avoids TS + CJS default-export issues
-  const pdfModule = await import("pdf-parse");
-  const pdf: any = (pdfModule as any).default || pdfModule;
-  const parsed = await pdf(buffer);
-  return parsed.text || "";
-}
-
-async function uploadToSupabase(
-  supabase: SupabaseClient,
-  file: File,
-): Promise<{ url: string | null; buffer: Buffer | null }> {
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-
-  const ext = file.name.split(".").pop()?.toLowerCase() || "bin";
-  const path = `uploads/${Date.now()}-${file.name}`;
-
-  const { error } = await supabase.storage
-    .from("resumes")
-    .upload(path, buffer, {
-      contentType: file.type || "application/octet-stream",
-      upsert: false,
-    });
-
-  if (error) {
-    console.error("[ai-resume-match] Supabase upload error:", error);
-    return { url: null, buffer: null };
-  }
-
-  const { data } = supabase.storage.from("resumes").getPublicUrl(path);
-  return { url: data.publicUrl, buffer: ext === "pdf" ? buffer : null };
-}
+type AiMatchResult = {
+  matchScore: number;
+  summary: string;
+  topStrengths: string[];
+  risksOrGaps: string[];
+  suggestedNextStep: string;
+  resumeUrl?: string | null;
+};
 
 export async function POST(req: NextRequest) {
   if (!openai) {
     return NextResponse.json(
-      { error: "Missing OPENAI_API_KEY in environment" },
+      { error: "Missing OPENAI_API_KEY" },
       { status: 500 },
     );
   }
 
-  // Expect multipart/form-data so we can support file upload
-  let form: FormData;
   try {
-    form = await req.formData();
-  } catch {
-    return NextResponse.json(
-      { error: "Expected multipart/form-data" },
-      { status: 400 },
-    );
-  }
+    const formData = await req.formData();
 
-  const jobDescription = form.get("jobDescription") as string | null;
-  const notes = form.get("candidateNotes") as string | null;
-  const file = form.get("file") as File | null;
+    const jobDescription =
+      (formData.get("jobDescription") as string | null) ?? "";
+    const candidateNotes =
+      (formData.get("candidateNotes") as string | null) ?? "";
+    const file = formData.get("file") as File | null;
 
-  if (!jobDescription) {
-    return NextResponse.json(
-      { error: "Missing jobDescription" },
-      { status: 400 },
-    );
-  }
-
-  if (!notes && !file) {
-    return NextResponse.json(
-      {
-        error:
-          "Provide either candidateNotes text or upload a resume file.",
-      },
-      { status: 400 },
-    );
-  }
-
-  const supabase = createSupabaseServerClient();
-
-  let uploadedUrl: string | null = null;
-  let extractedText = "";
-
-  if (file) {
-    try {
-      const { url, buffer } = await uploadToSupabase(supabase, file);
-      uploadedUrl = url;
-
-      if (buffer) {
-        // PDF → text
-        extractedText = await extractPdfText(buffer);
-      } else if (file.type.startsWith("text/")) {
-        // Plain text resume
-        const ab = await file.arrayBuffer();
-        extractedText = Buffer.from(ab).toString("utf8");
-      }
-    } catch (err) {
-      console.error("[ai-resume-match] failed to handle file:", err);
-    }
-  }
-
-  const candidateNotes = notes || extractedText;
-
-  const prompt = `
-You are a senior B2B SaaS hiring manager and revenue-focused recruiter.
-
-You will receive:
-- A job description
-- Candidate notes or a resume-style summary (auto-extracted if a PDF was uploaded)
-
-Your task:
-1. Evaluate how well this candidate fits the role.
-2. Focus on skills, scope of experience, stage of company, domain fit, and leadership/ownership.
-3. Be pragmatic. Don't be fluffy.
-
-Return ONLY valid JSON with this exact shape:
-
-{
-  "matchScore": 0-100,
-  "summary": "one short paragraph explaining the match",
-  "topStrengths": ["bullet", "bullet", "bullet"],
-  "risksOrGaps": ["bullet", "bullet"],
-  "suggestedNextStep": "clear recommendation like 'move to onsite', 'keep as backup', etc."
-}
-
-Job Description:
-${jobDescription}
-
-Candidate Notes:
-${candidateNotes || "(no visible notes or text extracted from resume)"}
-`.trim();
-
-  try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      response_format: { type: "json_object" },
-      temperature: 0.3,
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a precise, no-BS hiring manager. You always respond with a single valid JSON object as instructed.",
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
+    // Debug: see what we actually got from the front end
+    console.log("[ai-resume-match] fields:", {
+      jobDescriptionLength: jobDescription.length,
+      candidateNotesLength: candidateNotes.length,
+      hasFile: !!file,
+      fileName: file?.name,
+      fileType: file?.type,
+      fileSize: file?.size,
     });
 
-    const content = completion.choices[0]?.message?.content ?? "{}";
-
-    let parsed: any;
-    try {
-      parsed = JSON.parse(content);
-    } catch (e) {
-      console.error("[ai-resume-match] failed to parse JSON:", content);
+    if (!jobDescription.trim()) {
       return NextResponse.json(
-        { error: "Failed to parse AI response" },
-        { status: 500 },
+        { error: "jobDescription is required" },
+        { status: 400 },
       );
     }
 
-    return NextResponse.json(
-      {
-        matchScore:
-          typeof parsed.matchScore === "number" ? parsed.matchScore : 0,
-        summary: typeof parsed.summary === "string" ? parsed.summary : "",
-        topStrengths: Array.isArray(parsed.topStrengths)
-          ? parsed.topStrengths
-          : [],
-        risksOrGaps: Array.isArray(parsed.risksOrGaps)
-          ? parsed.risksOrGaps
-          : [],
+    // Read resume text (works for .txt; PDFs will need a proper parser later)
+    let resumeText = "";
+    if (file && file.size > 0) {
+      try {
+        // For .txt this will be clean; for PDFs this will likely be messy binary
+        resumeText = await file.text();
+      } catch (err) {
+        console.warn("[ai-resume-match] failed to read file text:", err);
+      }
+    }
+
+    const candidateProfile = [candidateNotes, resumeText]
+      .map((s) => s?.trim())
+      .filter(Boolean)
+      .join("\n\n");
+
+    // If we truly have no candidate info, still return something sensible
+    if (!candidateProfile) {
+      const fallback: AiMatchResult = {
+        matchScore: 0,
+        summary:
+          "There is no candidate information available to evaluate fit for this role.",
+        topStrengths: [],
+        risksOrGaps: [
+          "No resume, notes, or candidate profile information was provided.",
+        ],
         suggestedNextStep:
-          typeof parsed.suggestedNextStep === "string"
-            ? parsed.suggestedNextStep
-            : "",
-        resumeUrl: uploadedUrl,
-      },
-      { status: 200 },
-    );
-  } catch (err) {
-    console.error("AI resume match error", err);
+          "Collect the candidate's resume or notes and re-run the AI resume match.",
+        resumeUrl: null,
+      };
+      return NextResponse.json(fallback);
+    }
+
+    const systemPrompt = `
+You are an AI recruiting assistant. Given a job description and a candidate profile (resume text + recruiter notes), you must:
+
+- Estimate a match score between 0 and 100
+- Summarize overall fit in 3–6 sentences
+- List 3–6 top strengths, specific and role-relevant
+- List 3–6 risks or gaps, specific and actionable
+- Suggest one clear next step
+
+Return ONLY valid JSON with the shape:
+{
+  "matchScore": number,
+  "summary": string,
+  "topStrengths": string[],
+  "risksOrGaps": string[],
+  "suggestedNextStep": string
+}
+`;
+
+    const userPrompt = `
+JOB DESCRIPTION:
+${jobDescription}
+
+---
+
+CANDIDATE PROFILE (RESUME + NOTES):
+${candidateProfile}
+`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4.1-mini",
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: systemPrompt.trim() },
+        { role: "user", content: userPrompt.trim() },
+      ],
+      temperature: 0.2,
+    });
+
+    const raw = completion.choices[0]?.message?.content ?? "{}";
+    let parsed: Partial<AiMatchResult> = {};
+    try {
+      parsed = JSON.parse(raw);
+    } catch (err) {
+      console.error("[ai-resume-match] JSON parse error:", err, raw);
+    }
+
+    const result: AiMatchResult = {
+      matchScore:
+        typeof parsed.matchScore === "number" ? parsed.matchScore : 0,
+      summary: parsed.summary || "No summary was returned by the model.",
+      topStrengths: Array.isArray(parsed.topStrengths)
+        ? parsed.topStrengths
+        : [],
+      risksOrGaps: Array.isArray(parsed.risksOrGaps)
+        ? parsed.risksOrGaps
+        : [],
+      suggestedNextStep:
+        parsed.suggestedNextStep ||
+        "No suggested next step was returned by the model.",
+      resumeUrl: null, // plug in Supabase URL here later if you want
+    };
+
+    return NextResponse.json(result);
+  } catch (err: any) {
+    console.error("[ai-resume-match] unexpected error:", err);
     return NextResponse.json(
-      { error: "Failed to generate resume match" },
+      { error: err?.message || "Unexpected error" },
       { status: 500 },
     );
   }
