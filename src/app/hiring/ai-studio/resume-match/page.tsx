@@ -1,7 +1,7 @@
 // src/app/hiring/ai-studio/resume-match/page.tsx
 "use client";
 
-import React, { FormEvent, useState } from "react";
+import React, { FormEvent, useEffect, useState } from "react";
 import { AuthGate } from "@/components/dev-auth-gate";
 
 type MatchResult = {
@@ -13,20 +13,35 @@ type MatchResult = {
   resumeUrl?: string | null;
 };
 
+type JobOption = {
+  id: string;
+  title: string;
+  location?: string | null;
+  department?: string | null;
+};
+
 export default function AiResumeMatchPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<MatchResult | null>(null);
 
-  // For “choose current job” / JD prefill
+  // For “use current job”
   const [jobDescription, setJobDescription] = useState("");
   const [candidateNotes, setCandidateNotes] = useState("");
 
-  // Simple UX feedback for the “add to pipeline” button
+  // Pipeline modal state
+  const [showPipelineModal, setShowPipelineModal] = useState(false);
   const [pipelineStatus, setPipelineStatus] = useState<string | null>(null);
+  const [jobs, setJobs] = useState<JobOption[]>([]);
+  const [jobsLoading, setJobsLoading] = useState(false);
+  const [jobsError, setJobsError] = useState<string | null>(null);
+
+  const [selectedJobId, setSelectedJobId] = useState<string>("");
+  const [candidateName, setCandidateName] = useState("");
+  const [candidateEmail, setCandidateEmail] = useState("");
 
   function handleChooseCurrentJob() {
-    // TODO: replace this with actual current job from your ATS context
+    // TODO: replace this with real "current job" from your ATS context
     const mockJob =
       "Senior Full-Stack Engineer\n\nWe're seeking an experienced Full-Stack Engineer to join our growing team. You'll be responsible for building scalable web applications using React, Node.js, and PostgreSQL.\n\nRequirements:\n- 6+ years of full-stack development experience\n- Expert knowledge of React, Node.js, TypeScript\n- Experience with microservices architecture\n- Strong understanding of cloud infrastructure (AWS/GCP)\n- Experience with Kubernetes and container orchestration\n- Leadership experience managing small engineering teams\n- Excellent communication skills";
 
@@ -44,13 +59,12 @@ export default function AiResumeMatchPage() {
       const form = e.currentTarget;
       const fd = new FormData(form);
 
-      // Make sure our controlled values are what gets sent
       fd.set("jobDescription", jobDescription);
       fd.set("candidateNotes", candidateNotes);
 
       const res = await fetch("/api/ai-resume-match", {
         method: "POST",
-        body: fd, // multipart/form-data with file + fields
+        body: fd,
       });
 
       const data = await res.json();
@@ -65,7 +79,9 @@ export default function AiResumeMatchPage() {
         topStrengths: Array.isArray(data.topStrengths)
           ? data.topStrengths
           : [],
-        risksOrGaps: Array.isArray(data.risksOrGaps) ? data.risksOrGaps : [],
+        risksOrGaps: Array.isArray(data.risksOrGaps)
+          ? data.risksOrGaps
+          : [],
         suggestedNextStep: data.suggestedNextStep ?? "",
         resumeUrl: data.resumeUrl ?? null,
       });
@@ -77,9 +93,79 @@ export default function AiResumeMatchPage() {
     }
   }
 
-  function handleAddToPipeline() {
-    // TODO: wire this to your real “add candidate to pipeline” flow
-    setPipelineStatus("Candidate added to pipeline (stubbed).");
+  // Load open jobs when the pipeline modal first opens
+  useEffect(() => {
+    if (!showPipelineModal) return;
+    if (jobs.length > 0) return;
+
+    const loadJobs = async () => {
+      try {
+        setJobsLoading(true);
+        setJobsError(null);
+
+        const res = await fetch("/api/jobs/open");
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data?.error || `Failed to load jobs (${res.status})`);
+        }
+
+        setJobs(data.jobs || []);
+      } catch (err: any) {
+        console.error("[AI Resume Match] load jobs error:", err);
+        setJobsError(
+          err?.message || "Failed to load jobs. Please try again later.",
+        );
+      } finally {
+        setJobsLoading(false);
+      }
+    };
+
+    loadJobs();
+  }, [showPipelineModal, jobs.length]);
+
+  async function handleAddToPipelineConfirm() {
+    if (!result) return;
+    if (!selectedJobId || !candidateName) {
+      setPipelineStatus("Please select a job and enter a candidate name.");
+      return;
+    }
+
+    try {
+      setPipelineStatus("Sending candidate to pipeline…");
+
+      const res = await fetch("/api/ai-resume-match/add-to-pipeline", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          jobId: selectedJobId,
+          candidateName,
+          candidateEmail,
+          resumeUrl: result.resumeUrl ?? null,
+          matchScore: result.matchScore,
+          summary: result.summary,
+          strengths: result.topStrengths,
+          risks: result.risksOrGaps,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data?.error || `Pipeline request failed: ${res.status}`);
+      }
+
+      setPipelineStatus("Candidate added to pipeline.");
+      setShowPipelineModal(false);
+    } catch (err: any) {
+      console.error("[AI Resume Match] add to pipeline error:", err);
+      setPipelineStatus(
+        err?.message ||
+          "Failed to add candidate to pipeline. Please try again.",
+      );
+    }
   }
 
   return (
@@ -168,14 +254,14 @@ export default function AiResumeMatchPage() {
                   Upload resume file
                 </label>
                 <p className="text-xs text-slate-500">
-                  PDF or plain text works best. We&apos;ll upload it securely to
-                  Supabase and auto-extract the text for scoring.
+                  PDF, DOCX, or plain text works best. We&apos;ll upload it
+                  securely to Supabase and auto-extract the text for scoring.
                 </p>
                 <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-4">
                   <input
                     type="file"
                     name="file"
-                    accept=".pdf,.txt"
+                    accept=".pdf,.txt,.docx"
                     className="text-xs text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white hover:file:bg-slate-800"
                   />
                   <p className="text-[11px] text-slate-500">
@@ -305,7 +391,10 @@ export default function AiResumeMatchPage() {
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
               <button
                 type="button"
-                onClick={handleAddToPipeline}
+                onClick={() => {
+                  setShowPipelineModal(true);
+                  setPipelineStatus(null);
+                }}
                 className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
               >
                 Add candidate to pipeline
@@ -318,7 +407,135 @@ export default function AiResumeMatchPage() {
             </div>
           </section>
         )}
+
+        {showPipelineModal && (
+          <AddToPipelineModal
+            jobs={jobs}
+            jobsLoading={jobsLoading}
+            jobsError={jobsError}
+            selectedJobId={selectedJobId}
+            setSelectedJobId={setSelectedJobId}
+            candidateName={candidateName}
+            setCandidateName={setCandidateName}
+            candidateEmail={candidateEmail}
+            setCandidateEmail={setCandidateEmail}
+            onClose={() => setShowPipelineModal(false)}
+            onConfirm={handleAddToPipelineConfirm}
+          />
+        )}
       </main>
     </AuthGate>
+  );
+}
+
+type AddToPipelineModalProps = {
+  jobs: JobOption[];
+  jobsLoading: boolean;
+  jobsError: string | null;
+  selectedJobId: string;
+  setSelectedJobId: (v: string) => void;
+  candidateName: string;
+  setCandidateName: (v: string) => void;
+  candidateEmail: string;
+  setCandidateEmail: (v: string) => void;
+  onClose: () => void;
+  onConfirm: () => void;
+};
+
+function AddToPipelineModal({
+  jobs,
+  jobsLoading,
+  jobsError,
+  selectedJobId,
+  setSelectedJobId,
+  candidateName,
+  setCandidateName,
+  candidateEmail,
+  setCandidateEmail,
+  onClose,
+  onConfirm,
+}: AddToPipelineModalProps) {
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/30 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+        <h3 className="text-sm font-semibold text-slate-900">
+          Add candidate to pipeline
+        </h3>
+        <p className="mt-1 text-xs text-slate-500">
+          Choose a requisition and provide basic candidate info. Intime will
+          send this candidate into the ATS pipeline for that job.
+        </p>
+
+        <div className="mt-4 space-y-3">
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-slate-700">
+              Requisition
+            </label>
+            {jobsLoading ? (
+              <div className="text-xs text-slate-400">Loading jobs…</div>
+            ) : jobsError ? (
+              <div className="text-xs text-red-600">{jobsError}</div>
+            ) : (
+              <select
+                className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                value={selectedJobId}
+                onChange={(e) => setSelectedJobId(e.target.value)}
+              >
+                <option value="">Select a job…</option>
+                {jobs.map((job) => (
+                  <option key={job.id} value={job.id}>
+                    {job.title}
+                    {job.location ? ` • ${job.location}` : ""}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-slate-700">
+              Candidate name
+            </label>
+            <input
+              type="text"
+              className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              placeholder="e.g. Alex Johnson"
+              value={candidateName}
+              onChange={(e) => setCandidateName(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-slate-700">
+              Candidate email (optional)
+            </label>
+            <input
+              type="email"
+              className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-900 shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              placeholder="alex@example.com"
+              value={candidateEmail}
+              onChange={(e) => setCandidateEmail(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="rounded-full bg-indigo-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700"
+          >
+            Add to pipeline
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
