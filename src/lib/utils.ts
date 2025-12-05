@@ -1,4 +1,26 @@
 // src/lib/utils.ts
-export function cn(...xs: Array<string | false | undefined | null>) {
-  return xs.filter(Boolean).join(" ");
+
+type ClassValue =
+  | string
+  | null
+  | undefined
+  | false
+  | Record<string, boolean | null | undefined>;
+
+export function cn(...values: ClassValue[]) {
+  const classes: string[] = [];
+
+  for (const value of values) {
+    if (!value) continue;
+
+    if (typeof value === "string") {
+      classes.push(value);
+    } else if (typeof value === "object") {
+      for (const [key, condition] of Object.entries(value)) {
+        if (condition) classes.push(key);
+      }
+    }
+  }
+
+  return classes.join(" ");
 }
