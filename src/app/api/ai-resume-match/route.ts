@@ -1,9 +1,15 @@
 // src/app/api/ai-resume-match/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
+import { createClient } from "@supabase/supabase-js";
 
 const apiKey = process.env.OPENAI_API_KEY;
 const openai = apiKey ? new OpenAI({ apiKey }) : null;
+
+// Supabase server client
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 type AiMatchResult = {
   matchScore: number;
@@ -31,7 +37,6 @@ export async function POST(req: NextRequest) {
       (formData.get("candidateNotes") as string | null) ?? "";
     const file = formData.get("file") as File | null;
 
-    // Debug: see what we actually got from the front end
     console.log("[ai-resume-match] fields:", {
       jobDescriptionLength: jobDescription.length,
       candidateNotesLength: candidateNotes.length,
@@ -48,14 +53,42 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Read resume text (works for .txt; PDFs will need a proper parser later)
+    // ---- Supabase upload (if file present) ----
     let resumeText = "";
+    let resumeUrl: string | null = null;
+
     if (file && file.size > 0) {
       try {
-        // For .txt this will be clean; for PDFs this will likely be messy binary
+        // Upload to Supabase Storage
+        const arrayBuffer = await file.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+
+        const ext = file.name.split(".").pop() || "bin";
+        const path = `resumes/${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2)}.${ext}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("resumes") // 👈 make sure this bucket exists
+          .upload(path, buffer, {
+            contentType: file.type || "application/octet-stream",
+            upsert: false,
+          });
+
+        if (uploadError) {
+          console.error("[ai-resume-match] Supabase upload error:", uploadError);
+        } else {
+          const { data: publicData } = supabase.storage
+            .from("resumes")
+            .getPublicUrl(path);
+
+          resumeUrl = publicData.publicUrl;
+        }
+
+        // For .txt, this gives clean text; PDFs will be messy but still usable for now
         resumeText = await file.text();
       } catch (err) {
-        console.warn("[ai-resume-match] failed to read file text:", err);
+        console.warn("[ai-resume-match] failed to upload/read file:", err);
       }
     }
 
@@ -64,19 +97,18 @@ export async function POST(req: NextRequest) {
       .filter(Boolean)
       .join("\n\n");
 
-    // If we truly have no candidate info, still return something sensible
     if (!candidateProfile) {
       const fallback: AiMatchResult = {
         matchScore: 0,
         summary:
-          "There is no candidate information available to evaluate fit for this role.",
+          "There is no candidate information available to evaluate the candidate's fit for this role.",
         topStrengths: [],
         risksOrGaps: [
           "No resume, notes, or candidate profile information was provided.",
         ],
         suggestedNextStep:
           "Collect the candidate's resume or notes and re-run the AI resume match.",
-        resumeUrl: null,
+        resumeUrl,
       };
       return NextResponse.json(fallback);
     }
@@ -141,7 +173,7 @@ ${candidateProfile}
       suggestedNextStep:
         parsed.suggestedNextStep ||
         "No suggested next step was returned by the model.",
-      resumeUrl: null, // plug in Supabase URL here later if you want
+      resumeUrl, // 👈 now wired to Supabase
     };
 
     return NextResponse.json(result);
