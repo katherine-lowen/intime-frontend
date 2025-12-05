@@ -19,7 +19,7 @@ interface Message {
   component?: CopilotComponent;
 }
 
-// 🔧 company / org context – update these to pull from your real data later
+// 🔧 Org context (can later be dynamic)
 const ORG_CONTEXT = {
   orgId: process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org",
   orgName: "Intime demo workspace",
@@ -35,13 +35,14 @@ export default function CopilotPage() {
       id: "1",
       type: "ai",
       content:
-        "Hello! I'm your AI Workspace Copilot. I can help you analyze your workforce, evaluate candidates, draft job descriptions, track PTO, and generate strategic plans. What would you like to explore today?",
+        "Hello! I'm your **AI Workspace Copilot**. I can help you analyze your workforce, evaluate candidates, draft job descriptions, track PTO, and generate strategic plans.\n\nWhat would you like to explore today?",
     },
   ]);
 
   const [showChips, setShowChips] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Render AI component cards below messages
   const renderMessageComponent = (component?: CopilotComponent) => {
     switch (component) {
       case "workforce":
@@ -55,6 +56,7 @@ export default function CopilotPage() {
     }
   };
 
+  // Handle sending message to AI backend
   const handleSendMessage = async (content: string) => {
     if (!content.trim() || isLoading) return;
 
@@ -80,9 +82,7 @@ export default function CopilotPage() {
         }),
       });
 
-      if (!res.ok) {
-        throw new Error("Failed to call AI copilot API");
-      }
+      if (!res.ok) throw new Error("AI Copilot request failed");
 
       const data: {
         reply: string;
@@ -105,7 +105,7 @@ export default function CopilotPage() {
           id: (Date.now() + 1).toString(),
           type: "ai",
           content:
-            "I'm having trouble reaching the AI service right now. Please check your API key or try again in a moment.",
+            "⚠️ I couldn’t reach the AI service. Please check your API key or try again shortly.",
         },
       ]);
     } finally {
@@ -115,34 +115,34 @@ export default function CopilotPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#0a0a0f]">
-      {/* Hero Header */}
+      {/* Header */}
       <HeroHeader />
 
-      {/* Suggestion Chips */}
+      {/* Suggestion chips */}
       {showChips && <SuggestionChips onChipClick={handleSendMessage} />}
 
-      {/* Chat Canvas */}
+      {/* Chat area */}
       <div className="flex-1 vignette noise overflow-y-auto">
-        <div className="max-w-5xl mx-auto px-8 py-12 space-y-4">
-          {messages.map((message) =>
-            message.type === "user" ? (
-              <UserMessageBubble key={message.id} content={message.content} />
+        <div className="max-w-5xl mx-auto px-8 py-12 space-y-6">
+          {messages.map((msg) =>
+            msg.type === "user" ? (
+              <UserMessageBubble key={msg.id} content={msg.content} />
             ) : (
-              <AIMessageCard key={message.id} content={message.content}>
-                {renderMessageComponent(message.component)}
+              <AIMessageCard key={msg.id} content={msg.content}>
+                {renderMessageComponent(msg.component)}
               </AIMessageCard>
-            ),
+            )
           )}
 
           {isLoading && (
             <AIMessageCard content="Thinking about your workspace…">
-              {/* You can add a skeleton / loader shimmer here */}
+              {/* add shimmer loaders here if desired */}
             </AIMessageCard>
           )}
         </div>
       </div>
 
-      {/* Premium Input */}
+      {/* Input */}
       <PremiumInput onSend={handleSendMessage} />
     </div>
   );
