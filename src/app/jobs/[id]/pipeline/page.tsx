@@ -1,131 +1,172 @@
-// src/app/jobs/[id]/pipeline/page.tsx
+// src/app/jobs/[id]/components/PipelineTab.tsx
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import Link from "next/link";
 import api from "@/lib/api";
-import { PipelineTab } from "../components/PipelineTab";
 
-export const dynamic = "force-dynamic";
-
-type JobStatus = "OPEN" | "CLOSED" | "DRAFT" | "PAUSED";
-
-type Job = {
-  id: string;
-  title: string;
-  status?: JobStatus;
-  location?: string | null;
-  department?: string | null;
-  createdAt?: string;
-  description?: string | null;
+type PipelineTabProps = {
+  jobId: string;
 };
 
-export default function JobPipelinePage() {
-  const params = useParams<{ id: string }>();
-  const jobId = params?.id;
+type PipelineApplication = {
+  applicationId: string;
+  createdAt: string;
+  candidateId: string | null;
+  candidateName: string | null;
+  candidateEmail: string | null;
+  candidateStage: string | null;
+  matchScore: number | null;
+};
 
-  const [job, setJob] = useState<Job | null>(null);
+type PipelineStage = {
+  id: string;
+  name: string;
+  order: number;
+  applications: PipelineApplication[];
+};
+
+type PipelineResponse = {
+  jobId: string;
+  title: string;
+  stages: PipelineStage[];
+};
+
+export function PipelineTab({ jobId }: PipelineTabProps) {
+  const [data, setData] = useState<PipelineResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!jobId) {
-      setError("Missing job id from route params.");
-      setLoading(false);
-      return;
-    }
+    if (!jobId) return;
 
-    async function load() {
+    let cancelled = false;
+
+    async function loadPipeline() {
       setLoading(true);
       setError(null);
+
       try {
-        const jobRes = await api.get<Job>(`/jobs/${jobId}`);
-        setJob(jobRes ?? null);
+        // 🔹 Your `api` client returns the JSON directly (NOT axios response)
+        const pipeline = await api.get<PipelineResponse>(`/jobs/${jobId}/pipeline`);
+
+        if (!cancelled) {
+          setData(pipeline);
+        }
       } catch (err) {
-        console.error("[JobPipelinePage] error loading job:", err);
-        setError("Something went wrong loading this job.");
+        console.error("[PipelineTab] Pipeline load error:", err);
+        if (!cancelled) {
+          setError("Failed to load pipeline.");
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
-    load();
+    loadPipeline();
+
+    return () => {
+      cancelled = true;
+    };
   }, [jobId]);
 
-  const hasHardError = !!error || (!loading && !job);
+  // ---------- UI STATES ----------
+
+  if (loading) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500 shadow-sm">
+        Loading pipeline…
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+        {error}
+      </div>
+    );
+  }
+
+  if (!data || data.stages.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-500">
+        No pipeline stages found for this job.
+      </div>
+    );
+  }
+
+  // ---------- PIPELINE BOARD ----------
 
   return (
-    <div className="relative min-h-screen bg-slate-50">
-      <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-slate-50 via-white to-slate-50" />
-
-      <main className="mx-auto max-w-6xl px-6 py-6 space-y-6">
-        {/* HEADER */}
-        <section className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="mb-1 text-xs uppercase tracking-wide text-slate-500">
-              Hiring · Pipeline
-            </div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-              {job?.title || (loading ? "Loading job…" : "Job not found")}
-            </h1>
-            <p className="mt-1 text-sm text-slate-600">
-              Visual pipeline of candidates by stage for this role, including
-              candidates added via AI resume match.
-            </p>
-
-            {!loading && job && (
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                {job.department && (
-                  <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-700">
-                    {job.department}
-                  </span>
-                )}
-                {job.location && (
-                  <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-700">
-                    {job.location}
-                  </span>
-                )}
-                {job.status && (
-                  <span className="inline-flex items-center rounded-full bg-indigo-50 px-3 py-1 font-medium text-indigo-700">
-                    Status: {job.status}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href="/jobs"
-              className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+    <div className="overflow-x-auto pb-4">
+      <div className="flex min-w-full gap-4">
+        {data.stages
+          .slice()
+          .sort((a, b) => a.order - b.order)
+          .map((stage) => (
+            <div
+              key={stage.id}
+              className="flex w-72 flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-sm"
             >
-              ← Back to jobs
-            </Link>
-          </div>
-        </section>
+              {/* Stage Header */}
+              <div className="mb-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  {stage.name}
+                </div>
+                <div className="text-[11px] text-slate-400">
+                  {stage.applications.length}{" "}
+                  {stage.applications.length === 1 ? "candidate" : "candidates"}
+                </div>
+              </div>
 
-        {/* ERROR BANNER */}
-        {hasHardError && (
-          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            {error ?? "Job not found for this URL."}
-          </div>
-        )}
+              {/* Applications List */}
+              <div className="flex flex-col gap-2">
+                {stage.applications.length === 0 && (
+                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 py-4 text-center text-[11px] text-slate-400">
+                    No candidates here yet
+                  </div>
+                )}
 
-        {/* LOADING STATE */}
-        {loading && !hasHardError && (
-          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500 shadow-sm">
-            Loading pipeline…
-          </div>
-        )}
+                {stage.applications.map((app) => (
+                  <div
+                    key={app.applicationId}
+                    className="group rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm shadow-xs hover:shadow-md transition"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="font-medium text-slate-900">
+                          {app.candidateName || "Unnamed candidate"}
+                        </div>
+                        {app.candidateEmail && (
+                          <div className="text-xs text-slate-500">{app.candidateEmail}</div>
+                        )}
+                      </div>
 
-        {/* PIPELINE BOARD (new AI-aware version) */}
-        {!loading && !hasHardError && jobId && (
-          <section>
-            <PipelineTab jobId={jobId} />
-          </section>
-        )}
-      </main>
+                      {typeof app.matchScore === "number" && (
+                        <div className="rounded-full bg-indigo-50 px-2 py-1 text-[11px] font-semibold text-indigo-700">
+                          {Math.round(app.matchScore * 100)}%
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-2 flex items-center justify-between">
+                      {app.candidateStage && (
+                        <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-500">
+                          {app.candidateStage}
+                        </span>
+                      )}
+                      <span className="text-[10px] text-slate-400">
+                        {new Date(app.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+      </div>
     </div>
   );
 }
