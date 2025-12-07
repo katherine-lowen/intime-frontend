@@ -44,7 +44,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
 
     async function loadUser() {
       try {
-        // ✅ FIX: use dev-auth endpoint and normalize the shape
+        // ✅ Use dev-auth endpoint; api.get<T>() returns T | undefined in your setup
         const raw = await api.get<any>("/dev-auth/me");
 
         if (!raw) {
