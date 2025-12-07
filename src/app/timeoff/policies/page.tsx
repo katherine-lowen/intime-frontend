@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { AuthGate } from "@/components/dev-auth-gate";
+import { API_BASE_URL } from "@/lib/api";
 
 type TimeOffPolicyKind = "UNLIMITED" | "FIXED";
 
@@ -14,8 +15,6 @@ type TimeOffPolicy = {
   createdAt?: string;
 };
 
-const API_URL =
-  (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080").replace(/\/$/, "");
 const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
 
 function formatDate(value?: string) {
@@ -49,7 +48,7 @@ export default function TimeOffPoliciesPage() {
       setLoading(true);
       setLoadError(null);
 
-      const res = await fetch(`${API_URL}/timeoff/policies`, {
+      const res = await fetch(`${API_BASE_URL}/timeoff/policies`, {
         headers: {
           "x-org-id": ORG_ID,
         },
@@ -102,7 +101,7 @@ export default function TimeOffPoliciesPage() {
 
     setSaving(true);
     try {
-      const res = await fetch(`${API_URL}/timeoff/policies`, {
+      const res = await fetch(`${API_BASE_URL}/timeoff/policies`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

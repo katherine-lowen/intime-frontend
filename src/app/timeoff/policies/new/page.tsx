@@ -4,13 +4,10 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { AuthGate } from "@/components/dev-auth-gate";
+import { API_BASE_URL } from "@/lib/api";
 
 type TimeOffPolicyKind = "UNLIMITED" | "FIXED";
 
-const API = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3333").replace(
-  /\/$/,
-  ""
-);
 const ORG = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
 
 export default function NewTimeOffPolicyPage() {
@@ -49,7 +46,7 @@ export default function NewTimeOffPolicyPage() {
 
     setSaving(true);
     try {
-      const res = await fetch(`${API}/timeoff/policies`, {
+      const res = await fetch(`${API_BASE_URL}/timeoff/policies`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

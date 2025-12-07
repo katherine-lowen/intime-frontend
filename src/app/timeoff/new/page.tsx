@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AuthGate } from "@/components/dev-auth-gate";
+import { API_BASE_URL } from "@/lib/api";
 import { logSubmission } from "@/lib/submissions";
 
 type TimeOffType =
@@ -31,8 +32,6 @@ type PolicyOption = {
   annualAllowanceDays?: number | null;
 };
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
 
 export default function NewTimeOffRequestPage() {
@@ -59,10 +58,10 @@ export default function NewTimeOffRequestPage() {
         setOptionsError(null);
 
         const [employeesRes, policiesRes] = await Promise.all([
-          fetch(`${API_URL}/employees`, {
+          fetch(`${API_BASE_URL}/employees`, {
             headers: { "x-org-id": ORG_ID },
           }),
-          fetch(`${API_URL}/timeoff/policies`, {
+          fetch(`${API_BASE_URL}/timeoff/policies`, {
             headers: { "x-org-id": ORG_ID },
           }),
         ]);
@@ -130,7 +129,7 @@ export default function NewTimeOffRequestPage() {
     });
 
     try {
-      const res = await fetch(`${API_URL}/timeoff/requests`, {
+      const res = await fetch(`${API_BASE_URL}/timeoff/requests`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
