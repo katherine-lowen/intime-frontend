@@ -8,6 +8,7 @@ interface CourseCardProps {
   duration: string;
   learnerCount: number;
   completionRate: number;
+  onClick?: () => void;
 }
 
 export function CourseCard({
@@ -17,6 +18,7 @@ export function CourseCard({
   duration,
   learnerCount,
   completionRate,
+  onClick,
 }: CourseCardProps) {
   const difficultyConfig = {
     Beginner: 'bg-green-50 text-green-700 border-green-200',
@@ -25,7 +27,11 @@ export function CourseCard({
   };
 
   return (
-    <div className="bg-gradient-to-br from-slate-50 to-white rounded-xl border border-slate-200 p-5 hover:border-indigo-200 hover:shadow-md transition-all cursor-pointer group">
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full bg-gradient-to-br from-slate-50 to-white rounded-xl border border-slate-200 p-5 hover:border-indigo-200 hover:shadow-md transition-all cursor-pointer group text-left"
+    >
       <div className="flex items-start justify-between mb-3">
         <PlayCircle className="w-5 h-5 text-indigo-600 flex-shrink-0 group-hover:text-indigo-700 transition-colors" />
         <span
@@ -54,6 +60,6 @@ export function CourseCard({
           </div>
         </div>
       </div>
-    </div>
+    </button>
   );
 }
