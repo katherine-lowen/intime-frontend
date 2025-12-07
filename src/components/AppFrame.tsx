@@ -60,4 +60,3 @@ export function AppFrame({ children }: { children: ReactNode }) {
     </div>
   );
 }
-s
