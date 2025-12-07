@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { AuthGate } from "@/components/dev-auth-gate";
+import { API_BASE_URL } from "@/lib/api";
 import JobAtsClient from "./JobsAtsClient";
 import { PipelineTab } from "./components/PipelineTab";
 
@@ -39,8 +40,6 @@ type JobDataForUI = {
   boardStatus: string;
 };
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8080";
 const ORG_ID =
   process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
 
@@ -123,7 +122,7 @@ export default function JobDetailPage() {
 
     async function fetchJob() {
       try {
-        const url = `${API_URL}/jobs/${encodeURIComponent(safeJobId)}`;
+    const url = `${API_BASE_URL}/jobs/${encodeURIComponent(safeJobId)}`;
         const res = await fetch(url, {
           headers: {
             "x-org-id": ORG_ID,
@@ -193,11 +192,11 @@ export default function JobDetailPage() {
           <div className="mt-3 rounded-md bg-slate-900 text-slate-100 p-3 text-xs space-y-1">
             <div>rawParamId: {String(rawParamId)}</div>
             <div>jobId (normalized): {jobId || "(none)"}</div>
-            <div>API_URL: {API_URL}</div>
+            <div>API_URL: {API_BASE_URL}</div>
             <div>ORG_ID: {ORG_ID}</div>
             {jobId ? (
               <div>
-                fetch URL: {`${API_URL}/jobs/${encodeURIComponent(
+                fetch URL: {`${API_BASE_URL}/jobs/${encodeURIComponent(
                   jobId as string,
                 )}`}
               </div>

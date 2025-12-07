@@ -5,9 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { AuthGate } from "@/components/dev-auth-gate";
+import { API_BASE_URL } from "@/lib/api";
 
-const API_URL =
-  (process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8080").replace(/\/$/, "");
 const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
 
 type JobStatus = "OPEN" | "DRAFT" | "CLOSED" | "PAUSED";
@@ -77,7 +76,7 @@ export default function EditJobPage() {
       setErr(null);
       setLoading(true);
       try {
-        const res = await fetch(`${API_URL}/jobs/${id}`, {
+        const res = await fetch(`${API_BASE_URL}/jobs/${id}`, {
           headers: {
             "X-Org-Id": ORG_ID,
           },
@@ -124,7 +123,7 @@ export default function EditJobPage() {
       setTemplatesError(null);
 
       try {
-        const res = await fetch(`${API_URL}/application-templates`, {
+        const res = await fetch(`${API_BASE_URL}/application-templates`, {
           headers: {
             "X-Org-Id": ORG_ID,
           },
@@ -215,7 +214,7 @@ export default function EditJobPage() {
         body.applicationTemplateId = null;
       }
 
-      const res = await fetch(`${API_URL}/jobs/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/jobs/${id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",

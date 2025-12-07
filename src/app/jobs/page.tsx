@@ -1,10 +1,10 @@
 // src/app/jobs/page.tsx
 import Link from "next/link";
 import { AuthGate } from "@/components/dev-auth-gate";
+import { API_BASE_URL } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8080";
 const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "";
 
 type Job = {
@@ -35,7 +35,7 @@ async function getJobs(): Promise<{ jobs: Job[]; error?: string }> {
       headers["x-org-id"] = ORG_ID;
     }
 
-    const res = await fetch(`${API_URL}/jobs?limit=100`, {
+    const res = await fetch(`${API_BASE_URL}/jobs?limit=100`, {
       cache: "no-store",
       headers,
     });

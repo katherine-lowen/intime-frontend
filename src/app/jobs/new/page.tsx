@@ -4,6 +4,7 @@
 import { useEffect, useState, FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthGate } from "@/components/dev-auth-gate";
+import { API_BASE_URL } from "@/lib/api";
 import { logSubmission } from "@/lib/submissions";
 import {
   Briefcase,
@@ -17,7 +18,6 @@ import {
   FileText,
 } from "lucide-react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8080";
 const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID || "demo-org";
 
 type JobStatus = "OPEN" | "CLOSED" | "DRAFT" | "PAUSED";
@@ -80,7 +80,7 @@ export default function NewJobPage() {
       setTemplatesError(null);
 
       try {
-        const res = await fetch(`${API_URL}/application-templates`, {
+        const res = await fetch(`${API_BASE_URL}/application-templates`, {
           headers: {
             "X-Org-Id": ORG_ID,
           },
@@ -254,7 +254,7 @@ export default function NewJobPage() {
     });
 
     try {
-      const res = await fetch(`${API_URL}/jobs`, {
+      const res = await fetch(`${API_BASE_URL}/jobs`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

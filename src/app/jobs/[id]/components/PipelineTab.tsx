@@ -4,9 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Clock } from "lucide-react";
-
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8080";
+import { API_BASE_URL } from "@/lib/api";
 
 type PipelineApplication = {
   applicationId: string;
@@ -57,7 +55,7 @@ export function PipelineTab({ jobId }: { jobId: string }) {
       setError(null);
 
       try {
-        const res = await fetch(`${API_URL}/jobs/${jobId}/pipeline`);
+        const res = await fetch(`${API_BASE_URL}/jobs/${jobId}/pipeline`);
 
         if (!res.ok) {
           const text = await res.text();
