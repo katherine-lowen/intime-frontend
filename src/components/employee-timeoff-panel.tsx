@@ -63,9 +63,10 @@ function countDaysInYearRange(
 
   const msPerDay = 1000 * 60 * 60 * 24;
   // +1 to make it inclusive (Mon–Wed = 3 days)
-  return Math.floor(
-    (effectiveEnd.getTime() - effectiveStart.getTime()) / msPerDay,
-  ) + 1;
+  return (
+    Math.floor((effectiveEnd.getTime() - effectiveStart.getTime()) / msPerDay) +
+    1
+  );
 }
 
 export default function EmployeeTimeOffPanel({
@@ -88,10 +89,12 @@ export default function EmployeeTimeOffPanel({
         const data = await api.get<TimeOffRequest[]>(
           `/timeoff?employeeId=${employeeId}`,
         );
-        setRequests(data);
+        // normalize possible undefined → []
+        setRequests(data ?? []);
       } catch (err) {
         console.error(err);
         setError("Failed to load time off for this employee.");
+        setRequests([]);
       } finally {
         setLoading(false);
       }
@@ -102,19 +105,21 @@ export default function EmployeeTimeOffPanel({
         setLoadingPolicy(true);
         // We assume a single org-wide policy: just use the first one.
         const policies = await api.get<TimeOffPolicy[]>("/timeoff/policies");
-        setPolicy(policies[0] ?? null);
+        const normalized = policies ?? [];
+        setPolicy(normalized[0] ?? null);
       } catch (err) {
         console.error(err);
         // don't overwrite a more specific error if we already have one
         setError((prev) => prev ?? "Failed to load time off policy.");
+        setPolicy(null);
       } finally {
         setLoadingPolicy(false);
       }
     }
 
     if (employeeId) {
-      loadRequests();
-      loadPolicy();
+      void loadRequests();
+      void loadPolicy();
     }
   }, [employeeId]);
 
@@ -134,8 +139,7 @@ export default function EmployeeTimeOffPanel({
     )
     .reduce(
       (sum, r) =>
-        sum +
-        countDaysInYearRange(r.startDate, r.endDate, currentYear),
+        sum + countDaysInYearRange(r.startDate, r.endDate, currentYear),
       0,
     );
 
@@ -180,9 +184,7 @@ export default function EmployeeTimeOffPanel({
                   {approvedPtoThisYear} of {allowance} days
                 </span>{" "}
                 used in {currentYear}
-                {remaining != null && (
-                  <> • {remaining} days remaining</>
-                )}
+                {remaining != null && <> • {remaining} days remaining</>}
                 .
               </p>
             ) : (

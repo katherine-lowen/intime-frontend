@@ -42,7 +42,11 @@ export default function AddPersonForm({ onDone }: { onDone?: () => void }) {
       setLoadingTeams(true);
       try {
         const data = await api.get<Team[]>("/teams");
-        if (!cancelled) setTeams(data);
+
+        // Normalize: api.get<T>() returns T | undefined in your setup
+        const list: Team[] = Array.isArray(data) ? data : [];
+
+        if (!cancelled) setTeams(list);
       } catch (err) {
         console.error("Failed to load teams in AddPersonForm", err);
       } finally {
@@ -172,9 +176,7 @@ export default function AddPersonForm({ onDone }: { onDone?: () => void }) {
           <select
             className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
             value={status}
-            onChange={(e) =>
-              setStatus(e.target.value as EmployeeStatus)
-            }
+            onChange={(e) => setStatus(e.target.value as EmployeeStatus)}
           >
             {Object.entries(STATUS_LABELS).map(([value, label]) => (
               <option key={value} value={value}>

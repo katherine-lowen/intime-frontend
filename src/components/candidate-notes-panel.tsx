@@ -43,12 +43,16 @@ export default function CandidateNotesPanel({
     try {
       setSaveState("saving");
 
-      const newNote = await api.post<CandidateNote>(
+      const created = await api.post<CandidateNote>(
         `/candidates/${candidateId}/notes`,
         { text: trimmed }
       );
 
-      setNotes((prev) => [newNote, ...prev]);
+      if (!created) {
+        throw new Error("No note returned from API");
+      }
+
+      setNotes((prev) => [created, ...prev]);
       setText("");
       setSaveState("idle");
     } catch (err) {

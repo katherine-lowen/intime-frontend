@@ -27,8 +27,19 @@ type CandidateStatusResponse = {
   }[];
 };
 
-async function getCandidateStatus(publicId: string): Promise<CandidateStatusResponse> {
-  return api.get(`/careers/candidates/${publicId}`);
+async function getCandidateStatus(
+  publicId: string,
+): Promise<CandidateStatusResponse> {
+  const data = await api.get<CandidateStatusResponse>(
+    `/careers/candidates/${publicId}`,
+  );
+
+  // api.get can return undefined; guard so this function never does
+  if (!data) {
+    throw new Error("No candidate status returned for this link.");
+  }
+
+  return data;
 }
 
 function formatStage(stage: string) {
@@ -54,7 +65,8 @@ export default async function CandidateStatusPage({
     data = await getCandidateStatus(params.publicId);
   } catch (e) {
     console.error("Failed to load candidate status", e);
-    error = "We couldn't find this application. The link may be invalid or expired.";
+    error =
+      "We couldn't find this application. The link may be invalid or expired.";
   }
 
   if (!data || error) {
@@ -99,8 +111,8 @@ export default async function CandidateStatusPage({
           {candidate.name}
         </h1>
         <p className="text-sm text-neutral-600">
-          This page lets you check the status of your application with the hiring team.
-          Save this link if you want to come back later.
+          This page lets you check the status of your application with the
+          hiring team. Save this link if you want to come back later.
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-neutral-500">
           {candidate.email && (
@@ -134,14 +146,14 @@ export default async function CandidateStatusPage({
                   {stageLabel}
                 </p>
               </div>
-              <div className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 border border-emerald-100">
+              <div className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
                 Application received
               </div>
             </div>
             <p className="mt-3 text-xs text-neutral-600">
-              The hiring team uses Intime to track applications. As they move you
-              through the process, this status may update to reflect stages like
-              screening, interviews, or offer.
+              The hiring team uses Intime to track applications. As they move
+              you through the process, this status may update to reflect stages
+              like screening, interviews, or offer.
             </p>
           </div>
 
@@ -156,7 +168,8 @@ export default async function CandidateStatusPage({
 
             {answers.length === 0 ? (
               <p className="mt-3 text-xs text-neutral-400">
-                No additional questions were answered as part of this application.
+                No additional questions were answered as part of this
+                application.
               </p>
             ) : (
               <dl className="mt-3 space-y-3 text-sm">
@@ -168,7 +181,7 @@ export default async function CandidateStatusPage({
                     <dt className="text-[11px] font-medium text-neutral-600">
                       {a.questionLabel}
                     </dt>
-                    <dd className="mt-1 text-xs text-neutral-900 whitespace-pre-wrap">
+                    <dd className="mt-1 whitespace-pre-wrap text-xs text-neutral-900">
                       {a.answerText || "—"}
                     </dd>
                   </div>
@@ -190,11 +203,12 @@ export default async function CandidateStatusPage({
             {job && (
               <>
                 <p className="mt-1 text-xs text-neutral-600">
-                  {[job.location, job.department].filter(Boolean).join(" • ") ||
-                    "Location not specified"}
+                  {[job.location, job.department]
+                    .filter(Boolean)
+                    .join(" • ") || "Location not specified"}
                 </p>
                 {job.description && (
-                  <p className="mt-3 text-xs text-neutral-600 line-clamp-5 whitespace-pre-wrap">
+                  <p className="mt-3 line-clamp-5 whitespace-pre-wrap text-xs text-neutral-600">
                     {job.description}
                   </p>
                 )}
@@ -210,8 +224,8 @@ export default async function CandidateStatusPage({
             )}
             {!job && (
               <p className="mt-2 text-xs text-neutral-500">
-                This job may have been closed or removed since you applied, but your
-                application is still on record with the hiring team.
+                This job may have been closed or removed since you applied, but
+                your application is still on record with the hiring team.
               </p>
             )}
           </div>
@@ -219,9 +233,9 @@ export default async function CandidateStatusPage({
           <div className="rounded-2xl border border-neutral-200 bg-white p-4 text-xs text-neutral-600 shadow-sm">
             <p className="font-semibold text-neutral-800">Need help?</p>
             <p className="mt-1">
-              If you have questions about your application, reply directly to any email
-              you received from the recruiter or hiring manager. This page is a
-              read-only view powered by Intime.
+              If you have questions about your application, reply directly to
+              any email you received from the recruiter or hiring manager. This
+              page is a read-only view powered by Intime.
             </p>
             <div className="mt-3">
               <Link

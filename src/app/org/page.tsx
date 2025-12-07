@@ -22,7 +22,22 @@ type OrgTreeResponse = {
 };
 
 async function getOrgTree(): Promise<OrgTreeResponse> {
-  return api.get<OrgTreeResponse>("/org/tree");
+  try {
+    const data = await api.get<OrgTreeResponse>("/org/tree");
+    // Normalize possible undefined → empty tree shape
+    return (
+      data ?? {
+        totalEmployees: 0,
+        roots: [],
+      }
+    );
+  } catch (err) {
+    console.error("Failed to load org tree", err);
+    return {
+      totalEmployees: 0,
+      roots: [],
+    };
+  }
 }
 
 function statusPill(status?: string | null) {

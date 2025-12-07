@@ -17,12 +17,15 @@ type BillingSummary = {
 
 async function getBillingSummary(): Promise<BillingSummary | null> {
   try {
-    return await api.get<BillingSummary>("/billing/summary");
+    const data = await api.get<BillingSummary>("/billing/summary");
+    // Normalize undefined → null so the return type matches
+    return data ?? null;
   } catch (e) {
     console.error("[Billing] Failed to load summary", e);
     return null;
   }
 }
+
 
 function formatDate(dateStr: string | null | undefined) {
   if (!dateStr) return null;

@@ -39,7 +39,9 @@ type OnboardingFlow = {
 
 async function getFlow(id: string): Promise<OnboardingFlow | null> {
   try {
-    return await api.get<OnboardingFlow>(`/onboarding/flows/${id}`);
+    const flow = await api.get<OnboardingFlow>(`/onboarding/flows/${id}`);
+    // normalize possible undefined → null
+    return flow ?? null;
   } catch (e) {
     console.error("Failed to load onboarding flow", e);
     return null;
@@ -250,7 +252,7 @@ export default async function OnboardingFlowPage({
                       >
                         {/* TIMELINE DOT */}
                         <div className="flex flex-col items-center">
-                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-semibold text-white">
+                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-semibold text:white text-white">
                             {idx + 1}
                           </div>
                           {!isLast && (
@@ -331,7 +333,7 @@ export default async function OnboardingFlowPage({
                     {formatDate(flow.targetDate ?? null)}
                   </span>
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex items	center justify-between">
                   <span>Total tasks</span>
                   <span className="font-medium text-slate-900">
                     {totalTasks}

@@ -24,8 +24,15 @@ type TeamDetail = {
   }[];
 };
 
-async function getTeam(id: string): Promise<TeamDetail> {
-  return api.get<TeamDetail>(`/teams/${id}`);
+async function getTeam(id: string): Promise<TeamDetail | null> {
+  try {
+    const data = await api.get<TeamDetail>(`/teams/${id}`);
+    // normalize possible undefined → null
+    return data ?? null;
+  } catch (err) {
+    console.error("Failed to load team", err);
+    return null;
+  }
 }
 
 function statusLabel(status?: EmployeeStatus | null) {
@@ -50,6 +57,39 @@ export default async function TeamPage({
 }) {
   const teamId = params.id;
   const team = await getTeam(teamId);
+
+  if (!team) {
+    return (
+      <main className="mx-auto max-w-5xl px-6 py-8">
+        {/* Breadcrumbs */}
+        <div className="mb-4 flex items-center gap-2 text-xs text-slate-400">
+          <Link href="/people" className="text-indigo-600 hover:underline">
+            People
+          </Link>
+          <span className="text-slate-300">/</span>
+          <Link href="/teams" className="text-indigo-600 hover:underline">
+            Teams
+          </Link>
+          <span className="text-slate-300">/</span>
+          <span>Team</span>
+        </div>
+
+        <section className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          We couldn&apos;t find that team. It may have been deleted or you may
+          not have access to it.
+        </section>
+
+        <div className="mt-4">
+          <Link
+            href="/teams"
+            className="text-xs font-medium text-indigo-600 hover:underline"
+          >
+            ← Back to Teams
+          </Link>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-8">

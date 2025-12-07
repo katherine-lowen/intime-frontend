@@ -38,7 +38,12 @@ export default function EmployeeOnboardingPanel({ employeeId }: Props) {
         const res = await api.get<OnboardingSummary>(
           `/onboarding/${employeeId}`,
         );
-        if (!cancelled) setData(res);
+
+        // api.get<T>() returns T | undefined in your setup → normalize
+        const summary: OnboardingSummary | null =
+          res && typeof res === "object" ? res : null;
+
+        if (!cancelled) setData(summary);
       } catch (err) {
         console.error("Failed to load onboarding for employee", err);
         if (!cancelled) setError("Failed to load onboarding");

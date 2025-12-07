@@ -3,6 +3,8 @@ import api from "@/lib/api";
 import Link from "next/link";
 import { AuthGate } from "@/components/dev-auth-gate";
 
+export const dynamic = "force-dynamic";
+
 type TimeOffStatus = "REQUESTED" | "APPROVED" | "DENIED" | "CANCELLED";
 type TimeOffType =
   | "PTO"
@@ -30,8 +32,15 @@ type TimeOffRequest = {
 };
 
 async function getApprovedTimeOff(): Promise<TimeOffRequest[]> {
-  // Uses the new status filter
-  return api.get<TimeOffRequest[]>("/timeoff?status=APPROVED");
+  try {
+    // Uses the new status filter
+    const data = await api.get<TimeOffRequest[]>("/timeoff?status=APPROVED");
+    // normalize possible undefined → []
+    return data ?? [];
+  } catch (err) {
+    console.error("Failed to load approved time off:", err);
+    return [];
+  }
 }
 
 function isSameDay(a: Date, b: Date) {
@@ -146,47 +155,42 @@ export default async function TimeOverviewPage() {
   }
 
   return (
-    <main className="space-y-6 p-6">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Time overview
-          </h1>
-          <p className="text-sm text-slate-600">
-            See who&apos;s out today and what&apos;s coming up this week.
-          </p>
-        </div>
+    <AuthGate>
+      <main className="space-y-6 p-6">
+        <header className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              Time overview
+            </h1>
+            <p className="text-sm text-slate-600">
+              See who&apos;s out today and what&apos;s coming up this week.
+            </p>
+          </div>
 
-        <div className="flex items-center gap-3 text-xs">
-          <Link
-            href="/timeoff"
-            className="text-indigo-600 hover:underline"
-          >
-            Manage time off →
-          </Link>
-        </div>
-      </header>
+          <div className="flex items-center gap-3 text-xs">
+            <Link href="/timeoff" className="text-indigo-600 hover:underline">
+              Manage time off →
+            </Link>
+          </div>
+        </header>
 
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-slate-900">
-          Out today
-        </h2>
-        {renderList("out today", outToday)}
-      </section>
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold text-slate-900">Out today</h2>
+          {renderList("out today", outToday)}
+        </section>
 
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-slate-900">
-          Out this week
-        </h2>
-        {renderList("out this week", outThisWeek)}
-      </section>
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold text-slate-900">
+            Out this week
+          </h2>
+          {renderList("out this week", outThisWeek)}
+        </section>
 
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-slate-900">
-          Upcoming
-        </h2>
-        {renderList("out upcoming", upcoming)}
-      </section>
-    </main>
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold text-slate-900">Upcoming</h2>
+          {renderList("out upcoming", upcoming)}
+        </section>
+      </main>
+    </AuthGate>
   );
 }

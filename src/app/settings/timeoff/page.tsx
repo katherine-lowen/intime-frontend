@@ -42,12 +42,16 @@ export default function TimeoffSettingsPage() {
     try {
       setLoading(true);
       setError(null);
+
       const data = await api.get<TimeOffPolicy[]>("/timeoff/policies");
-      setPolicies(data);
+
+      // 🔧 Guard against undefined / wrong shape
+      const list: TimeOffPolicy[] = Array.isArray(data) ? data : [];
+      setPolicies(list);
 
       // Prefill form from first policy if one exists
-      if (data.length > 0) {
-        const p = data[0];
+      if (list.length > 0) {
+        const p = list[0];
         setEditingId(p.id);
         setName(p.name);
         setKind(p.kind);
@@ -138,228 +142,228 @@ export default function TimeoffSettingsPage() {
   }
 
   return (
-    <main className="space-y-6">
-      {/* HEADER */}
-      <section className="flex flex-wrap items-center justify-between gap-3">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-            Time off settings
-          </h1>
-          <p className="text-sm text-slate-600">
-            Define how PTO is handled at your company — unlimited vs fixed
-            policies and annual allowances.
-          </p>
-        </div>
-
-        <Link
-          href="/timeoff"
-          className="text-xs text-indigo-600 hover:underline"
-        >
-          View approvals →
-        </Link>
-      </section>
-
-      {/* ALERTS */}
-      {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-          {success}
-        </div>
-      )}
-
-      {/* LAYOUT */}
-      <section className="grid gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1.1fr)]">
-        {/* FORM CARD */}
-        <div className="card px-5 py-4 space-y-4">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <h2 className="section-title">
-                {editingId ? "Edit PTO policy" : "Create PTO policy"}
-              </h2>
-              <p className="text-xs text-slate-500">
-                Start with a single org-wide policy. Later you can add more
-                nuanced rules.
-              </p>
-            </div>
-            {editingId && (
-              <button
-                type="button"
-                onClick={resetFormToNew}
-                className="text-[11px] font-medium text-slate-500 hover:text-slate-700"
-              >
-                New policy
-              </button>
-            )}
+    <AuthGate>
+      <main className="space-y-6">
+        {/* HEADER */}
+        <section className="flex flex-wrap items-center justify-between gap-3">
+          <div className="space-y-1">
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+              Time off settings
+            </h1>
+            <p className="text-sm text-slate-600">
+              Define how PTO is handled at your company — unlimited vs fixed
+              policies and annual allowances.
+            </p>
           </div>
 
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            {/* Name */}
-            <div className="space-y-1">
-              <label htmlFor="name" className="field-label">
-                Policy name
-              </label>
-              <input
-                id="name"
-                name="name"
-                className="field-input"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Standard PTO"
-              />
-              <p className="text-[11px] text-slate-500">
-                Examples: &quot;Standard PTO&quot;, &quot;Unlimited PTO&quot;,
-                &quot;Hourly PTO&quot;.
-              </p>
-            </div>
+          <Link
+            href="/timeoff"
+            className="text-xs text-indigo-600 hover:underline"
+          >
+            View approvals →
+          </Link>
+        </section>
 
-            {/* Policy type */}
-            <div className="space-y-1">
-              <label className="field-label">Policy type</label>
-              <div className="flex flex-wrap gap-2 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setKind("FIXED")}
-                  className={[
-                    "rounded-full border px-3 py-1",
-                    kind === "FIXED"
-                      ? "border-indigo-500 bg-indigo-50 text-indigo-700"
-                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
-                  ].join(" ")}
-                >
-                  Fixed days per year
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setKind("UNLIMITED")}
-                  className={[
-                    "rounded-full border px-3 py-1",
-                    kind === "UNLIMITED"
-                      ? "border-indigo-500 bg-indigo-50 text-indigo-700"
-                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
-                  ].join(" ")}
-                >
-                  Unlimited PTO
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setKind("ACCRUAL")}
-                  className={[
-                    "rounded-full border px-3 py-1",
-                    kind === "ACCRUAL"
-                      ? "border-indigo-500 bg-indigo-50 text-indigo-700"
-                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
-                  ].join(" ")}
-                >
-                  Accrual-based
-                </button>
-              </div>
-              <p className="text-[11px] text-slate-500">
-                Fixed: lump sum per year. Unlimited: no strict cap.
-                Accrual: earned over time (e.g. X days per month).
-              </p>
-            </div>
+        {/* ALERTS */}
+        {error && (
+          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+        {success && (
+          <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            {success}
+          </div>
+        )}
 
-            {/* Annual days for FIXED / ACCRUAL */}
-            {(kind === "FIXED" || kind === "ACCRUAL") && (
-              <div className="space-y-1">
-                <label htmlFor="annualDays" className="field-label">
-                  Annual allowance (days)
-                </label>
-                <input
-                  id="annualDays"
-                  name="annualDays"
-                  type="number"
-                  min={0}
-                  step={0.5}
-                  className="field-input max-w-[160px]"
-                  value={annualDays}
-                  onChange={(e) => setAnnualDays(e.target.value)}
-                />
-                <p className="text-[11px] text-slate-500">
-                  Total paid days off per year. For accrual, this represents the
-                  target yearly amount.
+        {/* LAYOUT */}
+        <section className="grid gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1.1fr)]">
+          {/* FORM CARD */}
+          <div className="card px-5 py-4 space-y-4">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h2 className="section-title">
+                  {editingId ? "Edit PTO policy" : "Create PTO policy"}
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Start with a single org-wide policy. Later you can add more
+                  nuanced rules.
                 </p>
               </div>
-            )}
-
-            <div className="pt-1">
-              <button
-                type="submit"
-                disabled={saving}
-                className="btn-primary text-xs"
-              >
-                {saving
-                  ? "Saving…"
-                  : editingId
-                  ? "Save changes"
-                  : "Create policy"}
-              </button>
+              {editingId && (
+                <button
+                  type="button"
+                  onClick={resetFormToNew}
+                  className="text-[11px] font-medium text-slate-500 hover:text-slate-700"
+                >
+                  New policy
+                </button>
+              )}
             </div>
-          </form>
-        </div>
 
-        {/* EXISTING POLICIES CARD */}
-        <div className="card px-5 py-4 space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <h2 className="section-title">Existing policies</h2>
-              <p className="text-xs text-slate-500">
-                These policies are referenced when employees request time off.
-              </p>
-            </div>
+            <form className="space-y-4" onSubmit={handleSubmit}>
+              {/* Name */}
+              <div className="space-y-1">
+                <label htmlFor="name" className="field-label">
+                  Policy name
+                </label>
+                <input
+                  id="name"
+                  name="name"
+                  className="field-input"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Standard PTO"
+                />
+                <p className="text-[11px] text-slate-500">
+                  Examples: &quot;Standard PTO&quot;, &quot;Unlimited PTO&quot;,
+                  &quot;Hourly PTO&quot;.
+                </p>
+              </div>
+
+              {/* Policy type */}
+              <div className="space-y-1">
+                <label className="field-label">Policy type</label>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setKind("FIXED")}
+                    className={[
+                      "rounded-full border px-3 py-1",
+                      kind === "FIXED"
+                        ? "border-indigo-500 bg-indigo-50 text-indigo-700"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
+                    ].join(" ")}
+                  >
+                    Fixed days per year
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setKind("UNLIMITED")}
+                    className={[
+                      "rounded-full border px-3 py-1",
+                      kind === "UNLIMITED"
+                        ? "border-indigo-500 bg-indigo-50 text-indigo-700"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
+                    ].join(" ")}
+                  >
+                    Unlimited PTO
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setKind("ACCRUAL")}
+                    className={[
+                      "rounded-full border px-3 py-1",
+                      kind === "ACCRUAL"
+                        ? "border-indigo-500 bg-indigo-50 text-indigo-700"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
+                    ].join(" ")}
+                  >
+                    Accrual-based
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Fixed: lump sum per year. Unlimited: no strict cap.
+                  Accrual: earned over time (e.g. X days per month).
+                </p>
+              </div>
+
+              {/* Annual days for FIXED / ACCRUAL */}
+              {(kind === "FIXED" || kind === "ACCRUAL") && (
+                <div className="space-y-1">
+                  <label htmlFor="annualDays" className="field-label">
+                    Annual allowance (days)
+                  </label>
+                  <input
+                    id="annualDays"
+                    name="annualDays"
+                    type="number"
+                    min={0}
+                    step={0.5}
+                    className="field-input max-w-[160px]"
+                    value={annualDays}
+                    onChange={(e) => setAnnualDays(e.target.value)}
+                  />
+                  <p className="text-[11px] text-slate-500">
+                    Total paid days off per year. For accrual, this represents
+                    the target yearly amount.
+                  </p>
+                </div>
+              )}
+
+              <div className="pt-1">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="btn-primary text-xs"
+                >
+                  {saving
+                    ? "Saving…"
+                    : editingId
+                    ? "Save changes"
+                    : "Create policy"}
+                </button>
+              </div>
+            </form>
           </div>
 
-          {loading ? (
-            <p className="py-4 text-xs text-slate-500">Loading policies…</p>
-          ) : policies.length === 0 ? (
-            <p className="py-4 text-xs text-slate-500">
-              No PTO policies yet. Create one on the left to get started.
-            </p>
-          ) : (
-            <div className="space-y-2 text-sm">
-              {policies.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => startEditing(p)}
-                  className={[
-                    "flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition",
-                    editingId === p.id
-                      ? "border-indigo-400 bg-indigo-50/80"
-                      : "border-slate-200 bg-slate-50/80 hover:bg-slate-100",
-                  ].join(" ")}
-                >
-                  <div>
-                    <div className="text-sm font-medium text-slate-900">
-                      {p.name}
-                    </div>
-                    <div className="text-[11px] text-slate-600">
-                      {p.kind === "UNLIMITED"
-                        ? "Unlimited PTO"
-                        : p.kind === "ACCRUAL"
-                        ? `${
-                            p.annualAllowanceDays ?? "—"
-                          } days/year (accrual)`
-                        : p.annualAllowanceDays != null
-                        ? `${p.annualAllowanceDays} days/year`
-                        : "Fixed allowance"}
-                    </div>
-                  </div>
-                  <div className="text-right text-[11px] text-slate-500">
-                    {p.createdAt && (
-                      <div>Created {formatDate(p.createdAt)}</div>
-                    )}
-                  </div>
-                </button>
-              ))}
+          {/* EXISTING POLICIES CARD */}
+          <div className="card px-5 py-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h2 className="section-title">Existing policies</h2>
+                <p className="text-xs text-slate-500">
+                  These policies are referenced when employees request time off.
+                </p>
+              </div>
             </div>
-          )}
-        </div>
-      </section>
-    </main>
+
+            {loading ? (
+              <p className="py-4 text-xs text-slate-500">Loading policies…</p>
+            ) : policies.length === 0 ? (
+              <p className="py-4 text-xs text-slate-500">
+                No PTO policies yet. Create one on the left to get started.
+              </p>
+            ) : (
+              <div className="space-y-2 text-sm">
+                {policies.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => startEditing(p)}
+                    className={[
+                      "flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition",
+                      editingId === p.id
+                        ? "border-indigo-400 bg-indigo-50/80"
+                        : "border-slate-200 bg-slate-50/80 hover:bg-slate-100",
+                    ].join(" ")}
+                  >
+                    <div>
+                      <div className="text-sm font-medium text-slate-900">
+                        {p.name}
+                      </div>
+                      <div className="text-[11px] text-slate-600">
+                        {p.kind === "UNLIMITED"
+                          ? "Unlimited PTO"
+                          : p.kind === "ACCRUAL"
+                          ? `${p.annualAllowanceDays ?? "—"} days/year (accrual)`
+                          : p.annualAllowanceDays != null
+                          ? `${p.annualAllowanceDays} days/year`
+                          : "Fixed allowance"}
+                      </div>
+                    </div>
+                    <div className="text-right text-[11px] text-slate-500">
+                      {p.createdAt && (
+                        <div>Created {formatDate(p.createdAt)}</div>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      </main>
+    </AuthGate>
   );
 }

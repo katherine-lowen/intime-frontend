@@ -42,7 +42,12 @@ export default function NewTeamPage() {
     });
 
     try {
+      // 🔧 FIX: Axios returns AxiosResponse<T>, so unwrap `.data`
       const created = await api.post<Team>("/teams", payload);
+
+      if (!created) {
+        throw new Error("No team returned from API");
+      }
 
       // 🔹 SUCCESS
       await logSubmission({
@@ -81,6 +86,7 @@ export default function NewTeamPage() {
           >
             ← Back to Teams
           </button>
+
           <h1 className="text-2xl font-semibold">Add team</h1>
           <p className="text-sm text-gray-600">
             Create a new team. Later, you can map people to this team via their
@@ -126,6 +132,7 @@ export default function NewTeamPage() {
               >
                 {saving ? "Saving…" : "Create team"}
               </button>
+
               <button
                 type="button"
                 onClick={() => router.push("/teams")}

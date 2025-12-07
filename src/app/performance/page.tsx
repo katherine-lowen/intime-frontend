@@ -31,8 +31,10 @@ type ReviewListItem = {
 
 async function getReviews(): Promise<ReviewListItem[]> {
   try {
-    // 🔧 FIXED: match backend controller @Controller('performance-reviews')
-    return await api.get<ReviewListItem[]>("/performance-reviews");
+    // match backend controller @Controller('performance-reviews')
+    const data = await api.get<ReviewListItem[]>("/performance-reviews");
+    // normalize possible undefined → []
+    return data ?? [];
   } catch (err) {
     console.error("Failed to load performance reviews:", err);
     return [];

@@ -22,7 +22,14 @@ type BillingSummary = {
 };
 
 async function getBillingSummary(): Promise<BillingSummary> {
-  return api.get<BillingSummary>("/billing/summary");
+  try {
+    const data = await api.get<BillingSummary>("/billing/summary");
+    // normalize possible undefined → { organization: null }
+    return data ?? { organization: null };
+  } catch (err) {
+    console.error("Failed to load billing summary", err);
+    return { organization: null };
+  }
 }
 
 const PLAN_COPY: Record<

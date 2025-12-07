@@ -26,7 +26,9 @@ type OnboardingTemplate = {
 
 async function getTemplates(): Promise<OnboardingTemplate[]> {
   try {
-    return await api.get<OnboardingTemplate[]>("/onboarding/templates");
+    const data = await api.get<OnboardingTemplate[]>("/onboarding/templates");
+    // normalize possible undefined → []
+    return data ?? [];
   } catch (err) {
     console.error("Failed to load onboarding templates:", err);
     // Don’t crash the page – just show empty state

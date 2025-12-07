@@ -37,7 +37,9 @@ async function fetchEmployees(sp: SearchParams): Promise<Employee[]> {
   const qs = params.toString();
   const url = qs ? `/employees?${qs}` : "/employees";
 
-  return api.get<Employee[]>(url);
+  const employees = await api.get<Employee[]>(url);
+  // normalize possible undefined → []
+  return employees ?? [];
 }
 
 function formatStatus(status?: EmployeeStatus | null) {
@@ -72,9 +74,7 @@ export default async function EmployeesPage({
       {/* HEADER */}
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">
-            Employees
-          </h1>
+          <h1 className="text-2xl font-semibold text-slate-900">Employees</h1>
           <p className="mt-1 text-sm text-slate-500">
             Search and filter everyone in the organization.
           </p>

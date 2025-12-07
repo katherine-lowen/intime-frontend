@@ -45,18 +45,22 @@ export default function CandidateMoatsPanel({
     try {
       setSaving(true);
 
-      const newNote = await api.post<CandidateNote>(
+      const created = await api.post<CandidateNote>(
         `/candidates/${candidateId}/notes`,
         { text: `${MOAT_PREFIX}${trimmed}` }
       );
 
-      setMoats((prev) => [newNote, ...prev]);
+      if (!created) {
+        throw new Error("No note returned from API");
+      }
+
+      setMoats((prev) => [created, ...prev]);
       setText("");
-      setSaving(false);
     } catch (err) {
       console.error("Failed to save moat", err);
-      setSaving(false);
       setError("Could not save moat insight. Please try again.");
+    } finally {
+      setSaving(false);
     }
   }
 

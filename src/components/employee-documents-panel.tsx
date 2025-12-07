@@ -38,10 +38,12 @@ export default function EmployeeDocumentsPanel({
       const data = await api.get<EmployeeDocument[]>(
         `/employee-documents?employeeId=${employeeId}`,
       );
-      setItems(data);
+      // normalize possible undefined → []
+      setItems(data ?? []);
     } catch (err) {
       console.error(err);
       setError("Failed to load documents.");
+      setItems([]);
     } finally {
       setLoading(false);
     }

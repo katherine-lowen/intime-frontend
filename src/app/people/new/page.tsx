@@ -56,7 +56,7 @@ export default function NewEmployeePage() {
       setLoadingManagers(true);
       try {
         const data = await api.get<EmployeeListItem[]>("/employees");
-        if (!cancelled) setManagers(data);
+        if (!cancelled) setManagers(data ?? []);
       } catch (err) {
         console.error("Failed to load managers", err);
         if (!cancelled) setManagers([]);
@@ -65,7 +65,7 @@ export default function NewEmployeePage() {
       }
     }
 
-    loadManagers();
+    void loadManagers();
 
     return () => {
       cancelled = true;

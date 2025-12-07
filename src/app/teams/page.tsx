@@ -11,11 +11,30 @@ type Team = {
 };
 
 async function getTeams(): Promise<Team[]> {
-  return api.get<Team[]>("/teams");
+  try {
+    const raw = await api.get<Team[]>("/teams");
+
+    // raw is Team[] | undefined, so normalize it
+    if (!raw) {
+      console.error("No data returned from /teams");
+      return [];
+    }
+
+    if (!Array.isArray(raw)) {
+      console.error("Unexpected /teams response shape:", raw);
+      return [];
+    }
+
+    return raw;
+  } catch (err) {
+    console.error("Failed to load teams:", err);
+    return [];
+  }
 }
 
 export default async function TeamsPage() {
   const teams = await getTeams();
+
   const totalHeadcount = teams.reduce(
     (sum, t) => sum + (t.employeesCount || 0),
     0
@@ -65,7 +84,7 @@ export default async function TeamsPage() {
           <p>No teams yet.</p>
           <p className="mt-2">
             Teams are created automatically when you start assigning employees
-            to them, or you can add them by seeding data in the backend.
+            to them, or you can add them manually.
           </p>
         </section>
       ) : (
