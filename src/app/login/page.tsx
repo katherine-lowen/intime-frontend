@@ -3,36 +3,35 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-
-const USER_KEY = "intime_user";
-
-type DevUser = {
-  id: string;
-  email: string;
-  name?: string | null;
-  orgId: string;
-  role: string;
-};
+import api from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // If already "logged in" (user in localStorage), bounce to dashboard
+  // If already logged in on the backend, bounce to dashboard
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const raw = window.localStorage.getItem(USER_KEY);
-      if (raw) {
-        router.replace("/dashboard");
+    let cancelled = false;
+
+    async function checkSession() {
+      try {
+        const me = await api.get<any>("/dev-auth/me");
+        if (!cancelled && me) {
+          router.replace("/dashboard");
+        }
+      } catch {
+        // Not logged in yet — ignore
       }
-    } catch {
-      // ignore
     }
+
+    checkSession();
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
 
@@ -48,39 +47,43 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      // Derive a simple display name from the email
-      const beforeAt = email.split("@")[0] || "User";
-      const niceName =
-        beforeAt.includes(".")
-          ? beforeAt
-              .split(".")
-              .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-              .join(" ")
-          : beforeAt.charAt(0).toUpperCase() + beforeAt.slice(1);
-
-      const devUser: DevUser = {
-        id: `dev-${Date.now()}`,
-        email,
-        name: niceName,
-        orgId: "demo-org",
-        role: "admin",
-      };
-
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(USER_KEY, JSON.stringify(devUser));
-      }
-
+      // Real dev-auth login — backend sets cookie/session
+      await api.post("/dev-auth/login", { email });
       router.push("/dashboard");
-    } catch (err) {
-      console.error("[Login] Failed to store dev user:", err);
-      setError("Something went wrong saving your session.");
+    } catch (err: any) {
+      console.error("[Login] Dev auth failed:", err);
+
+      const msg =
+        err?.response?.data?.message ??
+        err?.message ??
+        "Something went wrong. Please try again.";
+
+      if (
+        typeof msg === "string" &&
+        msg.toLowerCase().includes("object can not be found")
+      ) {
+        setError(
+          "This email isn't in your seeded dev users. Try demo@intime.dev or click Sign in again."
+        );
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4">
+    <main className="relative flex min-h-screen items-center justify-center bg-slate-950 px-4">
+
+      {/* ⚠️ TEMPORARY BUG MESSAGE */}
+      <div className="absolute top-5 inset-x-0 flex justify-center">
+        <div className="rounded-md bg-amber-500/20 border border-amber-400 px-4 py-2 text-xs text-amber-200 shadow-lg backdrop-blur-sm">
+          ⚠️ Tiny login bug we're squashing!  
+          If you see “Try again”, just click sign-in again — it works 🤝
+        </div>
+      </div>
+
       <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900/80 p-6 shadow-xl">
         {/* Brand */}
         <div className="mb-6 flex items-center gap-2">
@@ -99,7 +102,8 @@ export default function LoginPage() {
           Sign in to your workspace
         </h1>
         <p className="mt-1 text-xs text-slate-400">
-          This is a temporary dev-only login. Any email &amp; password will work.
+          This uses dev-auth. Try a seeded user like{" "}
+          <span className="font-mono">demo@intime.dev</span>.
         </p>
 
         {error && (
@@ -118,7 +122,8 @@ export default function LoginPage() {
               type="email"
               autoComplete="email"
               className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              placeholder="you@company.com"
+              placeholder="demo@intime.dev"
+              disabled={loading}
             />
           </div>
 
@@ -132,6 +137,7 @@ export default function LoginPage() {
               autoComplete="current-password"
               className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               placeholder="••••••••"
+              disabled={loading}
             />
           </div>
 
@@ -144,8 +150,8 @@ export default function LoginPage() {
           </button>
 
           <p className="mt-2 text-[11px] text-slate-500">
-            For now, this creates a local dev session only. We&apos;ll wire real
-            auth + Stripe-backed orgs next.
+            This calls your Nest <code>/dev-auth/login</code> and seeds a dev
+            session cookie. Real multi-org auth coming next.
           </p>
         </form>
       </div>
