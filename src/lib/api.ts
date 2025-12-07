@@ -2,11 +2,16 @@
 // Single source of truth for the external API host.
 // We accept either NEXT_PUBLIC_API_BASE_URL or NEXT_PUBLIC_API_URL to avoid
 // misconfiguration between server and client components.
-export const API_BASE_URL = (
+const rawBase =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:8080"
-).replace(/\/$/, "");
+  "http://localhost:8080";
+
+// Normalize: strip trailing slash and an accidental "/api" path segment so we don't
+// end up calling nonexistent routes like /api/employees.
+export const API_BASE_URL = rawBase
+  .replace(/\/$/, "")
+  .replace(/\/api$/i, "");
 
 // Optional: use this ONLY if you want to force a specific org for debugging.
 // Leave it undefined in real multi-org mode.
