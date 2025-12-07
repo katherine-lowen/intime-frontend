@@ -12,14 +12,6 @@ export const dynamic = "force-dynamic";
 export default function DashboardPage() {
   return (
     <AuthGate>
-    
-{/* TEMP FIX MESSAGE */}
-  <div className="w-full flex justify-center pt-4">
-    <div className="rounded-lg bg-amber-500/20 border border-amber-400 px-4 py-2 text-xs text-amber-200">
-      ⚠️ Dashboard is loading through a temporary workaround — if anything breaks, just refresh. You're good 😊
-    </div>
-  </div>
-
       {/* Atmosphere background layer */}
       <div className="atmosphere-layer" />
 
