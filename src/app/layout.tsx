@@ -1,8 +1,13 @@
 // src/app/layout.tsx
 import "./globals.css";
 import type { ReactNode } from "react";
+
 import { IdentitySync } from "@/components/IdentitySync";
 import { AppFrame } from "@/components/AppFrame";
+
+// Vercel Analytics + Speed Insights
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export const metadata = {
   title: "Intime HR Platform",
@@ -13,11 +18,15 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body className="bg-slate-50 text-slate-900 antialiased">
-        {/* Runs client-side only; syncs Supabase user → localStorage */}
+        {/* Sync Supabase → localStorage client-side */}
         <IdentitySync />
 
-        {/* Client-side app shell that decides about sidebar/top-nav */}
+        {/* App shell (sidebar/topnav logic) */}
         <AppFrame>{children}</AppFrame>
+
+        {/* Vercel Analytics */}
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
