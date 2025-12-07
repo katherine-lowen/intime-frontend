@@ -21,7 +21,7 @@ export default function AiToolsPage() {
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                   Intime AI Studio
                   <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-slate-50">
-                    Hiring · People · Performance
+                    Hiring · People · Performance · Workforce
                   </span>
                 </div>
                 <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
@@ -29,8 +29,9 @@ export default function AiToolsPage() {
                 </h1>
                 <p className="mt-1 text-sm text-slate-600">
                   Use Intime AI to generate better roles, summarize candidates,
-                  and turn messy feedback into consistent reviews — all grounded
-                  in your jobs, people, and time-aware events.
+                  forecast workforce risk, and turn messy feedback into
+                  consistent reviews — all grounded in your jobs, people, and
+                  time-aware events.
                 </p>
 
                 <div className="mt-4 flex flex-wrap gap-2 text-[11px] text-slate-500">
@@ -42,6 +43,9 @@ export default function AiToolsPage() {
                   </span>
                   <span className="rounded-full bg-slate-100 px-2 py-1">
                     Performance &amp; reviews
+                  </span>
+                  <span className="rounded-full bg-slate-100 px-2 py-1">
+                    Workforce pulse &amp; risk
                   </span>
                 </div>
               </div>
@@ -188,22 +192,28 @@ export default function AiToolsPage() {
               </div>
             </div>
 
-            {/* Onboarding / employee intelligence teaser */}
+            {/* AI Workforce Pulse (new page) */}
             <div className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="space-y-2">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  People
+                  Workforce
                 </p>
                 <h2 className="text-sm font-semibold text-slate-900">
-                  AI Onboarding &amp; People
+                  AI Workforce Pulse
                 </h2>
                 <p className="text-xs text-slate-600">
-                  Use AI to draft onboarding plans, summarize employee history,
-                  and surface time-based risk and trajectory signals.
+                  A live command center for retention risk, capacity, hiring
+                  velocity, and payroll variance — with AI-generated actions you
+                  can take today.
                 </p>
               </div>
-              <div className="mt-4 text-[11px] text-slate-500">
-                Connected directly to your employees, events, and reviews.
+              <div className="mt-4">
+                <Link
+                  href="/ai/workforce"
+                  className="inline-flex items-center text-xs font-medium text-indigo-600 hover:underline"
+                >
+                  Open Workforce Pulse →
+                </Link>
               </div>
             </div>
           </section>
@@ -235,6 +245,13 @@ export default function AiToolsPage() {
                   <span className="font-semibold">At review time:</span> pull
                   in performance feedback and events to generate a consistent,
                   calibrated review draft.
+                </li>
+                <li className="rounded-xl bg-slate-50 px-3 py-2">
+                  <span className="font-semibold">
+                    As headcount and teams scale:
+                  </span>{" "}
+                  use AI Workforce Pulse to monitor risk, capacity, and payroll
+                  trends proactively.
                 </li>
               </ul>
 
