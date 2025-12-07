@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { AuthGate } from "@/components/dev-auth-gate";
 import { API_BASE_URL } from "@/lib/api";
 import JobAtsClient from "./JobsAtsClient";
@@ -42,6 +42,15 @@ type JobDataForUI = {
 
 const ORG_ID =
   process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
+const CLOSED_JOBS_KEY = "intime_closed_jobs";
+
+type ClosedJobRecord = {
+  id: string;
+  title: string;
+  closedAt: string;
+  department?: string | null;
+  location?: string | null;
+};
 
 function formatDate(dateStr?: string) {
   if (!dateStr) return "—";
@@ -95,6 +104,7 @@ function mapJobToUI(job: JobFromApi): JobDataForUI {
 
 export default function JobDetailPage() {
   const params = useParams<{ id?: string | string[] }>();
+  const router = useRouter();
 
   const rawParamId =
     typeof params?.id === "string"
@@ -109,6 +119,93 @@ export default function JobDetailPage() {
   const [job, setJob] = useState<JobFromApi | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [closing, setClosing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  function recordClosedJob(data: JobFromApi) {
+    if (typeof window === "undefined") return;
+    try {
+      const existing =
+        JSON.parse(
+          window.localStorage.getItem(CLOSED_JOBS_KEY) || "[]"
+        ) || [];
+      const filtered = Array.isArray(existing)
+        ? existing.filter((j: ClosedJobRecord) => j?.id !== data.id)
+        : [];
+      const next: ClosedJobRecord[] = [
+        ...filtered,
+        {
+          id: data.id,
+          title: data.title,
+          closedAt: new Date().toISOString(),
+          department: data.department ?? null,
+          location: data.location ?? null,
+        },
+      ];
+      window.localStorage.setItem(CLOSED_JOBS_KEY, JSON.stringify(next));
+    } catch (e) {
+      console.warn("[jobs/[id]] Failed to persist closed job", e);
+    }
+  }
+
+  async function handleCloseJob() {
+    if (!job) return;
+    setActionError(null);
+    setClosing(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "x-org-id": ORG_ID,
+        },
+        body: JSON.stringify({ status: "CLOSED" }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Close failed: ${res.status} ${text}`);
+      }
+
+      const updated: JobFromApi = await res.json();
+      setJob(updated);
+      recordClosedJob(updated);
+    } catch (err: any) {
+      setActionError(err?.message || "Failed to close job");
+    } finally {
+      setClosing(false);
+    }
+  }
+
+  async function handleDeleteJob() {
+    if (!job) return;
+    const confirmed = window.confirm(
+      "Delete this job? This cannot be undone."
+    );
+    if (!confirmed) return;
+
+    setActionError(null);
+    setDeleting(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/jobs/${job.id}`, {
+        method: "DELETE",
+        headers: {
+          "x-org-id": ORG_ID,
+        },
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Delete failed: ${res.status} ${text}`);
+      }
+
+      router.push("/jobs");
+    } catch (err: any) {
+      setActionError(err?.message || "Failed to delete job");
+      setDeleting(false);
+    }
+  }
 
   useEffect(() => {
     if (!jobId) {
@@ -221,7 +318,45 @@ export default function JobDetailPage() {
 
   return (
     <AuthGate>
-      <JobAtsClient jobId={ensuredJobId} jobData={jobDataForUI} />
+      <div className="flex flex-col gap-4 p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div>
+            <h1 className="text-lg font-semibold text-slate-900">
+              {job.title}
+            </h1>
+            <p className="text-sm text-slate-500">
+              Manage this role: close or delete the requisition.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleCloseJob}
+              disabled={closing || deleting}
+              className="inline-flex items-center rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {closing ? "Closing…" : "Close job"}
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteJob}
+              disabled={closing || deleting}
+              className="inline-flex items-center rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 shadow-sm hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {deleting ? "Deleting…" : "Delete job"}
+            </button>
+          </div>
+        </div>
+
+        {actionError && (
+          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+            {actionError}
+          </div>
+        )}
+
+        <JobAtsClient jobId={ensuredJobId} jobData={jobDataForUI} />
+      </div>
     </AuthGate>
   );
 }
