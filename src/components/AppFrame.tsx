@@ -36,7 +36,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
     );
   }
 
-  const handleToggleSidebar = () =>
+  const handleToggleCollapse = () =>
     setSidebarCollapsed((prev) => !prev);
 
   return (
@@ -60,3 +60,4 @@ export function AppFrame({ children }: { children: ReactNode }) {
     </div>
   );
 }
+s
