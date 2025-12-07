@@ -5,7 +5,7 @@ import { AuthGate } from "@/components/dev-auth-gate";
 export const dynamic = "force-dynamic";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8080";
-const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
+const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "";
 
 type Job = {
   id?: string;        // may be missing in some API responses
@@ -27,29 +27,34 @@ type JobsListResponse = {
   pages: number;
 };
 
-async function getJobs(): Promise<Job[]> {
+async function getJobs(): Promise<{ jobs: Job[]; error?: string }> {
   try {
+    const headers: HeadersInit = {};
+    // Only send org header if we actually have one configured
+    if (ORG_ID) {
+      headers["x-org-id"] = ORG_ID;
+    }
+
     const res = await fetch(`${API_URL}/jobs?limit=100`, {
       cache: "no-store",
-      headers: {
-        "x-org-id": ORG_ID,
-      },
+      headers,
     });
 
     if (!res.ok) {
-      console.error("Failed to load /jobs", res.status, await res.text());
-      return [];
+      const text = await res.text();
+      console.error("Failed to load /jobs", res.status, text);
+      return { jobs: [], error: `API responded with ${res.status}` };
     }
 
     const data: JobsListResponse | Job[] = await res.json();
 
-    if (Array.isArray(data)) return data;
-    if (data && Array.isArray(data.data)) return data.data;
+    if (Array.isArray(data)) return { jobs: data };
+    if (data && Array.isArray(data.data)) return { jobs: data.data };
 
-    return [];
+    return { jobs: [], error: "Unexpected jobs response shape" };
   } catch (err) {
     console.error("Failed to load /jobs", err);
-    return [];
+    return { jobs: [], error: "Network or API error loading jobs" };
   }
 }
 
@@ -65,7 +70,7 @@ function normalizeId(raw?: string | null): string {
 }
 
 export default async function JobsPage() {
-  const jobs = await getJobs();
+  const { jobs, error } = await getJobs();
   const openCount = jobs.filter((j) => isOpen(j.status)).length;
 
   return (
@@ -117,6 +122,14 @@ export default async function JobsPage() {
           </div>
         </section>
 
+        {/* Error banner (if API failed) */}
+        {error && (
+          <section className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+            There was a problem loading jobs from the API.{" "}
+            <span className="font-mono">({error})</span>
+          </section>
+        )}
+
         {/* Table */}
         <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between">
@@ -128,8 +141,9 @@ export default async function JobsPage() {
 
           {jobs.length === 0 ? (
             <p className="text-sm text-slate-500">
-              No jobs yet. Click &quot;Open new requisition&quot; to add your
-              first role.
+              {error
+                ? "We couldn’t load any jobs. Check your API URL and org configuration."
+                : 'No jobs yet. Click "Open new requisition" to add your first role.'}
             </p>
           ) : (
             <div className="overflow-hidden rounded-xl border border-slate-100">
@@ -167,14 +181,6 @@ export default async function JobsPage() {
                               {job.title} (no id)
                             </span>
                           )}
-
-                          {/* DEBUG OUTPUT */}
-                          <div className="mt-0.5 text-[10px] text-amber-700">
-                            rawId: {String(rawId) || "(empty)"}
-                          </div>
-                          <div className="text-[10px] text-pink-700">
-                            effectiveId: {effectiveId || "(none)"}
-                          </div>
                         </td>
 
                         <td className="px-4 py-2 text-slate-600">
