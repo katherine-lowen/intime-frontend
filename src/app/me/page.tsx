@@ -40,7 +40,18 @@ async function fetchMe(): Promise<MeResponse> {
   //   x-user-email
   //   x-user-name
   //   x-org-id (fallback)
-  return api.get<MeResponse>("/me");
+  const data = await api.get<MeResponse>("/me");
+
+  // Guard against api.get possibly returning undefined
+  return (
+    data ?? {
+      user: null,
+      org: null,
+      membership: null,
+      employee: null,
+      inferredOrgId: null,
+    }
+  );
 }
 
 export default async function MePage() {

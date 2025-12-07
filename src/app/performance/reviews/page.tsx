@@ -97,7 +97,9 @@ function getEmployeeName(e: Review["employee"]) {
 async function getReviews(): Promise<Review[]> {
   try {
     // Always get the full list; filter by employeeId on the server component.
-    return await api.get<Review[]>("/performance-reviews");
+    const reviews = await api.get<Review[]>("/performance-reviews");
+    // api.get might return undefined; normalize to []
+    return reviews ?? [];
   } catch (err) {
     console.error("Failed to load performance reviews:", err);
     return [];

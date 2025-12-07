@@ -119,12 +119,26 @@ export default function JobsClient() {
         ]);
 
         if (cancelled) return;
+
+        // Narrow out undefined for job
+        if (!jobRes) {
+          setJob(null);
+          setCandidates([]);
+          setError("Job not found.");
+          return;
+        }
+
         setJob(jobRes);
-        setCandidates(Array.isArray(candRes) ? candRes : []);
+
+        // Safely handle undefined / non-array candidates
+        const safeCandidates = Array.isArray(candRes) ? candRes : [];
+        setCandidates(safeCandidates);
       } catch (err: any) {
         if (cancelled) return;
         console.error(err);
         setError("Something went wrong loading this job.");
+        setJob(null);
+        setCandidates([]);
       } finally {
         if (!cancelled) {
           setLoading(false);

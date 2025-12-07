@@ -99,11 +99,22 @@ export default function CandidatePage() {
     async function load() {
       try {
         setLoading(true);
+        setError(null);
+
         const data = await api.get<Candidate>(`/candidates/${candidateId}`);
+
+        // Narrow out undefined
+        if (!data) {
+          setCandidate(null);
+          setError("Candidate not found.");
+          return;
+        }
+
         setCandidate(data);
       } catch (err) {
         console.error(err);
         setError("Unable to load candidate.");
+        setCandidate(null);
       } finally {
         setLoading(false);
       }
@@ -308,9 +319,7 @@ export default function CandidatePage() {
                     <span className="text-slate-500">Created</span>
                     <span className="font-medium">
                       {candidate.createdAt
-                        ? new Date(
-                            candidate.createdAt,
-                          ).toLocaleDateString()
+                        ? new Date(candidate.createdAt).toLocaleDateString()
                         : "N/A"}
                     </span>
                   </div>
@@ -400,17 +409,12 @@ export default function CandidatePage() {
                               None recorded yet.
                             </li>
                           )}
-                          {(effectiveAiMatch.strengths ?? []).map(
-                            (s, i) => (
-                              <li
-                                key={i}
-                                className="flex gap-2 text-xs"
-                              >
-                                <span className="mt-1 h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                                <span>{s}</span>
-                              </li>
-                            ),
-                          )}
+                          {(effectiveAiMatch.strengths ?? []).map((s, i) => (
+                            <li key={i} className="flex gap-2 text-xs">
+                              <span className="mt-1 h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                              <span>{s}</span>
+                            </li>
+                          ))}
                         </ul>
                       </div>
 
@@ -425,10 +429,7 @@ export default function CandidatePage() {
                             </li>
                           )}
                           {(effectiveAiMatch.risks ?? []).map((r, i) => (
-                            <li
-                              key={i}
-                              className="flex gap-2 text-xs"
-                            >
+                            <li key={i} className="flex gap-2 text-xs">
                               <span className="mt-1 h-1.5 w-1.5 rounded-full bg-amber-500" />
                               <span>{r}</span>
                             </li>
@@ -463,9 +464,7 @@ export default function CandidatePage() {
                     >
                       <div className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-slate-300" />
                       <div className="space-y-0.5">
-                        <div className="font-medium">
-                          {item.label}
-                        </div>
+                        <div className="font-medium">{item.label}</div>
                         {item.meta && (
                           <div className="text-[11px] text-slate-500">
                             {item.meta}
@@ -473,9 +472,7 @@ export default function CandidatePage() {
                         )}
                         {item.createdAt && (
                           <div className="text-[11px] text-slate-400">
-                            {new Date(
-                              item.createdAt,
-                            ).toLocaleString()}
+                            {new Date(item.createdAt).toLocaleString()}
                           </div>
                         )}
                       </div>

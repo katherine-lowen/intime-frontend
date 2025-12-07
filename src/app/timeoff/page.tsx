@@ -5,7 +5,6 @@ import { useEffect, useState, FormEvent } from "react";
 import api from "@/lib/api";
 import Link from "next/link";
 
-
 type TimeOffPolicyKind = "UNLIMITED" | "FIXED";
 
 type TimeOffPolicy = {
@@ -161,9 +160,9 @@ export default function TimeOffPage() {
         ]);
 
         if (!cancelled) {
-          setPolicies(pol);
-          setPolicySummary(summary);
-          setRequests(reqs);
+          setPolicies(pol ?? []);
+          setPolicySummary(summary ?? []);
+          setRequests(reqs ?? []);
         }
       } catch (e: any) {
         console.error("[TimeOffPage] failed to load", e);
@@ -186,10 +185,12 @@ export default function TimeOffPage() {
     async function loadMe() {
       try {
         const data = await api.get<MeResponse>("/me");
+        const normalized = data ?? null;
+
         if (!cancelled) {
-          setMe(data);
-          if (!reqEmployeeId && data.employee?.id) {
-            setReqEmployeeId(data.employee.id);
+          setMe(normalized);
+          if (!reqEmployeeId && normalized?.employee?.id) {
+            setReqEmployeeId(normalized.employee.id);
           }
         }
       } catch (e) {
@@ -229,8 +230,8 @@ export default function TimeOffPage() {
         api.get<PolicySummaryRow[]>("/timeoff/policies/summary"),
       ]);
 
-      setPolicies(pol);
-      setPolicySummary(summary);
+      setPolicies(pol ?? []);
+      setPolicySummary(summary ?? []);
 
       // reset form
       setPolicyName("");
@@ -262,7 +263,7 @@ export default function TimeOffPage() {
       });
 
       const refreshed = await api.get<TimeOffRequest[]>("/timeoff/requests");
-      setRequests(refreshed);
+      setRequests(refreshed ?? []);
 
       // reset form (but keep employeeId so "me" stays selected)
       setReqPolicyId("");
@@ -291,7 +292,7 @@ export default function TimeOffPage() {
       });
 
       const refreshed = await api.get<TimeOffRequest[]>("/timeoff/requests");
-      setRequests(refreshed);
+      setRequests(refreshed ?? []);
     } catch (e: any) {
       console.error("[TimeOffPage] failed to update status", e);
       setError("Failed to update request status.");
@@ -332,25 +333,24 @@ export default function TimeOffPage() {
   return (
     <main className="p-6 space-y-6">
       {/* Header + summary cards */}
-     <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-  <div>
-    <h1 className="text-2xl font-semibold tracking-tight">Time off</h1>
-    <p className="text-sm text-slate-500">
-      Manage PTO policies and track requests across your organization.
-    </p>
-  </div>
+      <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Time off</h1>
+          <p className="text-sm text-slate-500">
+            Manage PTO policies and track requests across your organization.
+          </p>
+        </div>
 
-  {/* Calendar button */}
-  <div className="flex flex-wrap items-center gap-2">
-    <Link
-      href="/timeoff/calendar"
-      className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-semibold text-slate-50 hover:bg-slate-800"
-    >
-      View time off calendar
-    </Link>
-  </div>
-</header>
-
+        {/* Calendar button */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/timeoff/calendar"
+            className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-semibold text-slate-50 hover:bg-slate-800"
+          >
+            View time off calendar
+          </Link>
+        </div>
+      </header>
 
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">

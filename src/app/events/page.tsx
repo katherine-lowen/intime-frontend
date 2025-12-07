@@ -18,7 +18,9 @@ type EventItem = {
 
 async function getEvents(): Promise<EventItem[]> {
   // Backend exposes GET /events (internal events)
-  return api.get<EventItem[]>("/events");
+  const events = await api.get<EventItem[]>("/events");
+  // api.get<T> now returns T | undefined, so normalize to []
+  return events ?? [];
 }
 
 export const dynamic = "force-dynamic";
@@ -45,16 +47,18 @@ export default async function EventsPage() {
     );
   }
 
-  const hasEvents = events && events.length > 0;
+  const hasEvents = events.length > 0;
 
   // newest first – prefer startsAt, fall back to createdAt
   const sorted = [...events].sort((a, b) => {
-    const aTime = (a.startsAt || a.createdAt)
-      ? new Date(a.startsAt || a.createdAt!).getTime()
-      : 0;
-    const bTime = (b.startsAt || b.createdAt)
-      ? new Date(b.startsAt || b.createdAt!).getTime()
-      : 0;
+    const aTime =
+      a.startsAt || a.createdAt
+        ? new Date(a.startsAt || a.createdAt!).getTime()
+        : 0;
+    const bTime =
+      b.startsAt || b.createdAt
+        ? new Date(b.startsAt || b.createdAt!).getTime()
+        : 0;
     return bTime - aTime;
   });
 
@@ -74,7 +78,7 @@ export default async function EventsPage() {
 
       {!hasEvents ? (
         <div className="mt-4 rounded border border-dashed bg-white/60 p-6 text-sm text-center text-neutral-700">
-          <p className="font-medium mb-1">No events yet</p>
+          <p className="mb-1 font-medium">No events yet</p>
           <p className="mb-3">
             Use &quot;Add event&quot; to start logging performance reviews,
             promotions, and key changes across your org.
@@ -85,30 +89,27 @@ export default async function EventsPage() {
           {sorted.map((evt) => {
             // Be defensive about how job id might be stored
             const effectiveJobId =
-              evt.jobId ??
-              (evt as any).jobId ??
-              (evt as any).job?.id ??
-              "";
+              evt.jobId ?? (evt as any).jobId ?? (evt as any).job?.id ?? "";
 
             return (
-              <li key={evt.id} className="px-4 py-3 text-sm flex gap-4">
+              <li key={evt.id} className="flex gap-4 px-4 py-3 text-sm">
                 <div className="mt-1 h-2 w-2 rounded-full bg-black" />
                 <div className="flex-1 space-y-1">
                   <div className="flex items-center justify-between gap-2">
                     <div className="font-medium">
                       {evt.summary || evt.type}
                     </div>
-                    <span className="text-[11px] text-neutral-500 whitespace-nowrap">
-                      {(evt.startsAt || evt.createdAt)
+                    <span className="whitespace-nowrap text-[11px] text-neutral-500">
+                      {evt.startsAt || evt.createdAt
                         ? new Date(
-                            evt.startsAt || evt.createdAt!,
+                            evt.startsAt || evt.createdAt!
                           ).toLocaleString()
                         : ""}
                     </span>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2 text-[11px] text-neutral-500">
-                    <span className="uppercase tracking-wide rounded-full border px-2 py-0.5">
+                    <span className="rounded-full border px-2 py-0.5 uppercase tracking-wide">
                       {evt.type.replace(/_/g, " ")}
                     </span>
 

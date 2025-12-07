@@ -63,7 +63,11 @@ export default function NewOnboardingFlowPage() {
       try {
         setLoadingEmployees(true);
         const data = await api.get<Employee[]>("/employees");
-        if (!cancelled) setEmployees(data);
+
+        if (!cancelled) {
+          // guard against undefined
+          setEmployees(data ?? []);
+        }
       } catch (e) {
         if (!cancelled) setError("Failed to load employees.");
       } finally {
@@ -212,6 +216,11 @@ export default function NewOnboardingFlowPage() {
         "/onboarding/flows",
         payload,
       );
+
+      // guard against undefined / missing id
+      if (!created || !created.id) {
+        throw new Error("Failed to create onboarding flow.");
+      }
 
       // 🔹 Log SUCCESS
       await logSubmission({

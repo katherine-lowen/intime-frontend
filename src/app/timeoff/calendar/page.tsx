@@ -46,7 +46,7 @@ export default function TimeOffCalendarPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [statusFilter, setStatusFilter] = useState<"ALL" | "APPROVED_ONLY">(
-    "ALL"
+    "ALL",
   );
 
   // day drawer state
@@ -64,7 +64,8 @@ export default function TimeOffCalendarPage() {
       try {
         const data = await api.get<TimeOffRequest[]>("/timeoff/requests");
         if (!cancelled) {
-          setRequests(data);
+          // normalize in case API returns undefined / 204
+          setRequests(data ?? []);
         }
       } catch (e: any) {
         console.error("[TimeOffCalendarPage] failed to load requests", e);
@@ -107,7 +108,7 @@ export default function TimeOffCalendarPage() {
           meta: r,
         };
       }),
-    [filteredRequests]
+    [filteredRequests],
   );
 
   function handleDayClick(date: Date, eventsForDay: CalendarEvent[]) {
@@ -135,7 +136,7 @@ export default function TimeOffCalendarPage() {
 
   async function updateStatus(
     req: TimeOffRequest,
-    newStatus: TimeOffStatus
+    newStatus: TimeOffStatus,
   ): Promise<void> {
     if (req.status === newStatus) return;
 
@@ -143,20 +144,27 @@ export default function TimeOffCalendarPage() {
     setActionError(null);
 
     try {
-      // NOTE: adjust this URL if your backend uses a different route
       const updated = await api.patch<TimeOffRequest>(
         `/timeoff/requests/${req.id}/status`,
-        { status: newStatus }
+        { status: newStatus },
       );
+
+      // If backend ever returns 204/no body, bail out defensively
+      if (!updated) {
+        console.warn(
+          "[TimeOffCalendarPage] updateStatus returned no body; skipping state update",
+        );
+        return;
+      }
 
       // Update global list
       setRequests((prev) =>
-        prev.map((r) => (r.id === req.id ? updated : r))
+        prev.map((r) => (r.id === req.id ? updated : r)),
       );
 
       // Update currently selected day view
       setSelectedRequests((prev) =>
-        prev.map((r) => (r.id === req.id ? updated : r))
+        prev.map((r) => (r.id === req.id ? updated : r)),
       );
     } catch (e: any) {
       console.error("[TimeOffCalendarPage] failed to update status", e);

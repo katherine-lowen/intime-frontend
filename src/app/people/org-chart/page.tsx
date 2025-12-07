@@ -39,12 +39,14 @@ type OrgNode = {
     firstName: string;
     lastName: string;
   } | null;
-    reports: OrgNode[];
+  reports: OrgNode[];
 };
 
 async function fetchEmployees(): Promise<EmployeeListItem[]> {
   try {
-    return await api.get<EmployeeListItem[]>("/employees");
+    const data = await api.get<EmployeeListItem[]>("/employees");
+    // Guard against api.get possibly returning undefined
+    return data ?? [];
   } catch (err) {
     console.error("Failed to load /employees for org chart", err);
     return [];
@@ -52,7 +54,10 @@ async function fetchEmployees(): Promise<EmployeeListItem[]> {
 }
 
 // Helper to normalize IDs and avoid "undefined" / empty strings
-function normalizeId(primary?: string | null, fallback?: string | null): string | null {
+function normalizeId(
+  primary?: string | null,
+  fallback?: string | null,
+): string | null {
   const clean = (v?: string | null) =>
     v && v !== "undefined" && v.trim() !== "" ? v : null;
 

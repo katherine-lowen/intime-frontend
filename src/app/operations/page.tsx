@@ -32,13 +32,16 @@ export default function OperationsPage() {
         const data = await api.get<BirthdayItem[]>(
           "/analytics/upcoming-birthdays",
         );
+
         if (!cancelled) {
-          setBirthdays(data);
+          // Guard against api.get possibly returning undefined
+          setBirthdays(data ?? []);
         }
       } catch (err) {
         console.error("Failed to load upcoming birthdays", err);
         if (!cancelled) {
           setBirthdaysError("Failed to load birthdays");
+          setBirthdays(null);
         }
       } finally {
         if (!cancelled) {

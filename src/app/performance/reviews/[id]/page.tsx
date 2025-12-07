@@ -112,7 +112,9 @@ function getEmployeeName(r: ReviewDetail) {
 
 async function getReview(id: string): Promise<ReviewDetail | null> {
   try {
-    return await api.get<ReviewDetail>(`/performance-reviews/${id}`);
+    const data = await api.get<ReviewDetail>(`/performance-reviews/${id}`);
+    // Guard in case api.get returns undefined
+    return data ?? null;
   } catch (err) {
     console.error("Failed to load performance review:", err);
     return null;

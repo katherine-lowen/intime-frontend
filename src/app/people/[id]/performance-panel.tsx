@@ -1,6 +1,9 @@
 // src/app/people/[id]/performance-panel.tsx
-import api from "@/lib/api";
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import api from "@/lib/api";
 
 type ReviewRating =
   | "Needs improvement"
@@ -11,25 +14,28 @@ type ReviewRating =
   | null
   | undefined;
 
-type PerformanceReview = {
+type ReviewSummary = {
   id: string;
   period?: string | null;
   rating?: ReviewRating;
   createdAt?: string | null;
-  managerSummary?: string | null;
+};
+
+type Props = {
+  employeeId: string;
 };
 
 function ratingBadge(rating: ReviewRating) {
   if (!rating) {
     return (
-      <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs font-medium text-slate-500">
+      <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-500">
         Unrated
       </span>
     );
   }
 
   const base =
-    "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border";
+    "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border";
 
   if (rating === "Needs improvement") {
     return (
@@ -38,7 +44,6 @@ function ratingBadge(rating: ReviewRating) {
       </span>
     );
   }
-
   if (rating === "Meets expectations") {
     return (
       <span className={`${base} border-slate-200 bg-slate-50 text-slate-700`}>
@@ -46,7 +51,6 @@ function ratingBadge(rating: ReviewRating) {
       </span>
     );
   }
-
   if (rating === "Exceeds expectations") {
     return (
       <span
@@ -56,7 +60,6 @@ function ratingBadge(rating: ReviewRating) {
       </span>
     );
   }
-
   if (rating === "Outstanding") {
     return (
       <span
@@ -81,126 +84,113 @@ function formatDate(value?: string | null) {
   return d.toLocaleDateString();
 }
 
-async function getPerformanceReviews(
-  employeeId: string,
-): Promise<PerformanceReview[]> {
-  try {
-    // ✅ hits your Nest controller: @Controller('performance-reviews')
-    return await api.get<PerformanceReview[]>(
-      `/performance-reviews?employeeId=${encodeURIComponent(employeeId)}`,
-    );
-  } catch (err) {
-    console.error("Failed to load performance reviews for person:", err);
-    return [];
-  }
-}
+export default function PerformancePanel({ employeeId }: Props) {
+  const [reviews, setReviews] = useState<ReviewSummary[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-export async function PerformancePanel({ employeeId }: { employeeId: string }) {
-  const reviews = await getPerformanceReviews(employeeId);
-  const hasReviews = reviews.length > 0;
+  useEffect(() => {
+    let cancelled = false;
 
-  // Sort newest → oldest just in case
-  const sorted = reviews
-    .slice()
-    .sort((a, b) => {
-      const da = a.createdAt ? Date.parse(a.createdAt) : 0;
-      const db = b.createdAt ? Date.parse(b.createdAt) : 0;
-      return db - da;
-    });
+    async function load() {
+      try {
+        setLoading(true);
+        setError(null);
 
-  const latest = sorted[0];
+        const data = await api.get<ReviewSummary[]>(
+          `/performance-reviews?employeeId=${employeeId}`,
+        );
+
+        if (!cancelled) {
+          setReviews(data ?? []);
+        }
+      } catch (err) {
+        console.error("[PerformancePanel] failed to load reviews", err);
+        if (!cancelled) {
+          setError("Could not load performance reviews.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    if (employeeId) {
+      load();
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [employeeId]);
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="mb-3 flex items-center justify-between gap-2">
+      <div className="mb-3 flex items-start justify-between gap-2">
         <div>
-          <h2 className="text-sm font-semibold text-slate-900">
-            Performance reviews
-          </h2>
+          <h2 className="text-sm font-semibold text-slate-900">Performance</h2>
           <p className="mt-1 text-xs text-slate-500">
-            Recent manager reviews and ratings for this person.
+            Recent reviews, ratings, and feedback snapshots.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href={`/performance/reviews/new?employeeId=${encodeURIComponent(
-              employeeId,
-            )}`}
-            className="inline-flex items-center rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-indigo-700"
-          >
-            New review
-          </Link>
-          <Link
-            href={`/performance/reviews?employeeId=${encodeURIComponent(
-              employeeId,
-            )}`}
-            className="text-xs font-medium text-slate-500 hover:text-slate-700"
-          >
-            View all
-          </Link>
-        </div>
+        <Link
+          href={`/performance/reviews?employeeId=${employeeId}`}
+          className="text-[11px] font-medium text-indigo-600 hover:underline"
+        >
+          View all reviews
+        </Link>
       </div>
 
-      {!hasReviews ? (
-        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-xs text-slate-600">
-          No performance reviews logged yet for this person.
-          <br />
-          <span className="text-slate-500">
-            Create a first review to start their performance history.
-          </span>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {/* Latest review summary pill */}
-          {latest && (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                    Latest review
-                  </div>
-                  <div className="mt-0.5 text-sm font-semibold text-slate-900">
-                    {latest.period || "Review period"}
-                  </div>
-                  <div className="mt-0.5 text-[11px] text-slate-500">
-                    Created {formatDate(latest.createdAt)}
-                  </div>
-                </div>
-                <div className="shrink-0">{ratingBadge(latest.rating)}</div>
-              </div>
-              {latest.managerSummary && (
-                <p className="mt-2 line-clamp-3 text-xs text-slate-700">
-                  {latest.managerSummary}
-                </p>
-              )}
-            </div>
-          )}
+      {loading && (
+        <p className="text-xs text-slate-500">Loading performance data…</p>
+      )}
 
-          {/* Compact list of recent reviews */}
-          <div className="space-y-1.5">
-            {sorted.slice(0, 3).map((r) => (
-              <div
-                key={r.id}
-                className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-slate-50"
-              >
-                <div>
-                  <div className="font-medium text-slate-900">
-                    {r.period || "Review"}
-                  </div>
-                  <div className="text-[11px] text-slate-500">
-                    {formatDate(r.createdAt)}
-                  </div>
-                </div>
-                <Link
-                  href={`/performance/reviews/${r.id}`}
-                  className="text-[11px] font-medium text-indigo-600 hover:text-indigo-500"
-                >
-                  Open
-                </Link>
-              </div>
-            ))}
+      {error && !loading && (
+        <p className="text-xs text-rose-600">{error}</p>
+      )}
+
+      {!loading && !error && reviews.length === 0 && (
+        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-600">
+          No performance reviews recorded yet for this employee.
+          <div className="mt-2">
+            <Link
+              href={`/performance/reviews/new?employeeId=${employeeId}`}
+              className="inline-flex items-center rounded-full bg-indigo-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-indigo-700"
+            >
+              Start first review
+            </Link>
           </div>
         </div>
+      )}
+
+      {!loading && !error && reviews.length > 0 && (
+        <ul className="mt-1 space-y-2 text-xs">
+          {reviews.slice(0, 3).map((r) => (
+            <li
+              key={r.id}
+              className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2"
+            >
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium text-slate-900">
+                    {r.period || "Review"}
+                  </span>
+                  {ratingBadge(r.rating)}
+                </div>
+                <div className="mt-0.5 text-[11px] text-slate-500">
+                  Created {formatDate(r.createdAt)}
+                </div>
+              </div>
+              <Link
+                href={`/performance/reviews/${r.id}`}
+                className="text-[11px] font-medium text-indigo-600 hover:underline"
+              >
+                Open
+              </Link>
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   );

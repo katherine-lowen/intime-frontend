@@ -6,7 +6,7 @@ import Link from "next/link";
 import { AuthGate } from "@/components/dev-auth-gate";
 import PayrollCompCard from "@/components/payroll-comp-card";
 import EmployeeTimeoffPolicyCard from "@/components/employee-timeoff-policy-card";
-import { PerformancePanel } from "./performance-panel";
+import PerformancePanel from "./performance-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +17,7 @@ type PaySchedule = "WEEKLY" | "BIWEEKLY" | "SEMI_MONTHLY" | "MONTHLY" | "OTHER";
 type PayrollProvider = "NONE" | "GUSTO" | "ADP" | "RIPPLING" | "DEEL" | "OTHER";
 
 type Employee = {
-  employeeId: string; // canonical ID we use everywhere
+  employeeId: string;
   firstName: string;
   lastName: string;
   email?: string | null;
@@ -42,7 +42,6 @@ type Employee = {
   payrollExternalId?: string | null;
 };
 
-// Shape returned from /employees list
 type EmployeeListItem = {
   employeeId?: string;
   id?: string;
@@ -117,10 +116,11 @@ type TimeOffRequestLite = {
 
 // -------- API helpers --------
 
-// Try the single-employee endpoint first
 async function tryGetEmployeeDetail(id: string): Promise<Employee | null> {
   try {
     const e = await api.get<any>(`/employees/${id}`);
+    if (!e) return null;
+
     return {
       employeeId: e.employeeId ?? id,
       firstName: e.firstName,
@@ -152,12 +152,10 @@ async function tryGetEmployeeDetail(id: string): Promise<Employee | null> {
   }
 }
 
-// Fall back to the list endpoint if detail endpoint fails
 async function tryResolveEmployeeFromList(id: string): Promise<Employee | null> {
   try {
-    const list = await api.get<EmployeeListItem[]>("/employees");
+    const list = (await api.get<EmployeeListItem[]>("/employees")) ?? [];
 
-    // Match on either employeeId or id
     const match = list.find((e) => e.employeeId === id || e.id === id);
     if (!match) return null;
 
@@ -178,7 +176,6 @@ async function tryResolveEmployeeFromList(id: string): Promise<Employee | null> 
             lastName: match.manager.lastName,
           }
         : null,
-      // list doesn’t return payroll fields, so default them
       payType: null,
       basePayCents: null,
       payCurrency: "USD",
@@ -192,11 +189,9 @@ async function tryResolveEmployeeFromList(id: string): Promise<Employee | null> 
   }
 }
 
-// Unified resolver: detail endpoint first, then list
 async function getEmployeeById(id: string): Promise<Employee | null> {
   const cleanId = (id ?? "").trim();
 
-  // 🔒 Hard guard: never call /employees/undefined or empty
   if (!cleanId || cleanId === "undefined") {
     console.warn("[people/[id]] Invalid employee id param:", id);
     return null;
@@ -211,7 +206,10 @@ async function getEmployeeById(id: string): Promise<Employee | null> {
 
 async function getEmployeeEvents(employeeId: string): Promise<EventItem[]> {
   try {
-    return await api.get<EventItem[]>(`/events?employeeId=${employeeId}`);
+    const events = await api.get<EventItem[]>(
+      `/events?employeeId=${employeeId}`,
+    );
+    return events ?? [];
   } catch (err) {
     console.error("Failed to load events for employee", employeeId, err);
     return [];
@@ -220,7 +218,8 @@ async function getEmployeeEvents(employeeId: string): Promise<EventItem[]> {
 
 async function getOnboardingFlows(): Promise<OnboardingFlow[]> {
   try {
-    return await api.get<OnboardingFlow[]>("/onboarding/flows");
+    const flows = await api.get<OnboardingFlow[]>("/onboarding/flows");
+    return flows ?? [];
   } catch (err) {
     console.warn(
       "[people/[id]] /onboarding/flows not available yet, returning []",
@@ -234,10 +233,8 @@ async function getEmployeeTimeOffRequests(
   employeeId: string,
 ): Promise<TimeOffRequestLite[]> {
   try {
-    const all = await api.get<TimeOffRequestLite[]>("/timeoff/requests");
-    return (all as any[]).filter(
-      (r) => r.employee && r.employee.id === employeeId,
-    );
+    const all = (await api.get<TimeOffRequestLite[]>("/timeoff/requests")) ?? [];
+    return all.filter((r) => r.employee && r.employee.id === employeeId);
   } catch (err) {
     console.error("Failed to load time off requests for employee", err);
     return [];
@@ -293,7 +290,6 @@ function formatDate(value?: string | null) {
   return d.toLocaleDateString();
 }
 
-// Inclusive day count between two ISO dates
 function countDaysInclusive(startIso: string, endIso: string): number {
   const start = new Date(startIso);
   const end = new Date(endIso);
@@ -309,7 +305,6 @@ function countDaysInclusive(startIso: string, endIso: string): number {
   return Math.floor(diff / msPerDay) + 1;
 }
 
-// Approved PTO days in the current calendar year
 function computePtoUsedThisYear(requests: TimeOffRequestLite[]): number {
   const now = new Date();
   const year = now.getFullYear();
@@ -324,18 +319,16 @@ function computePtoUsedThisYear(requests: TimeOffRequestLite[]): number {
     .reduce((sum, r) => sum + countDaysInclusive(r.startDate, r.endDate), 0);
 }
 
-// -------- PAGE COMPONENT (Next 15: params is a Promise) --------
+// -------- PAGE COMPONENT --------
 
 export default async function PersonPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  // In Next 15+, params is a Promise in async server components
   const resolvedParams = await params;
   const employeeIdFromUrl = (resolvedParams.id ?? "").toString();
 
-  // Always attempt to load the employee; no "no employee selected" guard
   const employee = await getEmployeeById(employeeIdFromUrl);
 
   if (!employee) {
@@ -443,7 +436,6 @@ export default async function PersonPage({
           </div>
 
           <div className="flex flex-col items-end gap-2 text-xs">
-            {/* Performance CTAs */}
             <div className="flex flex-wrap items-center justify-end gap-2">
               <Link
                 href={`/performance/reviews/new?employeeId=${employeeId}`}
@@ -459,7 +451,6 @@ export default async function PersonPage({
               </Link>
             </div>
 
-            {/* Onboarding CTAs */}
             <Link
               href={`/onboarding/new?employeeId=${employeeId}`}
               className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-semibold text-slate-50 hover:bg-slate-800"
@@ -481,7 +472,6 @@ export default async function PersonPage({
         <section className="grid gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1.3fr)]">
           {/* LEFT: Events + Performance */}
           <div className="space-y-4">
-            {/* Activity timeline */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-900">
                 Activity timeline
@@ -494,13 +484,11 @@ export default async function PersonPage({
               </div>
             </div>
 
-            {/* Performance panel */}
             <PerformancePanel employeeId={employeeId} />
           </div>
 
           {/* RIGHT: AI + Onboarding + Time off + PTO policy + Payroll + Profile */}
           <div className="space-y-4">
-            {/* AI insights */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-900">
                 AI-powered insights
@@ -514,7 +502,6 @@ export default async function PersonPage({
               </div>
             </div>
 
-            {/* Onboarding card */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex items-start justify-between gap-2">
                 <div>
@@ -601,7 +588,6 @@ export default async function PersonPage({
               </div>
             </div>
 
-            {/* Time off card */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="mb-3 flex items-start justify-between gap-2">
                 <div>
@@ -668,10 +654,8 @@ export default async function PersonPage({
               )}
             </div>
 
-            {/* PTO policy assignment */}
             <EmployeeTimeoffPolicyCard employeeId={employeeId} />
 
-            {/* Payroll / comp card */}
             <PayrollCompCard
               employeeId={employeeId}
               initial={{
@@ -684,7 +668,6 @@ export default async function PersonPage({
               }}
             />
 
-            {/* Basic contact card */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 text-xs text-slate-700 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-900">
                 Profile details

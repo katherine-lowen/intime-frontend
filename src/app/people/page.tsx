@@ -34,7 +34,9 @@ type UIEmployee = {
 };
 
 async function getEmployees(): Promise<Employee[]> {
-  return api.get<Employee[]>("/employees");
+  const data = await api.get<Employee[]>("/employees");
+  // Guard in case api.get returns undefined
+  return data ?? [];
 }
 
 // Normalize IDs (same logic as before so it stays compatible with /people/[id])

@@ -13,7 +13,7 @@ import {
   Calendar,
   ChevronDown,
   Zap,
-  FolderOpen,   // <-- Add this
+  FolderOpen, // <-- Add this
 } from "lucide-react";
 
 import { StatCard } from "@/components/StatCard";
@@ -75,11 +75,15 @@ type OnboardingTemplate = {
 /* ---------- Data fetch ---------- */
 
 async function getFlows(): Promise<OnboardingFlow[]> {
-  return api.get<OnboardingFlow[]>("/onboarding/flows");
+  const data = await api.get<OnboardingFlow[]>("/onboarding/flows");
+  // guard against api.get possibly returning undefined
+  return data ?? [];
 }
 
 async function getTemplates(): Promise<OnboardingTemplate[]> {
-  return api.get<OnboardingTemplate[]>("/onboarding/templates");
+  const data = await api.get<OnboardingTemplate[]>("/onboarding/templates");
+  // guard against api.get possibly returning undefined
+  return data ?? [];
 }
 
 /* ---------- Helpers ---------- */

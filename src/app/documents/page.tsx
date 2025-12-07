@@ -22,7 +22,10 @@ type EmployeeDocument = {
 };
 
 async function getDocuments(): Promise<EmployeeDocument[]> {
-  return api.get<EmployeeDocument[]>("/employee-documents/all");
+  const data = await api.get<EmployeeDocument[]>("/employee-documents/all");
+
+  // Guard against api.get possibly returning undefined
+  return data ?? [];
 }
 
 export default async function DocumentsPage() {
