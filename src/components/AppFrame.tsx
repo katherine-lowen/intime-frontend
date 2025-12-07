@@ -8,7 +8,6 @@ import TopNav from "@/components/top-nav";
 
 /**
  * Routes that should NOT display sidebar + top nav
- * (auth pages, plan choice, etc.)
  */
 const BARE_ROUTES = new Set<string>([
   "/choose-plan",
@@ -28,7 +27,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  // For login / signup etc, just render the page content.
+  // Bare layout (login, signup, etc.)
   if (bare) {
     return (
       <main className="min-h-screen bg-slate-50 text-slate-900">
@@ -45,7 +44,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
       <Sidebar
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={handleToggleSidebar}
-        // Dev mode: no backend user lookup; sidebar should handle null.
+        // Dev-only: no backend user yet; sidebar should handle null.
         currentUser={null}
       />
 

@@ -1,6 +1,4 @@
 // src/app/dashboard/page.tsx
-import { AuthGate } from "@/components/dev-auth-gate";
-
 import { HeroPanel } from "@/components/figma/ui/HeroPanel";
 import { KPICards } from "@/components/figma/ui/KPICards";
 import { WorkspacesGrid } from "@/components/figma/ui/WorkspacesGrid";
@@ -11,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default function DashboardPage() {
   return (
-    <AuthGate>
+    <>
       {/* Atmosphere background layer */}
       <div className="atmosphere-layer" />
 
@@ -41,6 +39,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
-    </AuthGate>
+    </>
   );
 }
