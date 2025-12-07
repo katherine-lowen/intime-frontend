@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 import { AuthGate } from "@/components/dev-auth-gate";
 import api from "@/lib/api";
@@ -28,8 +29,9 @@ export default function OperationsPage() {
       setBirthdaysError(null);
 
       try {
-        // adjust the path if you expose it differently on the backend
-        const data = await api.get<BirthdayItem[]>("/analytics/upcoming-birthdays");
+        const data = await api.get<BirthdayItem[]>(
+          "/analytics/upcoming-birthdays",
+        );
         if (!cancelled) {
           setBirthdays(data);
         }
@@ -122,6 +124,67 @@ export default function OperationsPage() {
             </div>
             <div className="col-span-12 lg:col-span-7">
               <AIOrgSummaryCard />
+            </div>
+
+            {/* Row 5: Reporting & Analytics entry point */}
+            <div className="col-span-12">
+              <Link href="/operations/reporting" className="block group">
+                <div className="flex flex-col gap-3 rounded-2xl border border-[#E6E8EC] bg-white px-6 py-5 shadow-sm transition-all group-hover:-translate-y-0.5 group-hover:border-[#2C6DF9]/50 group-hover:shadow-md">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[#7A869A]">
+                        Reporting Suite
+                      </p>
+                      <h2 className="mt-1 text-base font-semibold text-[#0F1419]">
+                        Open Reporting &amp; Analytics
+                      </h2>
+                      <p className="mt-1 text-sm text-[#5E6C84]">
+                        Dive into headcount planning, payroll spend, hiring
+                        funnel performance, and AI-powered org insights.
+                      </p>
+                    </div>
+                    <button className="hidden shrink-0 rounded-lg bg-[#2C6DF9] px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors group-hover:bg-[#1F5EE6] md:inline-flex">
+                      View dashboard
+                    </button>
+                  </div>
+
+                  {/* tiny visual hint so it feels like a preview of the page */}
+                  <div className="mt-2 grid gap-3 md:grid-cols-4">
+                    <div className="rounded-xl border border-[#E6E8EC] bg-[#F5F7FB] px-3 py-2">
+                      <p className="text-[11px] text-[#7A869A]">
+                        Total Headcount
+                      </p>
+                      <p className="text-lg font-semibold text-[#0F1419]">
+                        284
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-[#E6E8EC] bg-[#F5F7FB] px-3 py-2">
+                      <p className="text-[11px] text-[#7A869A]">
+                        Payroll Spend
+                      </p>
+                      <p className="text-lg font-semibold text-[#0F1419]">
+                        $6.7M
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-[#E6E8EC] bg-[#F5F7FB] px-3 py-2">
+                      <p className="text-[11px] text-[#7A869A]">
+                        Offer Acceptance
+                      </p>
+                      <p className="text-lg font-semibold text-[#0F1419]">
+                        87%
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-[#E6E8EC] bg-[#F5F7FB] px-3 py-2">
+                      <p className="text-[11px] text-[#7A869A]">
+                        Turnover (Qtr)
+                      </p>
+                      <p className="text-lg font-semibold text-[#0F1419]">
+                        4.2%
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </Link>
             </div>
           </div>
         </main>
