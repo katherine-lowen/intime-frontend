@@ -248,7 +248,7 @@ export default function AiWorkspaceLandingPage() {
                 </p>
 
                 <Link
-                  href="/ai/workspace"
+                  href="/ai/workforce"
                   className="group/link inline-flex items-center gap-2 text-sm text-indigo-300 transition-all hover:text-indigo-200"
                 >
                   <span>Go to workspace</span>
