@@ -20,7 +20,8 @@ type Job = {
 };
 
 type JobsListResponse = {
-  data: Job[];
+  data?: Job[]; // some backends respond with `data`
+  items?: Job[]; // render backend responds with `items`
   total: number;
   page: number;
   limit: number;
@@ -49,6 +50,9 @@ async function getJobs(): Promise<{ jobs: Job[]; error?: string }> {
     const data: JobsListResponse | Job[] = await res.json();
 
     if (Array.isArray(data)) return { jobs: data };
+
+    // Prefer `items`, fall back to `data`
+    if (data && Array.isArray(data.items)) return { jobs: data.items };
     if (data && Array.isArray(data.data)) return { jobs: data.data };
 
     return { jobs: [], error: "Unexpected jobs response shape" };
