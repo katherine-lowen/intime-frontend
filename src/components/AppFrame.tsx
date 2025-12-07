@@ -44,9 +44,41 @@ export function AppFrame({ children }: { children: ReactNode }) {
 
     async function loadUser() {
       try {
-        // api.get now returns T | undefined on 404
-        const user = await api.get<CurrentUser | null>("/auth/me");
-        setCurrentUser(user ?? null);
+        // ✅ FIX: use dev-auth endpoint and normalize the shape
+        const raw = await api.get<any>("/dev-auth/me");
+
+        if (!raw) {
+          setCurrentUser(null);
+          return;
+        }
+
+        // Case 1: { user: { ... } }
+        if (raw.user) {
+          const u = raw.user;
+          setCurrentUser({
+            id: u.id,
+            firstName: u.firstName ?? "",
+            lastName: u.lastName ?? "",
+            email: u.email,
+            role: u.role,
+          });
+          return;
+        }
+
+        // Case 2: flat user object
+        if (raw.id && raw.email) {
+          setCurrentUser({
+            id: raw.id,
+            firstName: raw.firstName ?? "",
+            lastName: raw.lastName ?? "",
+            email: raw.email,
+            role: raw.role,
+          });
+          return;
+        }
+
+        // Fallback
+        setCurrentUser(null);
       } catch (err) {
         console.error("Failed to load current user", err);
         setCurrentUser(null);

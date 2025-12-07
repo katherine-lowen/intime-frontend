@@ -38,7 +38,8 @@ export const authOptions: NextAuthOptions = {
  */
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   try {
-    const res = await fetch(`${API_URL}/auth/me`, {
+    // ✅ FIXED: Correct endpoint is /dev-auth/me (NOT /auth/me)
+    const res = await fetch(`${API_URL}/dev-auth/me`, {
       headers: {
         "X-Org-Id": ORG_ID,
       },
@@ -46,19 +47,25 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     });
 
     if (!res.ok) {
-      console.error("getCurrentUser: /auth/me returned", res.status);
+      console.error("getCurrentUser: /dev-auth/me returned", res.status);
       return null;
     }
 
     const raw = await res.json();
 
-    // If backend returns { user: { ... }, org: { ... } }
+    // --- CASE 1: Backend returns { user: {...}, org: {...} }
     if (raw?.user) {
       const u = raw.user;
+
+      const name =
+        u.name ??
+        `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() ??
+        "";
+
       return {
         id: u.id,
         email: u.email,
-        name: u.name ?? "",
+        name,
         role: u.role,
         org: raw.org
           ? {
@@ -69,12 +76,17 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       };
     }
 
-    // If backend already returns a flat shape
+    // --- CASE 2: Backend returns flat user shape
     if (raw?.id && raw?.email) {
+      const name =
+        raw.name ??
+        `${raw.firstName ?? ""} ${raw.lastName ?? ""}`.trim() ??
+        "";
+
       return {
         id: raw.id,
         email: raw.email,
-        name: raw.name ?? "",
+        name,
         role: raw.role,
         org: raw.org,
       };
@@ -82,7 +94,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 
     return null;
   } catch (err) {
-    console.error("getCurrentUser: failed to call /auth/me", err);
+    console.error("getCurrentUser: failed to call /dev-auth/me", err);
     return null;
   }
 }
