@@ -17,6 +17,10 @@ import {
   PanelLeft,
   Bell,
   Sparkles,
+  Activity,
+  PanelsTopLeft,
+  ListChecks,
+  ClipboardList
 } from "lucide-react";
 
 import { usePathname } from "next/navigation";
@@ -41,10 +45,21 @@ interface SidebarProps {
   currentUser?: CurrentUser | null;
 }
 
+// ⭐ Intelligence Suite links
+const intelligenceLinks = [
+  { label: "AI Studio Home", href: "/ai", icon: PanelsTopLeft },
+  { label: "Workforce Pulse", href: "/ai/workforce", icon: Activity },
+  { label: "Resume Match", href: "/ai#resume-match", icon: FileText },
+  { label: "Candidate Summary", href: "/ai/summary", icon: ClipboardList },
+  { label: "JD Generator", href: "/ai/jd", icon: Briefcase },
+  { label: "Job Intake", href: "/ai/ai-job-intake", icon: ListChecks },
+  { label: "Performance Review", href: "/ai/performance-review", icon: ClipboardList }
+];
+
 export function Sidebar({
   isCollapsed,
   onToggleCollapse,
-  currentUser,
+  currentUser
 }: SidebarProps) {
   const pathname = usePathname() ?? "";
 
@@ -58,7 +73,7 @@ export function Sidebar({
       className="relative flex flex-col bg-gradient-to-b from-[#050815] via-[#070B16] to-[#0C101C] border-r border-white/[0.06] shadow-2xl"
       style={{
         width: isCollapsed ? "72px" : "260px",
-        transition: "width 300ms cubic-bezier(0.25, 0.1, 0.25, 1)",
+        transition: "width 300ms cubic-bezier(0.25, 0.1, 0.25, 1)"
       }}
     >
       {/* Vignettes */}
@@ -79,7 +94,7 @@ export function Sidebar({
       </button>
 
       <div className="flex flex-col h-full p-4 relative z-10">
-        {/* Logo / brand */}
+        {/* Logo */}
         <div className={`mb-4 ${isCollapsed ? "flex flex-col items-center" : ""}`}>
           <div
             className={`flex items-center gap-3 mb-3 ${
@@ -114,10 +129,12 @@ export function Sidebar({
 
         {!isCollapsed && <OrgSwitcher />}
 
-        {/* Search + bell */}
+        {/* Search + Notifications */}
         <div
           className={`mb-6 ${
-            isCollapsed ? "flex flex-col items-center gap-3" : "flex items-center gap-2"
+            isCollapsed
+              ? "flex flex-col items-center gap-3"
+              : "flex items-center gap-2"
           }`}
         >
           {!isCollapsed && <SearchBar />}
@@ -135,29 +152,28 @@ export function Sidebar({
           </button>
         </div>
 
-        {/* Main Nav Sections */}
+        {/* MAIN NAV */}
         <div className="flex-1 overflow-y-auto space-y-1 custom-scrollbar">
+          {/* Overview */}
           <NavSection label="OVERVIEW" isCollapsed={isCollapsed}>
-            <NavItem
-              icon={Home}
-              label="Home"
-              href="/dashboard"
-              isCollapsed={isCollapsed}
-            />
+            <NavItem icon={Home} label="Home" href="/dashboard" isCollapsed={isCollapsed} />
           </NavSection>
 
+          {/* People */}
           <NavSection label="PEOPLE" isCollapsed={isCollapsed}>
             <NavItem icon={Users} label="People hub" href="/people" isCollapsed={isCollapsed} />
             <NavItem icon={UserPlus} label="Onboarding" href="/onboarding" isCollapsed={isCollapsed} />
             <NavItem icon={Calendar} label="Time off / PTO" href="/timeoff" isCollapsed={isCollapsed} />
           </NavSection>
 
+          {/* Talent */}
           <NavSection label="TALENT" isCollapsed={isCollapsed}>
             <NavItem icon={Target} label="Talent hub" href="/talent" isCollapsed={isCollapsed} />
             <NavItem icon={Briefcase} label="Recruiting" href="/hiring" isCollapsed={isCollapsed} />
             <NavItem icon={FileText} label="Onboarding templates" href="/onboarding/templates" isCollapsed={isCollapsed} />
           </NavSection>
 
+          {/* Platform & Intelligence Suite */}
           <NavSection label="PLATFORM" isCollapsed={isCollapsed}>
             <NavItem icon={Cog} label="Operations" href="/operations" isCollapsed={isCollapsed} />
             <NavItem icon={DollarSign} label="Payroll" href="/payroll" isCollapsed={isCollapsed} />
@@ -165,7 +181,7 @@ export function Sidebar({
             <NavItem icon={FolderOpen} label="Documents" href="/employee-documents" isCollapsed={isCollapsed} />
             <NavItem icon={Zap} label="Obsession" href="/obsession" isCollapsed={isCollapsed} />
 
-            {/* ⭐ SPECIAL AI WORKSPACE ITEM */}
+            {/* ⭐ AI WORKSPACE (unchanged) */}
             <a
               href="/ai/workspace"
               className={cn(
@@ -173,15 +189,12 @@ export function Sidebar({
                 isCollapsed ? "justify-center" : "justify-start"
               )}
             >
-              {/* glowing gradient pane */}
               <div
                 className={cn(
                   "absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 blur-md transition-all duration-500",
                   "bg-gradient-to-br from-[#4F46E5]/40 via-[#7C3AED]/40 to-[#EC4899]/40"
                 )}
               />
-
-              {/* Icon capsule */}
               <div
                 className={cn(
                   "relative z-10 flex items-center justify-center h-8 w-8 rounded-lg",
@@ -192,7 +205,6 @@ export function Sidebar({
               >
                 <Sparkles className="h-4 w-4 text-white" strokeWidth={2} />
               </div>
-
               {!isCollapsed && (
                 <span
                   className={cn(
@@ -206,6 +218,56 @@ export function Sidebar({
               )}
             </a>
 
+            {/* ⭐ NEW INTELLIGENCE SUITE FLYOUT */}
+            <div className="relative group mt-1">
+              {/* Parent row routes to /ai */}
+              <a
+                href="/ai"
+                className={cn(
+                  "relative flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all duration-300",
+                  "hover:bg-white/5",
+                  isCollapsed ? "justify-center" : "justify-start"
+                )}
+              >
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900/80 border border-slate-600/70">
+                  <Activity className="h-4 w-4 text-violet-300" />
+                </div>
+
+                {!isCollapsed && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-slate-200">
+                      Intelligence Suite
+                    </span>
+                    <span className="rounded-full bg-violet-500/20 px-2 py-0.5 text-[10px] font-medium text-violet-300">
+                      AI
+                    </span>
+                  </div>
+                )}
+              </a>
+
+              {/* Flyout */}
+              <div className="pointer-events-none absolute left-full top-0 z-50 ml-2 w-72 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
+                <div className="rounded-2xl border border-slate-700 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-xl">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    Intelligence Suite
+                  </p>
+
+                  <div className="space-y-1">
+                    {intelligenceLinks.map((item) => (
+                      <a
+                        key={item.href}
+                        href={item.href}
+                        className="flex items-center gap-3 rounded-xl px-2 py-2 text-xs text-slate-200 hover:bg-slate-800/70 transition-all"
+                      >
+                        <item.icon className="h-4 w-4 text-violet-300" />
+                        <span>{item.label}</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <NavItem icon={Cog} label="Settings" href="/settings" isCollapsed={isCollapsed} />
           </NavSection>
         </div>
@@ -213,11 +275,7 @@ export function Sidebar({
         {/* Footer User */}
         <UserProfile
           isCollapsed={isCollapsed}
-          name={
-            currentUser
-              ? `${currentUser.firstName} ${currentUser.lastName}`
-              : undefined
-          }
+          name={currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : undefined}
           secondary={currentUser?.email ?? currentUser?.role}
         />
       </div>
