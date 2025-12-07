@@ -1,6 +1,9 @@
 // src/lib/api.ts
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
+  (process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080").replace(
+    /\/$/,
+    ""
+  );
 
 // Optional: use this ONLY if you want to force a specific org for debugging.
 // Leave it undefined in real multi-org mode.
@@ -31,12 +34,17 @@ function getIdentityHeaders(): Record<string, string> {
   return headers;
 }
 
+/**
+ * Low-level fetch wrapper.
+ *
+ * NOTE: 404 is treated as "no data" and returns `undefined` instead of throwing,
+ * so callers like `/auth/me` don't blow up the whole app.
+ */
 async function apiFetch<T>(
   path: string,
   options: RequestInit & { jsonBody?: unknown } = {}
-): Promise<T> {
-  const base = API_BASE_URL.replace(/\/$/, "");
-  const url = `${base}${path.startsWith("/") ? path : `/${path}`}`;
+): Promise<T | undefined> {
+  const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
 
   const { jsonBody, headers, ...rest } = options;
 
@@ -55,6 +63,20 @@ async function apiFetch<T>(
         : (rest.body as BodyInit | null | undefined),
     cache: "no-store",
   });
+
+  // 👉 Special case: 404 = "no data" instead of hard error
+  if (res.status === 404) {
+    const text = await res.text().catch(() => "");
+    console.warn(
+      "[api.ts] 404",
+      options.method || "GET",
+      url,
+      "→",
+      res.status,
+      text
+    );
+    return undefined as T;
+  }
 
   if (!res.ok) {
     const text = await res.text();
@@ -80,15 +102,13 @@ async function apiFetch<T>(
 }
 
 const api = {
-  get: <T>(path: string) => apiFetch<T>(path, { method: "GET" }),
-
+  get:  <T>(path: string) => apiFetch<T>(path, { method: "GET" }),
   post: <T>(path: string, body?: unknown) =>
     apiFetch<T>(path, { method: "POST", jsonBody: body }),
-
   patch: <T>(path: string, body?: unknown) =>
     apiFetch<T>(path, { method: "PATCH", jsonBody: body }),
-
-  del: <T>(path: string) => apiFetch<T>(path, { method: "DELETE" }),
+  del:  <T>(path: string) =>
+    apiFetch<T>(path, { method: "DELETE" }),
 };
 
 export default api;

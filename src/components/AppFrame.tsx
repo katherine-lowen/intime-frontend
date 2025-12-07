@@ -40,20 +40,21 @@ export function AppFrame({ children }: { children: ReactNode }) {
 
   // Fetch current user once (for non-bare routes)
   useEffect(() => {
-  if (bare) return;
+    if (bare) return;
 
-  async function loadUser() {
-    try {
-      const user = await api.get<CurrentUser>("/auth/me");
-      setCurrentUser(user);
-    } catch (err) {
-      console.error("Failed to load current user", err);
+    async function loadUser() {
+      try {
+        // api.get now returns T | undefined on 404
+        const user = await api.get<CurrentUser | null>("/auth/me");
+        setCurrentUser(user ?? null);
+      } catch (err) {
+        console.error("Failed to load current user", err);
+        setCurrentUser(null);
+      }
     }
-  }
 
-  loadUser();
-}, [bare]);
-
+    loadUser();
+  }, [bare]);
 
   // Bare layout (login, signup, etc.)
   if (bare) {
