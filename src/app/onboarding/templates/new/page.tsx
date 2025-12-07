@@ -4,6 +4,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { AuthGate } from "@/components/dev-auth-gate";
+import { API_BASE_URL } from "@/lib/api";
 import { logSubmission } from "@/lib/submissions";
 
 type AssigneeType = "EMPLOYEE" | "MANAGER" | "HR" | "OTHER";
@@ -25,11 +26,6 @@ type TaskRow = {
   when?: string;
 };
 
-const API_URL =
-  (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080").replace(
-    /\/$/,
-    "",
-  );
 const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
 
 export default function NewOnboardingTemplatePage() {
@@ -177,7 +173,7 @@ export default function NewOnboardingTemplatePage() {
     try {
       setSubmitting(true);
 
-      const res = await fetch(`${API_URL}/onboarding/templates`, {
+      const res = await fetch(`${API_BASE_URL}/onboarding/templates`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

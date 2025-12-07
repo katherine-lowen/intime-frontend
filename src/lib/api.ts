@@ -1,9 +1,12 @@
 // src/lib/api.ts
-const API_BASE_URL =
-  (process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080").replace(
-    /\/$/,
-    ""
-  );
+// Single source of truth for the external API host.
+// We accept either NEXT_PUBLIC_API_BASE_URL or NEXT_PUBLIC_API_URL to avoid
+// misconfiguration between server and client components.
+export const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:8080"
+).replace(/\/$/, "");
 
 // Optional: use this ONLY if you want to force a specific org for debugging.
 // Leave it undefined in real multi-org mode.

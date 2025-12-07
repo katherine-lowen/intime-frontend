@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { API_BASE_URL } from "@/lib/api";
 
 type AssigneeType = "EMPLOYEE" | "MANAGER" | "HR" | "OTHER";
 
@@ -35,8 +36,6 @@ type Employee = {
   department?: string | null;
 };
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
 
 export default function OnboardingTemplateDetailPage({
@@ -75,7 +74,7 @@ export default function OnboardingTemplateDetailPage({
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`${API_BASE}/onboarding/templates/${id}`, {
+        const res = await fetch(`${API_BASE_URL}/onboarding/templates/${id}`, {
           headers: {
             "x-org-id": ORG_ID,
           },
@@ -127,7 +126,7 @@ export default function OnboardingTemplateDetailPage({
     async function fetchEmployees() {
       setEmployeesLoading(true);
       try {
-        const res = await fetch(`${API_BASE}/employees`, {
+        const res = await fetch(`${API_BASE_URL}/employees`, {
           headers: {
             "x-org-id": ORG_ID,
           },
@@ -174,7 +173,7 @@ export default function OnboardingTemplateDetailPage({
     setError(null);
 
     try {
-      const res = await fetch(`${API_BASE}/onboarding/templates/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/onboarding/templates/${id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -217,7 +216,7 @@ export default function OnboardingTemplateDetailPage({
     setError(null);
 
     try {
-      const res = await fetch(`${API_BASE}/onboarding/templates/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/onboarding/templates/${id}`, {
         method: "DELETE",
         headers: {
           "x-org-id": ORG_ID,
@@ -250,7 +249,7 @@ export default function OnboardingTemplateDetailPage({
 
     try {
       const res = await fetch(
-        `${API_BASE}/onboarding/templates/${id}/apply/${selectedEmployeeId}`,
+        `${API_BASE_URL}/onboarding/templates/${id}/apply/${selectedEmployeeId}`,
         {
           method: "POST",
           headers: {
