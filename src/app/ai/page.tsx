@@ -2,7 +2,16 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Sparkles, Layout, Zap } from "lucide-react";
+import {
+  ArrowLeft,
+  Sparkles,
+  Layout,
+  Zap,
+  Activity,
+  Brain,
+  CalendarClock,
+  HeartPulse,
+} from "lucide-react";
 import { AuthGate } from "@/components/dev-auth-gate";
 
 import { HeroClockAvatar } from "./components/HeroClockAvatar";
@@ -335,6 +344,139 @@ export default function AiWorkspaceLandingPage() {
               </div>
             </div>
           </div>
+
+          {/* Coming Soon: Intime Intelligence Suite */}
+          <section className="relative mt-20 space-y-8">
+            <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+              <div>
+                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1 text-[11px] uppercase tracking-[0.18em] text-slate-300/80 backdrop-blur">
+                  <Sparkles className="h-3 w-3 text-amber-300" />
+                  <span>Intime Intelligence Suite</span>
+                  <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+                    Coming soon
+                  </span>
+                </div>
+                <h2 className="mt-4 text-xl font-semibold text-white">
+                  Beyond hiring: AI that understands{" "}
+                  <span className="bg-gradient-to-r from-sky-300 to-violet-300 bg-clip-text text-transparent">
+                    people, time, and performance
+                  </span>
+                  .
+                </h2>
+                <p className="mt-2 max-w-2xl text-xs text-slate-300">
+                  Preview the next wave of Intime features—deep intelligence for
+                  forecasting headcount, spotting burnout, understanding pay
+                  equity, and tracking engagement across your organization.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+              {/* Workforce Forecasting */}
+              <div className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-5 text-xs text-slate-200 backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 hover:border-sky-300/40 hover:bg-white/10">
+                <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-sky-500/20 blur-3xl transition-opacity group-hover:opacity-70" />
+                <div className="relative mb-4 flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500/15">
+                    <Activity className="h-4 w-4 text-sky-300" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[11px] uppercase tracking-[0.18em] text-sky-200/80">
+                      Planning
+                    </span>
+                    <span className="text-sm font-medium text-white">
+                      AI Workforce Forecasting
+                    </span>
+                  </div>
+                </div>
+                <p className="relative text-[11px] leading-relaxed text-slate-300">
+                  Predict hiring needs, understaffed teams, and headcount shifts
+                  based on seasonality, growth, and time-off patterns.
+                </p>
+                <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-sky-400/20 bg-sky-500/10 px-3 py-1 text-[10px] font-medium text-sky-100">
+                  <span className="h-1.5 w-1.5 rounded-full bg-sky-300" />
+                  In design · Coming soon
+                </div>
+              </div>
+
+              {/* Burnout & Attrition Alerts */}
+              <div className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-5 text-xs text-slate-200 backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 hover:border-rose-300/40 hover:bg-white/10">
+                <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-rose-500/25 blur-3xl transition-opacity group-hover:opacity-80" />
+                <div className="relative mb-4 flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-500/15">
+                    <HeartPulse className="h-4 w-4 text-rose-300" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[11px] uppercase tracking-[0.18em] text-rose-200/80">
+                      People Risk
+                    </span>
+                    <span className="text-sm font-medium text-white">
+                      Burnout & Attrition Signals
+                    </span>
+                  </div>
+                </div>
+                <p className="relative text-[11px] leading-relaxed text-slate-300">
+                  Detect early signs of burnout or churn using PTO behavior,
+                  schedule volatility, feedback tone, and performance changes.
+                </p>
+                <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-rose-400/20 bg-rose-500/10 px-3 py-1 text-[10px] font-medium text-rose-100">
+                  <span className="h-1.5 w-1.5 rounded-full bg-rose-300" />
+                  Research prototype
+                </div>
+              </div>
+
+              {/* Compensation Intelligence */}
+              <div className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-5 text-xs text-slate-200 backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 hover:border-amber-300/40 hover:bg-white/10">
+                <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-amber-500/25 blur-3xl transition-opacity group-hover:opacity-80" />
+                <div className="relative mb-4 flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/15">
+                    <Brain className="h-4 w-4 text-amber-200" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[11px] uppercase tracking-[0.18em] text-amber-200/80">
+                      Compensation
+                    </span>
+                    <span className="text-sm font-medium text-white">
+                      AI Compensation Intelligence
+                    </span>
+                  </div>
+                </div>
+                <p className="relative text-[11px] leading-relaxed text-slate-300">
+                  Generate market-aware salary bands, flag pay equity risks, and
+                  simulate offer scenarios before they&apos;re sent.
+                </p>
+                <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-[10px] font-medium text-amber-100">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-300" />
+                  Roadmap · Q2
+                </div>
+              </div>
+
+              {/* Org Pulse & Engagement */}
+              <div className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-5 text-xs text-slate-200 backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 hover:border-violet-300/40 hover:bg-white/10">
+                <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-violet-500/25 blur-3xl transition-opacity group-hover:opacity-80" />
+                <div className="relative mb-4 flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/15">
+                    <CalendarClock className="h-4 w-4 text-violet-200" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[11px] uppercase tracking-[0.18em] text-violet-200/80">
+                      Org Pulse
+                    </span>
+                    <span className="text-sm font-medium text-white">
+                      Sentiment & Engagement Score
+                    </span>
+                  </div>
+                </div>
+                <p className="relative text-[11px] leading-relaxed text-slate-300">
+                  Combine review text, surveys, and time data into a single
+                  engagement index—with hotspots and recommended actions.
+                </p>
+                <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-violet-400/20 bg-violet-500/10 px-3 py-1 text-[10px] font-medium text-violet-100">
+                  <span className="h-1.5 w-1.5 rounded-full bg-violet-300" />
+                  Concept validation
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
 
         {/* Global keyframes for shimmer */}
