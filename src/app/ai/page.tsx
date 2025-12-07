@@ -24,7 +24,7 @@ export default function AiWorkspaceLandingPage() {
     <AuthGate>
       <div className="relative min-h-screen overflow-hidden bg-[#050815]">
         {/* Multi-layer atmospheric background */}
-        <div className="fixed inset-0">
+        <div className="pointer-events-none absolute inset-0">
           {/* Deep indigo base */}
           <div
             className="absolute inset-0"

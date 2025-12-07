@@ -70,7 +70,7 @@ export function Sidebar({
 
   return (
     <div
-      className="relative flex flex-col bg-gradient-to-b from-[#050815] via-[#070B16] to-[#0C101C] border-r border-white/[0.06] shadow-2xl"
+      className="relative flex h-full min-h-screen flex-col bg-gradient-to-b from-[#050815] via-[#070B16] to-[#0C101C] border-r border-white/[0.06] shadow-2xl"
       style={{
         width: isCollapsed ? "72px" : "260px",
         transition: "width 300ms cubic-bezier(0.25, 0.1, 0.25, 1)"

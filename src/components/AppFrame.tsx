@@ -41,14 +41,18 @@ export function AppFrame({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-slate-50 text-slate-900">
-      <Sidebar
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={handleToggleSidebar}
-        // Dev-only: no backend user yet; sidebar should handle null.
-        currentUser={null}
-      />
+      {/* Sticky/pinned sidebar with its own scroll area */}
+      <div className="sticky top-0 h-screen shrink-0 overflow-y-auto">
+        <Sidebar
+          isCollapsed={sidebarCollapsed}
+          onToggleCollapse={handleToggleSidebar}
+          // Dev-only: no backend user yet; sidebar should handle null.
+          currentUser={null}
+        />
+      </div>
 
-      <div className="flex min-h-screen flex-1 flex-col">
+      {/* Main column: top nav + scrollable page content */}
+      <div className="flex min-h-screen flex-1 flex-col overflow-hidden">
         <TopNav
           onToggleSidebar={handleToggleSidebar}
           isSidebarOpen={!sidebarCollapsed}

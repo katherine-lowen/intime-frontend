@@ -344,6 +344,11 @@ export default function TopNav({
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
 
+  const openPalette = () => {
+    setPaletteOpen(true);
+    setQuery("");
+  };
+
   // user identity from localStorage
   const [user, setUser] = useState<StoredUser | null>(null);
 
@@ -382,7 +387,12 @@ export default function TopNav({
     };
 
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    const onExternalOpen = () => openPalette();
+    window.addEventListener("intime-open-command-palette", onExternalOpen);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("intime-open-command-palette", onExternalOpen);
+    };
   }, []);
 
   // focus input when palette opens
@@ -460,8 +470,7 @@ export default function TopNav({
             <button
               type="button"
               onClick={() => {
-                setPaletteOpen(true);
-                setQuery("");
+                openPalette();
               }}
               className="group relative flex w-full max-w-lg items-center gap-2 rounded-xl border border-slate-700 bg-slate-800/60 px-3 py-2 text-left text-sm text-slate-200 hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
             >
