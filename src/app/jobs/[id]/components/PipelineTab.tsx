@@ -1,34 +1,31 @@
 // src/app/jobs/[id]/components/PipelineTab.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Clock } from "lucide-react";
-import { API_BASE_URL } from "@/lib/api";
+import api from "@/lib/api";
 
-type PipelineApplication = {
-  applicationId: string;
-  createdAt: string;
-  candidateId: string;
-  candidateName: string | null;
-  candidateEmail: string | null;
-  candidateStage: string | null;
-  matchScore: number | null;
-  // optional source tag – if your API adds this later we'll show it
-  source?: string | null;
+type Job = {
+  id: string;
+  title: string;
 };
 
-type PipelineStage = {
+type Stage = {
   id: string;
   name: string;
   order: number;
-  applications: PipelineApplication[];
 };
 
-type PipelineResponse = {
-  jobId: string;
-  title: string;
-  stages: PipelineStage[];
+type Candidate = {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  stageId: string;
+  matchScore?: number | null;
+  source?: string | null;
+  appliedAt?: string | null;
+  title?: string | null;
 };
 
 type FilterState = {
@@ -37,131 +34,164 @@ type FilterState = {
   aiOnly: boolean;
 };
 
-export function PipelineTab({ jobId }: { jobId: string }) {
-  const [data, setData] = useState<PipelineResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+type Props = {
+  jobId: string;
+  job?: Job;
+  stages?: Stage[];
+  candidates?: Candidate[];
+  onReload?: () => void;
+  isEmployee?: boolean;
+};
+
+export function PipelineTab({
+  jobId,
+  job: jobProp,
+  stages: stagesProp,
+  candidates: candidatesProp,
+  onReload,
+  isEmployee = false,
+}: Props) {
+  const [pipelineJob, setPipelineJob] = useState<Job | undefined>(jobProp);
+  const [pipelineStages, setPipelineStages] = useState<Stage[] | undefined>(
+    stagesProp
+  );
+  const [pipelineCandidates, setPipelineCandidates] = useState<
+    Candidate[] | undefined
+  >(candidatesProp);
+  const [loadingFetch, setLoadingFetch] = useState(
+    !jobProp || !stagesProp || !candidatesProp
+  );
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  // Fallback fetch if data not provided
+  useMemo(() => {
+    setPipelineJob(jobProp);
+    setPipelineStages(stagesProp);
+    setPipelineCandidates(candidatesProp);
+  }, [jobProp, stagesProp, candidatesProp]);
+
+  const fetchPipeline = async () => {
+    try {
+      setLoadingFetch(true);
+      setFetchError(null);
+      const data = await api.get<{
+        job: Job;
+        stages: Stage[];
+        candidates: Candidate[];
+      }>(`/jobs/${jobId}/pipeline`);
+      if (data) {
+        setPipelineJob(data.job);
+        setPipelineStages(data.stages);
+        setPipelineCandidates(data.candidates);
+      }
+    } catch (err: any) {
+      console.error("[PipelineTab] fetch failed", err);
+      setFetchError(err?.message || "Failed to load pipeline");
+    } finally {
+      setLoadingFetch(false);
+    }
+  };
+
+  // Auto-fetch if props missing
+  useMemo(() => {
+    if (!jobProp || !stagesProp || !candidatesProp) {
+      void fetchPipeline();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobId]);
+
+  const job = pipelineJob;
+  const stages = pipelineStages ?? [];
+  const candidates = pipelineCandidates ?? [];
+
   const [filters, setFilters] = useState<FilterState>({
     search: "",
     minScore: null,
     aiOnly: false,
   });
+  const [movingId, setMovingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  const sortedStages = useMemo(
+    () => [...stages].sort((a, b) => a.order - b.order),
+    [stages]
+  );
 
-    async function fetchPipeline() {
-      setLoading(true);
-      setError(null);
-
-      try {
-        const res = await fetch(`${API_BASE_URL}/jobs/${jobId}/pipeline`);
-
-        if (!res.ok) {
-          const text = await res.text();
-          throw new Error(
-            `Failed to load pipeline (${res.status}): ${text}`,
-          );
-        }
-
-        const json = (await res.json()) as PipelineResponse;
-
-        if (!cancelled) {
-          setData(json);
-        }
-      } catch (err: any) {
-        console.error("[PipelineTab] error loading pipeline:", err);
-        if (!cancelled) {
-          setError(err?.message || "Failed to load pipeline");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
-
-    if (jobId) fetchPipeline();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [jobId]);
-
-  const filteredStages = useMemo(() => {
-    if (!data) return [];
-
+  const filteredByStage = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
     const minScore = filters.minScore;
     const aiOnly = filters.aiOnly;
 
-    const sortedStages = [...(data.stages ?? [])].sort(
-      (a, b) => a.order - b.order,
-    );
-
-    return sortedStages.map((stage) => {
-      const apps = stage.applications.filter((app) => {
-        if (search) {
-          const name = (app.candidateName || "").toLowerCase();
-          const email = (app.candidateEmail || "").toLowerCase();
-          if (!name.includes(search) && !email.includes(search)) {
-            return false;
-          }
-        }
-
-        if (aiOnly && app.matchScore == null) {
-          return false;
-        }
-
-        if (
-          minScore != null &&
-          typeof app.matchScore === "number" &&
-          app.matchScore < minScore
-        ) {
-          return false;
-        }
-
-        return true;
-      });
-
-      return { ...stage, applications: apps };
+    const map: Record<string, Candidate[]> = {};
+    sortedStages.forEach((s) => {
+      map[s.id] = [];
     });
-  }, [data, filters]);
+
+    candidates.forEach((cand) => {
+      // stage filter bucket
+      if (!map[cand.stageId]) map[cand.stageId] = [];
+
+      // search filter
+      if (search) {
+        const name = (cand.name || "").toLowerCase();
+        const email = (cand.email || "").toLowerCase();
+        if (!name.includes(search) && !email.includes(search)) return;
+      }
+
+      // AI-only filter
+      if (aiOnly && cand.matchScore == null) return;
+
+      // min score
+      if (
+        minScore != null &&
+        typeof cand.matchScore === "number" &&
+        cand.matchScore < minScore
+      ) {
+        return;
+      }
+
+      map[cand.stageId].push(cand);
+    });
+
+    // Sort candidates per stage by appliedAt or name
+    Object.keys(map).forEach((stageId) => {
+      map[stageId] = map[stageId].sort((a, b) => {
+        if (a.appliedAt && b.appliedAt) {
+          return new Date(a.appliedAt).getTime() - new Date(b.appliedAt).getTime();
+        }
+        const an = (a.name || "").toLowerCase();
+        const bn = (b.name || "").toLowerCase();
+        return an.localeCompare(bn);
+      });
+    });
+
+    return map;
+  }, [candidates, filters, sortedStages]);
 
   const totalVisible = useMemo(
     () =>
-      filteredStages.reduce(
-        (sum, stage) => sum + stage.applications.length,
-        0,
+      Object.values(filteredByStage).reduce(
+        (sum, arr) => sum + arr.length,
+        0
       ),
-    [filteredStages],
+    [filteredByStage]
   );
 
-  if (loading && !data) {
-    return (
-      <div className="flex items-center justify-center py-12 text-sm text-slate-500">
-        Loading pipeline…
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-        {error}
-      </div>
-    );
-  }
-
-  if (!data) {
-    return (
-      <div className="flex items-center justify-center py-12 text-sm text-slate-500">
-        No pipeline data available.
-      </div>
-    );
-  }
-
-  const stages = filteredStages;
+  const handleStageChange = async (candidateId: string, newStageId: string) => {
+    if (isEmployee) return;
+    try {
+      setMovingId(candidateId);
+      await api.patch(`/candidates/${candidateId}`, { stageId: newStageId });
+      if (onReload) {
+        await onReload();
+      } else {
+        await fetchPipeline();
+      }
+    } catch (err) {
+      console.error("[Pipeline] stage change failed", err);
+    } finally {
+      setMovingId(null);
+    }
+  };
 
   return (
     <div className="flex h-full flex-col gap-4">
@@ -169,11 +199,10 @@ export function PipelineTab({ jobId }: { jobId: string }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <h2 className="text-sm font-semibold text-slate-900">
-            Pipeline
+            Pipeline {job ? `· ${job.title}` : ""}
           </h2>
           <p className="text-xs text-slate-500">
-            Drag-and-drop kanban view of candidates across stages. AI
-            match scores help you prioritize quickly.
+            Drag/drop not enabled; use stage controls to move candidates. AI match scores help you prioritize quickly.
           </p>
         </div>
 
@@ -188,11 +217,41 @@ export function PipelineTab({ jobId }: { jobId: string }) {
       {/* Filters */}
       <FiltersBar filters={filters} onChange={setFilters} />
 
+      {/* Loading/error */}
+      {loadingFetch && !job && (
+        <div className="space-y-3">
+          <div className="h-12 rounded-lg bg-slate-100" />
+          <div className="h-48 rounded-lg bg-slate-100" />
+        </div>
+      )}
+      {fetchError && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          {fetchError}
+          <div className="mt-2">
+            <button
+              onClick={fetchPipeline}
+              className="rounded-md border border-amber-200 bg-white px-3 py-1 text-[11px] font-medium text-amber-700 hover:bg-amber-50"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Columns */}
       <div className="overflow-x-auto pb-3">
         <div className="flex min-w-full gap-4">
-          {stages.map((stage) => (
-            <StageColumn key={stage.id} stage={stage} jobId={jobId} />
+          {sortedStages.map((stage) => (
+            <StageColumn
+              key={stage.id}
+              stage={stage}
+              candidates={filteredByStage[stage.id] ?? []}
+              jobId={jobId}
+              allStages={sortedStages}
+              onStageChange={handleStageChange}
+              isEmployee={isEmployee}
+              movingId={movingId}
+            />
           ))}
         </div>
       </div>
@@ -277,12 +336,22 @@ function FiltersBar({ filters, onChange }: FiltersBarProps) {
 
 function StageColumn({
   stage,
+  candidates,
   jobId,
+  allStages,
+  onStageChange,
+  isEmployee,
+  movingId,
 }: {
-  stage: PipelineStage;
+  stage: Stage;
+  candidates: Candidate[];
   jobId: string;
+  allStages: Stage[];
+  onStageChange: (candidateId: string, stageId: string) => void;
+  isEmployee: boolean;
+  movingId: string | null;
 }) {
-  const count = stage.applications.length;
+  const count = candidates.length;
 
   return (
     <div className="flex w-[280px] flex-shrink-0 flex-col rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -298,7 +367,6 @@ function StageColumn({
             {count}
           </div>
         </div>
-        {/* progress underline */}
         <div className="mt-2 h-1 w-full rounded-full bg-slate-100">
           <div className="h-1 w-1/3 rounded-full bg-gradient-to-r from-indigo-500 to-sky-400" />
         </div>
@@ -312,11 +380,16 @@ function StageColumn({
           </div>
         )}
 
-        {stage.applications.map((app) => (
+        {candidates.map((cand) => (
           <CandidateCard
-            key={app.applicationId}
-            app={app}
+            key={cand.id}
+            candidate={cand}
             jobId={jobId}
+            allStages={allStages}
+            currentStageId={stage.id}
+            onStageChange={onStageChange}
+            isEmployee={isEmployee}
+            movingId={movingId}
           />
         ))}
       </div>
@@ -325,72 +398,85 @@ function StageColumn({
 }
 
 function CandidateCard({
-  app,
+  candidate,
   jobId,
+  allStages,
+  currentStageId,
+  onStageChange,
+  isEmployee,
+  movingId,
 }: {
-  app: PipelineApplication;
+  candidate: Candidate;
   jobId: string;
+  allStages: Stage[];
+  currentStageId: string;
+  onStageChange: (candidateId: string, stageId: string) => void;
+  isEmployee: boolean;
+  movingId: string | null;
 }) {
   const router = useRouter();
-
-  const created = new Date(app.createdAt);
+  const created = candidate.appliedAt ? new Date(candidate.appliedAt) : null;
   const now = new Date();
-  const diffMs = now.getTime() - created.getTime();
-  const diffDays = Math.max(
-    0,
-    Math.floor(diffMs / (1000 * 60 * 60 * 24)),
-  );
-
+  const diffDays =
+    created != null
+      ? Math.max(0, Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24)))
+      : null;
   const appliedLabel =
-    diffDays === 0
+    diffDays == null
+      ? ""
+      : diffDays === 0
       ? "Applied today"
       : diffDays === 1
       ? "Applied 1 day ago"
       : `Applied ${diffDays} days ago`;
 
-  const initials = getInitials(app.candidateName);
-  const sourceLabel = app.source || guessSourceFromStage(app.candidateStage);
+  const initials = getInitials(candidate.name);
+  const sourceLabel = candidate.source;
   const sourceClass = getSourceBadgeClass(sourceLabel);
 
   const handleClick = () => {
-    if (!app.candidateId) return;
-
+    if (!candidate.id) return;
     const params = new URLSearchParams();
     params.set("source", "pipeline");
     params.set("jobId", jobId);
-    if (typeof app.matchScore === "number") {
-      params.set("matchScore", String(Math.round(app.matchScore)));
+    if (typeof candidate.matchScore === "number") {
+      params.set("matchScore", String(Math.round(candidate.matchScore)));
     }
-
     router.push(
-      `/candidates/${encodeURIComponent(
-        app.candidateId,
-      )}?${params.toString()}`,
+      `/candidates/${encodeURIComponent(candidate.id)}?${params.toString()}`
     );
   };
 
+  const handleMove = (stageId: string) => {
+    if (stageId === currentStageId) return;
+    onStageChange(candidate.id, stageId);
+  };
+
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      className="group flex flex-col rounded-2xl border border-slate-100 bg-white px-3.5 py-3 text-left text-xs shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-[0_14px_40px_rgba(15,23,42,0.08)]"
-    >
+    <div className="group flex flex-col rounded-2xl border border-slate-100 bg-white px-3.5 py-3 text-left text-xs shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-[0_14px_40px_rgba(15,23,42,0.08)]">
       {/* Top row: avatar + name/email */}
-      <div className="flex items-start gap-3">
-        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-[11px] font-semibold text-white">
-          {initials}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-xs font-semibold text-slate-900">
-            {app.candidateName || "Unnamed candidate"}
+      <button type="button" onClick={handleClick} className="w-full text-left">
+        <div className="flex items-start gap-3">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-[11px] font-semibold text-white">
+            {initials}
           </div>
-          {app.candidateEmail && (
-            <div className="truncate text-[11px] text-slate-500">
-              {app.candidateEmail}
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-xs font-semibold text-slate-900">
+              {candidate.name || "Unnamed candidate"}
             </div>
-          )}
+            {candidate.email && (
+              <div className="truncate text-[11px] text-slate-500">
+                {candidate.email}
+              </div>
+            )}
+            {candidate.title && (
+              <div className="truncate text-[11px] text-slate-500">
+                {candidate.title}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      </button>
 
       {/* Middle row: source + (optional) AI match */}
       <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -401,19 +487,36 @@ function CandidateCard({
             {sourceLabel}
           </span>
         )}
-        {typeof app.matchScore === "number" && (
+        {typeof candidate.matchScore === "number" && (
           <span className="inline-flex items-center rounded-full border border-slate-100 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-600 group-hover:border-indigo-100 group-hover:bg-indigo-50 group-hover:text-indigo-700">
-            AI match {Math.round(app.matchScore)}%
+            AI match {Math.round(candidate.matchScore)}%
           </span>
         )}
       </div>
 
-      {/* Bottom row: applied date */}
-      <div className="mt-2 flex items-center gap-1 text-[10px] text-slate-400">
-        <Clock className="h-3 w-3" />
-        <span>{appliedLabel}</span>
+      {/* Bottom row: applied date + stage select */}
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1 text-[10px] text-slate-400">
+          <Clock className="h-3 w-3" />
+          <span>{appliedLabel}</span>
+        </div>
+
+        {!isEmployee && (
+          <select
+            value={currentStageId}
+            onChange={(e) => handleMove(e.target.value)}
+            disabled={movingId === candidate.id}
+            className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700 shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {allStages.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -421,24 +524,14 @@ function CandidateCard({
 /*                                   HELPERS                                  */
 /* -------------------------------------------------------------------------- */
 
-function getInitials(name: string | null): string {
+function getInitials(name: string | null | undefined): string {
   if (!name) return "??";
   const parts = name.trim().split(/\s+/);
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[1][0]).toUpperCase();
+  return (parts[0][0] + (parts[1]?.[0] || "")).toUpperCase();
 }
 
-function guessSourceFromStage(stage: string | null): string | null {
-  if (!stage) return null;
-  const s = stage.toLowerCase();
-  if (s.includes("linkedin")) return "LinkedIn";
-  if (s.includes("referral")) return "Referral";
-  if (s.includes("indeed")) return "Indeed";
-  if (s.includes("internal")) return "Internal";
-  return null;
-}
-
-function getSourceBadgeClass(source: string | null): string {
+function getSourceBadgeClass(source: string | null | undefined): string {
   if (!source) return "bg-slate-50 text-slate-600 border border-slate-100";
 
   const key = source.toLowerCase();

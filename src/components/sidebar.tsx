@@ -33,9 +33,10 @@ import { cn } from "@/lib/utils";
 
 type CurrentUser = {
   id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
   role?: string;
 };
 
@@ -67,6 +68,16 @@ export function Sidebar({
     pathname.startsWith("/login") || pathname.startsWith("/signup");
 
   if (isAuthRoute) return null;
+
+  const role = (currentUser?.role || "").toUpperCase();
+  const isAdmin =
+    role === "OWNER" || role === "ADMIN" || role === "MANAGER";
+  const isEmployee = !isAdmin;
+
+  const userName =
+    currentUser?.name ||
+    `${currentUser?.firstName ?? ""} ${currentUser?.lastName ?? ""}`.trim() ||
+    undefined;
 
   return (
     <div
@@ -154,128 +165,154 @@ export function Sidebar({
 
         {/* MAIN NAV */}
         <div className="flex-1 overflow-y-auto space-y-1 custom-scrollbar">
-          {/* Overview */}
-          <NavSection label="OVERVIEW" isCollapsed={isCollapsed}>
-            <NavItem icon={Home} label="Home" href="/dashboard" isCollapsed={isCollapsed} />
-          </NavSection>
+          {isEmployee ? (
+            <>
+              <NavSection label="EMPLOYEE" isCollapsed={isCollapsed}>
+                <NavItem icon={Home} label="Home" href="/employee" isCollapsed={isCollapsed} />
+                <NavItem icon={Users} label="My profile" href="/employee/profile" isCollapsed={isCollapsed} />
+                <NavItem icon={Calendar} label="My time off" href="/employee/timeoff" isCollapsed={isCollapsed} />
+                <NavItem icon={UserPlus} label="My tasks / onboarding" href="/employee/tasks" isCollapsed={isCollapsed} />
+                <NavItem icon={FileText} label="My reviews" href="/employee/reviews" isCollapsed={isCollapsed} />
+                <NavItem icon={FolderOpen} label="My documents" href="/employee/documents" isCollapsed={isCollapsed} />
+              </NavSection>
+            </>
+          ) : (
+            <>
+              {/* Overview */}
+              <NavSection label="OVERVIEW" isCollapsed={isCollapsed}>
+                <NavItem icon={Home} label="Home" href="/dashboard" isCollapsed={isCollapsed} />
+              </NavSection>
 
-          {/* People */}
-          <NavSection label="PEOPLE" isCollapsed={isCollapsed}>
-            <NavItem icon={Users} label="People hub" href="/people" isCollapsed={isCollapsed} />
-            <NavItem icon={UserPlus} label="Onboarding" href="/onboarding" isCollapsed={isCollapsed} />
-            <NavItem icon={Calendar} label="Time off / PTO" href="/timeoff" isCollapsed={isCollapsed} />
-          </NavSection>
+              {/* People */}
+              <NavSection label="PEOPLE" isCollapsed={isCollapsed}>
+                <NavItem icon={Users} label="People hub" href="/people" isCollapsed={isCollapsed} />
+                <NavItem icon={UserPlus} label="Onboarding" href="/onboarding" isCollapsed={isCollapsed} />
+                <NavItem icon={Calendar} label="Time off / PTO" href="/timeoff" isCollapsed={isCollapsed} />
+                <NavItem icon={Calendar} label="Policies" href="/timeoff/policies" isCollapsed={isCollapsed} />
+                <NavItem icon={ClipboardList} label="Requests" href="/timeoff/requests" isCollapsed={isCollapsed} />
+                <NavItem icon={Calendar} label="Calendar" href="/timeoff/calendar" isCollapsed={isCollapsed} />
+              </NavSection>
 
-          {/* Talent */}
-          <NavSection label="TALENT" isCollapsed={isCollapsed}>
-            <NavItem icon={Target} label="Talent hub" href="/talent" isCollapsed={isCollapsed} />
-            <NavItem icon={Briefcase} label="Recruiting" href="/hiring" isCollapsed={isCollapsed} />
-            <NavItem icon={FileText} label="Onboarding templates" href="/onboarding/templates" isCollapsed={isCollapsed} />
-          </NavSection>
+              {/* Talent */}
+              <NavSection label="TALENT" isCollapsed={isCollapsed}>
+                <NavItem icon={Target} label="Talent hub" href="/talent" isCollapsed={isCollapsed} />
+                <NavItem icon={Briefcase} label="Recruiting" href="/hiring" isCollapsed={isCollapsed} />
+                <NavItem icon={FileText} label="Onboarding templates" href="/onboarding/templates" isCollapsed={isCollapsed} />
+              </NavSection>
 
-          {/* Platform & Intelligence Suite */}
-          <NavSection label="PLATFORM" isCollapsed={isCollapsed}>
-            <NavItem icon={Cog} label="Operations" href="/operations" isCollapsed={isCollapsed} />
-            <NavItem icon={DollarSign} label="Payroll" href="/payroll" isCollapsed={isCollapsed} />
-            <NavItem icon={GraduationCap} label="Learning" href="/learning" isCollapsed={isCollapsed} />
-            <NavItem icon={FolderOpen} label="Documents" href="/employee-documents" isCollapsed={isCollapsed} />
-            <NavItem icon={Zap} label="Obsession" href="/obsession" isCollapsed={isCollapsed} />
+              {/* Platform & Intelligence Suite */}
+              <NavSection label="PLATFORM" isCollapsed={isCollapsed}>
+                <NavItem icon={Cog} label="Operations" href="/operations" isCollapsed={isCollapsed} />
+                <NavItem icon={DollarSign} label="Payroll" href="/payroll" isCollapsed={isCollapsed} />
+                <NavItem icon={GraduationCap} label="Learning" href="/learning" isCollapsed={isCollapsed} />
+                <NavItem icon={FolderOpen} label="Documents" href="/employee-documents" isCollapsed={isCollapsed} />
+                <NavItem icon={Zap} label="Obsession" href="/obsession" isCollapsed={isCollapsed} />
 
-            {/* ⭐ AI WORKSPACE (unchanged) */}
-            <a
-              href="/ai/workspace"
-              className={cn(
-                "relative flex items-center gap-3 rounded-xl px-3 py-2.5 group transition-all duration-300",
-                isCollapsed ? "justify-center" : "justify-start"
-              )}
-            >
-              <div
-                className={cn(
-                  "absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 blur-md transition-all duration-500",
-                  "bg-gradient-to-br from-[#4F46E5]/40 via-[#7C3AED]/40 to-[#EC4899]/40"
-                )}
-              />
-              <div
-                className={cn(
-                  "relative z-10 flex items-center justify-center h-8 w-8 rounded-lg",
-                  "bg-gradient-to-br from-[#4F46E5] via-[#7C3AED] to-[#EC4899]",
-                  "shadow-lg shadow-indigo-600/30 group-hover:shadow-pink-500/40",
-                  "transition-all duration-300 group-hover:scale-110"
-                )}
-              >
-                <Sparkles className="h-4 w-4 text-white" strokeWidth={2} />
-              </div>
-              {!isCollapsed && (
-                <span
+                {/* ⭐ AI WORKSPACE (unchanged) */}
+                <a
+                  href="/ai/workspace"
                   className={cn(
-                    "relative z-10 text-sm font-semibold bg-clip-text text-transparent",
-                    "bg-gradient-to-r from-indigo-300 via-purple-300 to-pink-300",
-                    "tracking-wide"
+                    "relative flex items-center gap-3 rounded-xl px-3 py-2.5 group transition-all duration-300",
+                    isCollapsed ? "justify-center" : "justify-start"
                   )}
                 >
-                  AI Workspace
-                </span>
-              )}
-            </a>
+                  <div
+                    className={cn(
+                      "absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 blur-md transition-all duration-500",
+                      "bg-gradient-to-br from-[#4F46E5]/40 via-[#7C3AED]/40 to-[#EC4899]/40"
+                    )}
+                  />
+                  <div
+                    className={cn(
+                      "relative z-10 flex items-center justify-center h-8 w-8 rounded-lg",
+                      "bg-gradient-to-br from-[#4F46E5] via-[#7C3AED] to-[#EC4899]",
+                      "shadow-lg shadow-indigo-600/30 group-hover:shadow-pink-500/40",
+                      "transition-all duration-300 group-hover:scale-110"
+                    )}
+                  >
+                    <Sparkles className="h-4 w-4 text-white" strokeWidth={2} />
+                  </div>
+                  {!isCollapsed && (
+                    <span
+                      className={cn(
+                        "relative z-10 text-sm font-semibold bg-clip-text text-transparent",
+                        "bg-gradient-to-r from-indigo-300 via-purple-300 to-pink-300",
+                        "tracking-wide"
+                      )}
+                    >
+                      AI Workspace
+                    </span>
+                  )}
+                </a>
 
-            {/* ⭐ NEW INTELLIGENCE SUITE FLYOUT */}
-            <div className="relative group mt-1">
-              {/* Parent row routes to /ai */}
-              <a
-                href="/ai"
-                className={cn(
-                  "relative flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all duration-300",
-                  "hover:bg-white/5",
-                  isCollapsed ? "justify-center" : "justify-start"
-                )}
-              >
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900/80 border border-slate-600/70">
-                  <Activity className="h-4 w-4 text-violet-300" />
+                {/* ⭐ NEW INTELLIGENCE SUITE FLYOUT */}
+                <div className="relative group mt-1">
+                  {/* Parent row routes to /ai */}
+                  <a
+                    href="/ai"
+                    className={cn(
+                      "relative flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all duration-300",
+                      "hover:bg-white/5",
+                      isCollapsed ? "justify-center" : "justify-start"
+                    )}
+                  >
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900/80 border border-slate-600/70">
+                      <Activity className="h-4 w-4 text-violet-300" />
+                    </div>
+
+                    {!isCollapsed && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-slate-200">
+                          Intelligence Suite
+                        </span>
+                        <span className="rounded-full bg-violet-500/20 px-2 py-0.5 text-[10px] font-medium text-violet-300">
+                          AI
+                        </span>
+                      </div>
+                    )}
+                  </a>
+
+                  {/* Flyout */}
+                  <div className="pointer-events-none absolute left-full top-0 z-50 ml-2 w-72 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
+                    <div className="rounded-2xl border border-slate-700 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-xl">
+                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                        Intelligence Suite
+                      </p>
+
+                      <div className="space-y-1">
+                        {intelligenceLinks.map((item) => (
+                          <a
+                            key={item.href}
+                            href={item.href}
+                            className="flex items-center gap-3 rounded-xl px-2 py-2 text-xs text-slate-200 hover:bg-slate-800/70 transition-all"
+                          >
+                            <item.icon className="h-4 w-4 text-violet-300" />
+                            <span>{item.label}</span>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                {!isCollapsed && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-slate-200">
-                      Intelligence Suite
-                    </span>
-                    <span className="rounded-full bg-violet-500/20 px-2 py-0.5 text-[10px] font-medium text-violet-300">
-                      AI
-                    </span>
-                  </div>
+                <NavItem icon={Cog} label="Settings" href="/settings" isCollapsed={isCollapsed} />
+                {(role === "OWNER" || role === "ADMIN") && (
+                  <NavItem
+                    icon={Users}
+                    label="Members"
+                    href="/settings/members"
+                    isCollapsed={isCollapsed}
+                  />
                 )}
-              </a>
-
-              {/* Flyout */}
-              <div className="pointer-events-none absolute left-full top-0 z-50 ml-2 w-72 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
-                <div className="rounded-2xl border border-slate-700 bg-slate-950/95 p-3 shadow-2xl backdrop-blur-xl">
-                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                    Intelligence Suite
-                  </p>
-
-                  <div className="space-y-1">
-                    {intelligenceLinks.map((item) => (
-                      <a
-                        key={item.href}
-                        href={item.href}
-                        className="flex items-center gap-3 rounded-xl px-2 py-2 text-xs text-slate-200 hover:bg-slate-800/70 transition-all"
-                      >
-                        <item.icon className="h-4 w-4 text-violet-300" />
-                        <span>{item.label}</span>
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <NavItem icon={Cog} label="Settings" href="/settings" isCollapsed={isCollapsed} />
-          </NavSection>
+              </NavSection>
+            </>
+          )}
         </div>
 
         {/* Footer User */}
         <UserProfile
           isCollapsed={isCollapsed}
-          name={currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : undefined}
+          name={userName}
           secondary={currentUser?.email ?? currentUser?.role}
         />
       </div>

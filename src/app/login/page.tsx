@@ -12,6 +12,27 @@ export default function LoginPage() {
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const email = (formData.get("email") as string) || "demo@intime.ai";
+    const lower = email.toLowerCase();
+    const role = lower.includes("employee") ? "EMPLOYEE" : "ADMIN";
+
+    // Store a lightweight demo user locally so AuthGate sees a session
+    try {
+      window.localStorage.setItem(
+        "intime_demo_user",
+        JSON.stringify({
+          id: "emp_demo",
+          email,
+          name: email.split("@")[0],
+          role,
+          org: { id: "demo-org", name: "Intime demo workspace" },
+        })
+      );
+    } catch {
+      // ignore
+    }
+
     router.push("/dashboard");
   };
 

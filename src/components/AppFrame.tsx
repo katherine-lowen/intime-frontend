@@ -1,10 +1,11 @@
 // src/components/AppFrame.tsx
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
 import TopNav from "@/components/top-nav";
+import { getCurrentUser, type CurrentUser } from "@/lib/auth";
 
 /**
  * Routes that should NOT display sidebar + top nav
@@ -26,6 +27,19 @@ export function AppFrame({ children }: { children: ReactNode }) {
   const bare = isBareRoute(pathname);
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadUser() {
+      const me = await getCurrentUser();
+      if (!cancelled) setCurrentUser(me);
+    }
+    if (!bare) void loadUser();
+    return () => {
+      cancelled = true;
+    };
+  }, [bare]);
 
   // Bare layout (login, signup, etc.)
   if (bare) {
@@ -46,8 +60,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
         <Sidebar
           isCollapsed={sidebarCollapsed}
           onToggleCollapse={handleToggleSidebar}
-          // Dev-only: no backend user yet; sidebar should handle null.
-          currentUser={null}
+          currentUser={currentUser as any}
         />
       </div>
 

@@ -1,28 +1,104 @@
 // src/components/dev-auth-gate.tsx
 "use client";
 
+import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import type React from "react";
+import { getCurrentUser, type CurrentUser } from "@/lib/auth";
 
-/**
- * Dev-only user shape (kept in case it's referenced elsewhere).
- */
-export type DevUser = {
-  id: string;
-  email: string;
-  name?: string | null;
-  orgId?: string;
-  role?: string;
-};
+const PUBLIC_ROUTES = new Set<string>([
+  "/",
+  "/login",
+  "/signup",
+  "/careers",
+]);
 
-/**
- * TEMP: No-op auth wrapper for YC/demo.
- *
- * Many pages wrap their content in <AuthGate>...</AuthGate>.
- * For this preview build, we don't enforce any auth at all –
- * we simply render the children.
- *
- * This avoids crashes / redirects while keeping the page code unchanged.
- */
+const NO_ORG_ROUTE = "/no-org";
+
+function isPublic(pathname: string | null) {
+  if (!pathname) return false;
+  if (PUBLIC_ROUTES.has(pathname)) return true;
+  if (pathname.startsWith("/careers")) return true;
+  return false;
+}
+
+const EMPLOYEE_HOME = "/employee";
+const EMPLOYEE_ALLOWED_PREFIXES = [
+  EMPLOYEE_HOME,
+  "/employee/profile",
+  "/employee/timeoff",
+  "/employee/tasks",
+  "/employee/reviews",
+  "/employee/documents",
+];
+
 export function AuthGate({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const [user, setUser] = useState<CurrentUser | null>(null);
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function check() {
+      // Skip auth on public routes
+      if (isPublic(pathname)) {
+        setChecking(false);
+        return;
+      }
+
+      setChecking(true);
+      const me = await getCurrentUser();
+      if (cancelled) return;
+
+      if (!me) {
+        router.replace("/login");
+        return;
+      }
+
+      // No org membership – send to setup page
+      if (!me.org && pathname !== NO_ORG_ROUTE) {
+        router.replace(NO_ORG_ROUTE);
+        return;
+      }
+
+      // If employee-level role, keep them on employee experience only
+      const role = (me.role || "").toUpperCase();
+      const isEmployee = !["OWNER", "ADMIN", "MANAGER"].includes(role);
+      if (isEmployee) {
+        const allowed = pathname
+          ? EMPLOYEE_ALLOWED_PREFIXES.some((p) =>
+              pathname.startsWith(p)
+            )
+          : false;
+        if (!allowed) {
+          router.replace(EMPLOYEE_HOME);
+          return;
+        }
+      }
+
+      setUser(me);
+      setChecking(false);
+    }
+
+    void check();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname, router]);
+
+  // While checking, render a lightweight placeholder to avoid layout jumps
+  if (checking) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-500">
+        Checking your session…
+      </div>
+    );
+  }
+
+  // If user exists (and org where required), render children
   return <>{children}</>;
 }

@@ -1,343 +1,508 @@
-// src/app/performance/page.tsx
-import api from "@/lib/api";
-import { AuthGate } from "@/components/dev-auth-gate";
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { format } from "date-fns";
+import { AuthGate } from "@/components/dev-auth-gate";
+import api from "@/lib/api";
+import { getCurrentUser } from "@/lib/auth";
 
-export const dynamic = "force-dynamic";
+type OrgRole = "OWNER" | "ADMIN" | "MANAGER" | "EMPLOYEE";
+type CycleStatus = "DRAFT" | "ACTIVE" | "CLOSED";
 
-type ReviewRating =
-  | "Needs improvement"
-  | "Meets expectations"
-  | "Exceeds expectations"
-  | "Outstanding"
-  | string
-  | null
-  | undefined;
-
-type ReviewListItem = {
+type ReviewCycle = {
   id: string;
-  period?: string | null;
-  rating?: ReviewRating;
-  createdAt?: string | null;
-  employee?: {
-    id: string;
-    firstName?: string | null;
-    lastName?: string | null;
-    email?: string | null;
-    title?: string | null;
-    department?: string | null;
-  } | null;
+  name: string;
+  startDate: string;
+  endDate: string;
+  status: CycleStatus;
+  assignedCount?: number | null;
 };
 
-async function getReviews(): Promise<ReviewListItem[]> {
-  try {
-    // match backend controller @Controller('performance-reviews')
-    const data = await api.get<ReviewListItem[]>("/performance-reviews");
-    // normalize possible undefined → []
-    return data ?? [];
-  } catch (err) {
-    console.error("Failed to load performance reviews:", err);
-    return [];
-  }
-}
+type FormState = {
+  id?: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  status: CycleStatus;
+};
 
-function formatDate(value?: string | null) {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString();
-}
+const statusFilters: Array<{ label: string; value: CycleStatus | "ALL" }> = [
+  { label: "All", value: "ALL" },
+  { label: "Draft", value: "DRAFT" },
+  { label: "Active", value: "ACTIVE" },
+  { label: "Closed", value: "CLOSED" },
+];
 
-function getEmployeeName(r: ReviewListItem) {
-  const e = r.employee;
-  if (!e) return "Employee";
-  const name = [e.firstName, e.lastName].filter(Boolean).join(" ");
-  return name || e.email || "Employee";
-}
+export default function PerformancePage() {
+  const [role, setRole] = useState<OrgRole | null>(null);
+  const [cycles, setCycles] = useState<ReviewCycle[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<CycleStatus | "ALL">("ALL");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [form, setForm] = useState<FormState>({
+    name: "",
+    startDate: "",
+    endDate: "",
+    status: "DRAFT",
+  });
+  const [saving, setSaving] = useState(false);
+  const [closingId, setClosingId] = useState<string | null>(null);
 
-function ratingBadge(rating: ReviewRating) {
-  if (!rating) {
-    return (
-      <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs font-medium text-slate-500">
-        Unrated
-      </span>
-    );
-  }
-
-  const base =
-    "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border";
-
-  if (rating === "Needs improvement") {
-    return (
-      <span className={`${base} border-rose-200 bg-rose-50 text-rose-800`}>
-        Needs improvement
-      </span>
-    );
-  }
-
-  if (rating === "Meets expectations") {
-    return (
-      <span className={`${base} border-slate-200 bg-slate-50 text-slate-700`}>
-        Meets expectations
-      </span>
-    );
-  }
-
-  if (rating === "Exceeds expectations") {
-    return (
-      <span
-        className={`${base} border-emerald-200 bg-emerald-50 text-emerald-800`}
-      >
-        Exceeds expectations
-      </span>
-    );
-  }
-
-  if (rating === "Outstanding") {
-    return (
-      <span
-        className={`${base} border-indigo-200 bg-indigo-50 text-indigo-800`}
-      >
-        Outstanding
-      </span>
-    );
-  }
-
-  // Fallback for any custom strings
-  return (
-    <span className={`${base} border-slate-200 bg-slate-50 text-slate-700`}>
-      {rating}
-    </span>
+  const isManager = useMemo(
+    () => role === "OWNER" || role === "ADMIN" || role === "MANAGER",
+    [role]
   );
-}
 
-export default async function PerformanceHomePage() {
-  const reviews = await getReviews();
+  useEffect(() => {
+    let cancelled = false;
+    async function init() {
+      const me = await getCurrentUser();
+      const normalizedRole = (me?.role || "").toUpperCase() as OrgRole;
+      if (!cancelled) setRole(normalizedRole);
+      if (normalizedRole === "EMPLOYEE") {
+        window.location.replace("/employee");
+        return;
+      }
+      await fetchCycles(normalizedRole);
+    }
+    void init();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const total = reviews.length;
-  const needsImprovement = reviews.filter(
-    (r) => r.rating === "Needs improvement"
-  ).length;
-  const meets = reviews.filter(
-    (r) => r.rating === "Meets expectations"
-  ).length;
-  const exceeds = reviews.filter(
-    (r) => r.rating === "Exceeds expectations"
-  ).length;
-  const outstanding = reviews.filter(
-    (r) => r.rating === "Outstanding"
-  ).length;
+  useEffect(() => {
+    if (isManager) {
+      void fetchCycles(role);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter]);
 
-  const recent = reviews
-    .slice()
-    .sort((a, b) => {
-      const da = a.createdAt ? Date.parse(a.createdAt) : 0;
-      const db = b.createdAt ? Date.parse(b.createdAt) : 0;
-      return db - da;
-    })
-    .slice(0, 5);
+  async function fetchCycles(currentRole: OrgRole | null = role) {
+    if (currentRole === "EMPLOYEE") return;
+    try {
+      setLoading(true);
+      setError(null);
+      const query =
+        statusFilter && statusFilter !== "ALL" ? `?status=${statusFilter}` : "";
+      const data = await api.get<ReviewCycle[]>(`/performance/cycles${query}`);
+      setCycles(data ?? []);
+    } catch (err: any) {
+      console.error("[performance] cycles fetch failed", err);
+      setError(err?.message || "Failed to load review cycles.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const openCreate = () => {
+    setForm({
+      id: undefined,
+      name: "",
+      startDate: "",
+      endDate: "",
+      status: "DRAFT",
+    });
+    setDialogOpen(true);
+  };
+
+  const openEdit = (cycle: ReviewCycle) => {
+    setForm({
+      id: cycle.id,
+      name: cycle.name,
+      startDate: cycle.startDate?.slice(0, 10) || "",
+      endDate: cycle.endDate?.slice(0, 10) || "",
+      status: cycle.status,
+    });
+    setDialogOpen(true);
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isManager) return;
+    if (!form.name.trim() || !form.startDate || !form.endDate) {
+      setError("Name and dates are required.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      if (form.id) {
+        await api.patch(`/performance/cycles/${form.id}`, {
+          name: form.name.trim(),
+          startDate: form.startDate,
+          endDate: form.endDate,
+          status: form.status,
+        });
+      } else {
+        await api.post(`/performance/cycles`, {
+          name: form.name.trim(),
+          startDate: form.startDate,
+          endDate: form.endDate,
+          status: "DRAFT",
+        });
+      }
+      setDialogOpen(false);
+      await fetchCycles();
+    } catch (err: any) {
+      console.error("[performance] save failed", err);
+      setError(err?.message || "Failed to save review cycle.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCloseCycle = async (id: string) => {
+    if (!isManager) return;
+    const confirmClose = window.confirm("Close this cycle? You can reopen via edit.");
+    if (!confirmClose) return;
+    setClosingId(id);
+    try {
+      await api.patch(`/performance/cycles/${id}`, { status: "CLOSED" });
+      setCycles((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, status: "CLOSED" } : c))
+      );
+    } catch (err: any) {
+      console.error("[performance] close failed", err);
+      setError(err?.message || "Failed to close cycle.");
+    } finally {
+      setClosingId(null);
+    }
+  };
+
+  const renderStatusChip = (status: CycleStatus) => {
+    const color =
+      status === "ACTIVE"
+        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+        : status === "CLOSED"
+        ? "bg-slate-100 text-slate-700 border-slate-200"
+        : "bg-amber-50 text-amber-700 border-amber-200";
+    return (
+      <span
+        className={`inline-flex items-center rounded-full border px-2 py-1 text-[11px] font-semibold ${color}`}
+      >
+        {status}
+      </span>
+    );
+  };
+
+  const renderSkeleton = () => (
+    <div className="space-y-4 animate-pulse">
+      <div className="h-10 w-48 rounded bg-slate-100" />
+      <div className="h-24 rounded-2xl border border-slate-200 bg-slate-100" />
+      <div className="h-24 rounded-2xl border border-slate-200 bg-slate-100" />
+    </div>
+  );
 
   return (
     <AuthGate>
-      <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-8">
-        {/* HEADER */}
-        <header className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-              Performance
-            </p>
-            <h1 className="mt-1 text-3xl font-semibold text-slate-900">
-              Performance overview
-            </h1>
-            <p className="mt-1 text-sm text-slate-500">
-              See how reviews are trending across the org and jump into
-              individual cycles.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href="/performance/reviews/new"
-              className="inline-flex items-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500"
-            >
-              New review
-            </Link>
-            <Link
-              href="/performance/reviews"
-              className="inline-flex items-center rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              View all reviews
-            </Link>
-          </div>
-        </header>
-
-        {/* SUMMARY GRID */}
-        <section className="grid gap-4 md:grid-cols-4">
-          <SummaryCard
-            label="Total reviews"
-            value={total}
-            helper="All-time reviews"
-          />
-          <SummaryCard
-            label="Outstanding"
-            value={outstanding}
-            helper="Top performers"
-          />
-          <SummaryCard
-            label="Exceeds expectations"
-            value={exceeds}
-            helper="Above the bar"
-          />
-          <SummaryCard
-            label="Meets / below"
-            value={meets + needsImprovement}
-            helper={`${meets} meets · ${needsImprovement} needs improvement`}
-          />
-        </section>
-
-        {/* MAIN LAYOUT */}
-        <section className="grid gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1.3fr)]">
-          {/* Recent reviews table */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <div>
-                <h2 className="text-sm font-semibold text-slate-900">
-                  Recent reviews
-                </h2>
-                <p className="mt-1 text-xs text-slate-500">
-                  The latest review cycles created in Intime.
-                </p>
-              </div>
-              <Link
-                href="/performance/reviews"
-                className="text-xs font-medium text-indigo-600 hover:text-indigo-500"
-              >
-                View all
-              </Link>
+      <div className="min-h-screen bg-slate-50">
+        <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-500">
+                Performance
+              </p>
+              <h1 className="text-2xl font-semibold text-slate-900">
+                Performance reviews
+              </h1>
+              <p className="text-sm text-slate-600">
+                Set up review cycles, templates, and track progress across your team.
+              </p>
             </div>
-
-            {recent.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
-                No performance reviews yet. Start by creating your first review
-                for a team member.
-              </div>
-            ) : (
-              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                <table className="min-w-full divide-y divide-slate-200">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
-                        Employee
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
-                        Period
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
-                        Rating
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
-                        Created
-                      </th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-600">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 bg-white">
-                    {recent.map((r) => (
-                      <tr key={r.id} className="hover:bg-slate-50">
-                        <td className="px-4 py-3 text-sm">
-                          {r.employee ? (
-                            <Link
-                              href={`/people/${r.employee.id}`}
-                              className="font-medium text-slate-900 hover:text-indigo-600 hover:underline"
-                            >
-                              {getEmployeeName(r)}
-                            </Link>
-                          ) : (
-                            <span className="font-medium text-slate-900">
-                              {getEmployeeName(r)}
-                            </span>
-                          )}
-                          {r.employee?.title && (
-                            <div className="text-xs text-slate-500">
-                              {r.employee.title}
-                              {r.employee.department
-                                ? ` · ${r.employee.department}`
-                                : ""}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-slate-700">
-                          {r.period || "—"}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-slate-700">
-                          {ratingBadge(r.rating)}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-slate-700">
-                          {formatDate(r.createdAt)}
-                        </td>
-                        <td className="px-4 py-3 text-right text-sm">
-                          <Link
-                            href={`/performance/reviews/${r.id}`}
-                            className="text-xs font-medium text-indigo-600 hover:text-indigo-500 hover:underline"
-                          >
-                            Open
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            {isManager && (
+              <button
+                onClick={openCreate}
+                className="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
+                type="button"
+              >
+                New review cycle
+              </button>
             )}
           </div>
 
-          {/* Side panel: review cycles + notes */}
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-900">
-                Review cycles (coming soon)
-              </h2>
-              <p className="mt-1 text-xs text-slate-500">
-                In the next iteration, you&apos;ll be able to design recurring
-                waves (mid-year, annual) and track completion by manager and
-                org.
-              </p>
-              <ul className="mt-3 space-y-1.5 text-xs text-slate-600">
-                <li>• Configure cycles by department and level</li>
-                <li>• Track who&apos;s submitted vs. pending</li>
-                <li>• Calibrate ratings across teams</li>
-              </ul>
+          {error && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+              {error}
             </div>
+          )}
 
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-xs text-slate-600">
-              Use this page as the home for how performance is actually tracked
-              in the org — your &quot;source of truth&quot; for reviews and,
-              later, calibration and comp.
+          {!isManager && !loading ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              You do not have access to performance reviews.
+            </div>
+          ) : (
+            <div className="grid gap-6 md:grid-cols-12">
+              <div className="md:col-span-8 space-y-4">
+                {/* Status filters */}
+                <div className="flex flex-wrap gap-2">
+                  {statusFilters.map((item) => (
+                    <button
+                      key={item.value}
+                      onClick={() => setStatusFilter(item.value)}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                        statusFilter === item.value
+                          ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+                          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                      }`}
+                      type="button"
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Cycles table */}
+                {loading ? (
+                  renderSkeleton()
+                ) : cycles.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-6 text-sm text-slate-600 shadow-sm">
+                    <div className="mb-2 font-semibold text-slate-800">
+                      No review cycles yet
+                    </div>
+                    <p className="mb-4 text-sm text-slate-600">
+                      Start your first cycle to launch performance reviews.
+                    </p>
+                    {isManager && (
+                      <button
+                        onClick={openCreate}
+                        className="rounded-md bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700"
+                        type="button"
+                      >
+                        Create your first cycle
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <div className="grid grid-cols-12 gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase text-slate-600">
+                      <div className="col-span-4">Name</div>
+                      <div className="col-span-4">Period</div>
+                      <div className="col-span-2">Status</div>
+                      <div className="col-span-2 text-right">Actions</div>
+                    </div>
+                    <div className="divide-y divide-slate-200">
+                      {cycles.map((cycle) => (
+                        <div
+                          key={cycle.id}
+                          className="grid grid-cols-12 items-center gap-3 px-4 py-3 text-sm text-slate-800"
+                        >
+                          <div className="col-span-4 font-medium">
+                            {cycle.name}
+                            {typeof cycle.assignedCount === "number" && (
+                              <div className="text-xs text-slate-500">
+                                {cycle.assignedCount} assigned
+                              </div>
+                            )}
+                          </div>
+                          <div className="col-span-4 text-sm text-slate-700">
+                            {cycle.startDate && cycle.endDate
+                              ? `${format(new Date(cycle.startDate), "MMM d, yyyy")} – ${format(new Date(cycle.endDate), "MMM d, yyyy")}`
+                              : "—"}
+                          </div>
+                          <div className="col-span-2">{renderStatusChip(cycle.status)}</div>
+                          <div className="col-span-2 flex justify-end gap-2 text-xs">
+                            <Link
+                              href={`/performance/cycles/${cycle.id}`}
+                              className="rounded-md border border-slate-200 px-2 py-1 text-slate-700 hover:bg-slate-50"
+                            >
+                              View
+                            </Link>
+                            {isManager && (
+                              <>
+                                <button
+                                  onClick={() => openEdit(cycle)}
+                                  className="rounded-md border border-slate-200 px-2 py-1 text-slate-700 hover:bg-slate-50"
+                                  type="button"
+                                >
+                                  Edit
+                                </button>
+                                {cycle.status === "ACTIVE" && (
+                                  <button
+                                    onClick={() => handleCloseCycle(cycle.id)}
+                                    disabled={closingId === cycle.id}
+                                    className="rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+                                    type="button"
+                                  >
+                                    {closingId === cycle.id ? "Closing…" : "Close"}
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Right column */}
+              <div className="md:col-span-4 space-y-4">
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <h3 className="text-sm font-semibold text-slate-900">Review stats</h3>
+                  <p className="mt-1 text-xs text-slate-600">
+                    Quick snapshot of current cycles.
+                  </p>
+                  <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-3">
+                      <div className="text-[11px] uppercase text-slate-500">Active</div>
+                      <div className="text-xl font-semibold text-slate-900">
+                        {cycles.filter((c) => c.status === "ACTIVE").length}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-3">
+                      <div className="text-[11px] uppercase text-slate-500">Drafts</div>
+                      <div className="text-xl font-semibold text-slate-900">
+                        {cycles.filter((c) => c.status === "DRAFT").length}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-3">
+                      <div className="text-[11px] uppercase text-slate-500">Closed</div>
+                      <div className="text-xl font-semibold text-slate-900">
+                        {cycles.filter((c) => c.status === "CLOSED").length}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-3">
+                      <div className="text-[11px] uppercase text-slate-500">Total</div>
+                      <div className="text-xl font-semibold text-slate-900">{cycles.length}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <h3 className="text-sm font-semibold text-slate-900">Templates</h3>
+                  <p className="mt-1 text-xs text-slate-600">
+                    Reuse your favorite review templates or create a new one.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                    <Link
+                      href="/performance/templates"
+                      className="rounded-md border border-slate-200 px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      Browse templates
+                    </Link>
+                    <Link
+                      href="/performance/templates/new"
+                      className="rounded-md bg-slate-900 px-3 py-2 font-semibold text-white hover:bg-slate-800"
+                    >
+                      New template
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Dialog */}
+        {dialogOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+            <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">
+                    {form.id ? "Edit review cycle" : "New review cycle"}
+                  </h2>
+                  <p className="text-xs text-slate-600">
+                    Define the period and status for this cycle.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setDialogOpen(false)}
+                  className="text-xs font-semibold text-slate-500 hover:text-slate-700"
+                  type="button"
+                >
+                  Close
+                </button>
+              </div>
+
+              <form className="mt-4 space-y-4" onSubmit={handleSave}>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-700">Name</label>
+                  <input
+                    value={form.name}
+                    onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    placeholder="Mid-year review"
+                    required
+                  />
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-slate-700">
+                      Period start
+                    </label>
+                    <input
+                      type="date"
+                      value={form.startDate}
+                      onChange={(e) =>
+                        setForm((prev) => ({ ...prev, startDate: e.target.value }))
+                      }
+                      className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-slate-700">
+                      Period end
+                    </label>
+                    <input
+                      type="date"
+                      value={form.endDate}
+                      onChange={(e) =>
+                        setForm((prev) => ({ ...prev, endDate: e.target.value }))
+                      }
+                      className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {form.id && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-slate-700">Status</label>
+                    <select
+                      value={form.status}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          status: e.target.value as CycleStatus,
+                        }))
+                      }
+                      className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="DRAFT">Draft</option>
+                      <option value="ACTIVE">Active</option>
+                      <option value="CLOSED">Closed</option>
+                    </select>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDialogOpen(false)}
+                    className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {saving ? "Saving…" : form.id ? "Save changes" : "Create cycle"}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
-        </section>
-      </main>
-    </AuthGate>
-  );
-}
-
-function SummaryCard({
-  label,
-  value,
-  helper,
-}: {
-  label: string;
-  value: number;
-  helper: string;
-}) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="text-xs font-medium text-slate-500">{label}</div>
-      <div className="mt-1 text-2xl font-semibold text-slate-900">
-        {value}
+        )}
       </div>
-      <p className="mt-1 text-[11px] text-slate-500">{helper}</p>
-    </div>
+    </AuthGate>
   );
 }

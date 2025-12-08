@@ -1,360 +1,241 @@
-// src/app/timeoff/calendar/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { addMonths, endOfMonth, format, startOfMonth } from "date-fns";
+import { useRouter } from "next/navigation";
+import { AuthGate } from "@/components/dev-auth-gate";
 import api from "@/lib/api";
-import CalendarMonth, {
-  type CalendarEvent,
-} from "@/components/calendar-month";
+import { getCurrentUser } from "@/lib/auth";
 
-type TimeOffStatus = "REQUESTED" | "APPROVED" | "DENIED" | "CANCELLED";
+type OrgRole = "OWNER" | "ADMIN" | "MANAGER" | "EMPLOYEE";
 
-type TimeOffType =
-  | "PTO"
-  | "SICK"
-  | "PERSONAL"
-  | "UNPAID"
-  | "JURY_DUTY"
-  | "PARENTAL_LEAVE";
-
-type EmployeeSummary = {
-  id: string;
-  firstName: string;
-  lastName: string;
-  department?: string | null;
-};
-
-type PolicySummary = {
-  id: string;
-  name: string;
-};
-
-type TimeOffRequest = {
+type TimeOffCalendarEvent = {
   id: string;
   employeeId: string;
-  type: TimeOffType;
-  status: TimeOffStatus;
-  startDate: string; // ISO date
-  endDate: string; // ISO date
-  employee: EmployeeSummary | null;
-  policy: PolicySummary | null;
+  employeeName: string;
+  policyName?: string;
+  startDate: string;
+  endDate: string;
+  status: "REQUESTED" | "APPROVED" | "DENIED" | "CANCELLED";
 };
 
-export default function TimeOffCalendarPage() {
-  const [requests, setRequests] = useState<TimeOffRequest[]>([]);
+type StatusFilter = "ALL" | TimeOffCalendarEvent["status"];
+
+function enumerateDays(from: Date, to: Date) {
+  const dates: string[] = [];
+  const curr = new Date(from);
+  while (curr <= to) {
+    dates.push(format(curr, "yyyy-MM-dd"));
+    curr.setDate(curr.getDate() + 1);
+  }
+  return dates;
+}
+
+export default function TimeoffCalendarPage() {
+  const router = useRouter();
+  const [role, setRole] = useState<OrgRole | null>(null);
+  const [rangeStart, setRangeStart] = useState<Date>(startOfMonth(new Date()));
+  const [rangeEnd, setRangeEnd] = useState<Date>(endOfMonth(new Date()));
+  const [events, setEvents] = useState<TimeOffCalendarEvent[]>([]);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [statusFilter, setStatusFilter] = useState<"ALL" | "APPROVED_ONLY">(
-    "ALL",
+  const isManager = useMemo(
+    () => role === "OWNER" || role === "ADMIN" || role === "MANAGER",
+    [role]
   );
+  const isEmployee = role === "EMPLOYEE";
 
-  // day drawer state
-  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
-  const [selectedRequests, setSelectedRequests] = useState<TimeOffRequest[]>([]);
-  const [mutatingId, setMutatingId] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const load = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const params = new URLSearchParams();
+      params.set("from", format(rangeStart, "yyyy-MM-dd"));
+      params.set("to", format(rangeEnd, "yyyy-MM-dd"));
+      if (statusFilter !== "ALL") params.set("status", statusFilter);
+      const data = await api.get<TimeOffCalendarEvent[]>(
+        `/timeoff/calendar?${params.toString()}`
+      );
+      setEvents(data ?? []);
+    } catch (err: any) {
+      console.error("[timeoff/calendar] fetch failed", err);
+      setError(err?.message || "Failed to load calendar.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
-
-    async function load() {
-      setLoading(true);
-      setError(null);
-      try {
-        const data = await api.get<TimeOffRequest[]>("/timeoff/requests");
-        if (!cancelled) {
-          // normalize in case API returns undefined / 204
-          setRequests(data ?? []);
-        }
-      } catch (e: any) {
-        console.error("[TimeOffCalendarPage] failed to load requests", e);
-        if (!cancelled) {
-          setError("Failed to load time off requests.");
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
+    async function init() {
+      const me = await getCurrentUser();
+      const normalizedRole = (me?.role || "").toUpperCase() as OrgRole;
+      if (!cancelled) setRole(normalizedRole);
+      if (normalizedRole === "EMPLOYEE") {
+        router.replace("/employee/timeoff");
+        return;
       }
+      await load();
     }
-
-    load();
+    void init();
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const filteredRequests = useMemo(() => {
-    if (statusFilter === "APPROVED_ONLY") {
-      return requests.filter((r) => r.status === "APPROVED");
-    }
-    return requests;
-  }, [requests, statusFilter]);
+  useEffect(() => {
+    if (!isEmployee) void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rangeStart, rangeEnd, statusFilter]);
 
-  // Map backend requests → calendar events (with meta = full request)
-  const events: CalendarEvent[] = useMemo(
-    () =>
-      filteredRequests.map((r) => {
-        const name = r.employee
-          ? `${r.employee.firstName} ${r.employee.lastName}`
-          : `Employee ${r.employeeId.slice(0, 6)}`;
+  const grouped = useMemo(() => {
+    const byDay: Record<string, TimeOffCalendarEvent[]> = {};
+    events.forEach((event) => {
+      const days = enumerateDays(new Date(event.startDate), new Date(event.endDate));
+      days.forEach((day) => {
+        byDay[day] = byDay[day] || [];
+        byDay[day].push(event);
+      });
+    });
+    return byDay;
+  }, [events]);
 
-        return {
-          id: r.id,
-          title: `${name} · ${r.type.toLowerCase()}`,
-          start: r.startDate,
-          end: r.endDate,
-          status: r.status,
-          kind: r.type,
-          meta: r,
-        };
-      }),
-    [filteredRequests],
+  const goMonth = (delta: number) => {
+    const nextStart = startOfMonth(addMonths(rangeStart, delta));
+    const nextEnd = endOfMonth(nextStart);
+    setRangeStart(nextStart);
+    setRangeEnd(nextEnd);
+  };
+
+  const renderSkeleton = () => (
+    <div className="space-y-3 animate-pulse">
+      <div className="h-10 w-48 rounded bg-slate-100" />
+      <div className="h-24 rounded-2xl border border-slate-200 bg-slate-100" />
+      <div className="h-24 rounded-2xl border border-slate-200 bg-slate-100" />
+    </div>
   );
 
-  function handleDayClick(date: Date, eventsForDay: CalendarEvent[]) {
-    const reqs: TimeOffRequest[] = [];
-
-    for (const e of eventsForDay) {
-      if (e.meta) {
-        reqs.push(e.meta as TimeOffRequest);
-      } else {
-        const fallback = filteredRequests.find((r) => r.id === e.id);
-        if (fallback) reqs.push(fallback);
-      }
-    }
-
-    setSelectedDay(date);
-    setSelectedRequests(reqs);
-    setActionError(null);
-  }
-
-  function closeDrawer() {
-    setSelectedDay(null);
-    setSelectedRequests([]);
-    setActionError(null);
-  }
-
-  async function updateStatus(
-    req: TimeOffRequest,
-    newStatus: TimeOffStatus,
-  ): Promise<void> {
-    if (req.status === newStatus) return;
-
-    setMutatingId(req.id);
-    setActionError(null);
-
-    try {
-      const updated = await api.patch<TimeOffRequest>(
-        `/timeoff/requests/${req.id}/status`,
-        { status: newStatus },
-      );
-
-      // If backend ever returns 204/no body, bail out defensively
-      if (!updated) {
-        console.warn(
-          "[TimeOffCalendarPage] updateStatus returned no body; skipping state update",
-        );
-        return;
-      }
-
-      // Update global list
-      setRequests((prev) =>
-        prev.map((r) => (r.id === req.id ? updated : r)),
-      );
-
-      // Update currently selected day view
-      setSelectedRequests((prev) =>
-        prev.map((r) => (r.id === req.id ? updated : r)),
-      );
-    } catch (e: any) {
-      console.error("[TimeOffCalendarPage] failed to update status", e);
-      setActionError("Failed to update request status. Please try again.");
-    } finally {
-      setMutatingId(null);
-    }
-  }
-
   return (
-    <main className="space-y-6 p-6">
-      {/* Header */}
-      <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Time off calendar
-          </h1>
-          <p className="text-sm text-slate-500">
-            See who&apos;s out and when, across your organization.
-          </p>
-        </div>
-
-        <div className="flex flex-col items-start gap-2 text-xs md:flex-row md:items-center md:gap-3">
-          <div className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-medium text-slate-50">
-            <span className="mr-2 inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-            {filteredRequests.length} time off requests shown
+    <AuthGate>
+      <div className="min-h-screen bg-slate-50">
+        <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-500">
+                Time off · Calendar
+              </p>
+              <h1 className="text-2xl font-semibold text-slate-900">
+                Team time off calendar
+              </h1>
+              <p className="text-sm text-slate-600">
+                View approved and pending time off across the org.
+              </p>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <label className="text-[11px] font-medium text-slate-600">
-              Filter
-            </label>
-            <select
-              className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              value={statusFilter}
-              onChange={(e) =>
-                setStatusFilter(e.target.value as "ALL" | "APPROVED_ONLY")
-              }
-            >
-              <option value="ALL">All requests</option>
-              <option value="APPROVED_ONLY">Approved only</option>
-            </select>
-          </div>
-        </div>
-      </header>
+          {error && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+              {error}
+            </div>
+          )}
 
-      {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-          {error}
-        </div>
-      )}
-
-      {loading ? (
-        <div className="rounded-xl border border-slate-200 bg-white px-4 py-6 text-sm text-slate-500 shadow-sm">
-          Loading time off calendar…
-        </div>
-      ) : (
-        <CalendarMonth
-          initialMonth={new Date()}
-          events={events}
-          onDayClick={handleDayClick}
-        />
-      )}
-
-      {/* Side drawer for selected day */}
-      {selectedDay && (
-        <div className="fixed inset-0 z-40 flex items-start justify-end bg-black/20">
-          <div className="h-full w-full max-w-md border-l border-slate-200 bg-white shadow-xl">
-            <div className="flex items-start justify-between border-b border-slate-100 px-4 py-3">
-              <div>
-                <div className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                  Day details
+          {!isManager && !loading ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              You do not have permission to view the calendar.
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => goMonth(-1)}
+                    className="rounded-md border border-slate-200 bg-white px-3 py-1 text-sm text-slate-800 hover:bg-slate-50"
+                  >
+                    ← Prev
+                  </button>
+                  <div className="text-sm font-medium text-slate-800">
+                    {format(rangeStart, "LLLL yyyy")}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => goMonth(1)}
+                    className="rounded-md border border-slate-200 bg-white px-3 py-1 text-sm text-slate-800 hover:bg-slate-50"
+                  >
+                    Next →
+                  </button>
                 </div>
-                <div className="text-sm font-semibold text-slate-900">
-                  {selectedDay.toLocaleDateString(undefined, {
-                    weekday: "long",
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })}
+
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-medium text-slate-700">
+                    Status
+                  </label>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) =>
+                      setStatusFilter(e.target.value as StatusFilter)
+                    }
+                    className="rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-800"
+                  >
+                    <option value="ALL">All</option>
+                    <option value="APPROVED">Approved</option>
+                    <option value="REQUESTED">Requested</option>
+                    <option value="DENIED">Denied</option>
+                    <option value="CANCELLED">Cancelled</option>
+                  </select>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={closeDrawer}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50"
-              >
-                ✕
-              </button>
-            </div>
 
-            <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-3 text-sm">
-              {actionError && (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700">
-                  {actionError}
-                </div>
-              )}
-
-              {selectedRequests.length === 0 ? (
-                <div className="mt-4 text-xs text-slate-500">
-                  No one is out on this day (based on current filters).
+              {loading ? (
+                renderSkeleton()
+              ) : Object.keys(grouped).length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-6 text-sm text-slate-600 shadow-sm">
+                  No events in this range.
                 </div>
               ) : (
-                selectedRequests.map((r) => {
-                  const name = r.employee
-                    ? `${r.employee.firstName} ${r.employee.lastName}`
-                    : `Employee ${r.employeeId.slice(0, 6)}`;
-
-                  const statusBadge =
-                    r.status === "APPROVED"
-                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                      : r.status === "REQUESTED"
-                      ? "bg-amber-50 text-amber-700 border-amber-200"
-                      : r.status === "DENIED"
-                      ? "bg-rose-50 text-rose-700 border-rose-200"
-                      : "bg-slate-50 text-slate-600 border-slate-200";
-
-                  return (
-                    <div
-                      key={r.id}
-                      className="rounded-xl border border-slate-200 bg-slate-50/60 p-3"
-                    >
-                      <div className="mb-1 flex items-center justify-between gap-2">
-                        <div className="font-medium text-slate-900">
-                          {name}
+                <div className="space-y-4">
+                  {Object.keys(grouped)
+                    .sort()
+                    .map((day) => (
+                      <div
+                        key={day}
+                        className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                      >
+                        <div className="mb-2 text-sm font-semibold text-slate-800">
+                          {day}
                         </div>
-                        <span
-                          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusBadge}`}
-                        >
-                          {r.status.toLowerCase()}
-                        </span>
-                      </div>
-
-                      <div className="text-xs text-slate-600">
-                        <div className="flex flex-wrap gap-1">
-                          <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
-                            {r.type.toLowerCase()}
-                          </span>
-                          {r.policy && (
-                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-700">
-                              {r.policy.name}
-                            </span>
-                          )}
-                        </div>
-                        <div className="mt-1 text-[11px] text-slate-500">
-                          {new Date(r.startDate).toLocaleDateString()} –{" "}
-                          {new Date(r.endDate).toLocaleDateString()}
+                        <div className="space-y-2">
+                          {grouped[day].map((evt) => (
+                            <div
+                              key={`${day}-${evt.id}`}
+                              className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2"
+                            >
+                              <div>
+                                <div className="text-sm font-medium text-slate-900">
+                                  {evt.employeeName}
+                                </div>
+                                <div className="text-xs text-slate-600">
+                                  {evt.policyName ?? "Time off"} · {evt.startDate} →{" "}
+                                  {evt.endDate}
+                                </div>
+                              </div>
+                              <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+                                {evt.status}
+                              </span>
+                            </div>
+                          ))}
                         </div>
                       </div>
-
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => updateStatus(r, "APPROVED")}
-                          disabled={
-                            mutatingId === r.id || r.status === "APPROVED"
-                          }
-                          className="inline-flex items-center rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => updateStatus(r, "DENIED")}
-                          disabled={
-                            mutatingId === r.id || r.status === "DENIED"
-                          }
-                          className="inline-flex items-center rounded-full bg-rose-600 px-3 py-1 text-[11px] font-medium text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          Deny
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => updateStatus(r, "CANCELLED")}
-                          disabled={
-                            mutatingId === r.id || r.status === "CANCELLED"
-                          }
-                          className="inline-flex items-center rounded-full border border-slate-300 bg-white px-3 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
+                    ))}
+                </div>
               )}
-            </div>
-          </div>
+            </>
+          )}
         </div>
-      )}
-    </main>
+      </div>
+    </AuthGate>
   );
 }

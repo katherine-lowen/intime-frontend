@@ -37,6 +37,27 @@ export const authOptions: NextAuthOptions = {
  * Normalizes the shape so pages can safely use `user.name`, `user.email`, etc.
  */
 export async function getCurrentUser(): Promise<CurrentUser | null> {
+  // Demo/local fallback: read from localStorage if present
+  if (typeof window !== "undefined") {
+    try {
+      const raw = window.localStorage.getItem("intime_demo_user");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.id && parsed?.email) {
+          return {
+            id: parsed.id,
+            email: parsed.email,
+            name: parsed.name ?? parsed.email,
+            role: parsed.role,
+            org: parsed.org,
+          };
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   try {
     // ✅ FIXED: Correct endpoint is /dev-auth/me (NOT /auth/me)
     const res = await fetch(`${API_URL}/dev-auth/me`, {
@@ -44,6 +65,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
         "X-Org-Id": ORG_ID,
       },
       cache: "no-store",
+      credentials: "include",
     });
 
     if (!res.ok) {

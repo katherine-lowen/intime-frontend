@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { AuthGate } from "@/components/dev-auth-gate";
 import { API_BASE_URL } from "@/lib/api";
+import { JobsTableSkeleton } from "./components/JobsTableSkeleton";
 
 export const dynamic = "force-dynamic";
 
@@ -19,14 +20,17 @@ type Job = {
   applicantsCount?: number;
 };
 
-type JobsListResponse = {
-  data?: Job[]; // some backends respond with `data`
-  items?: Job[]; // render backend responds with `items`
-  total: number;
-  page: number;
-  limit: number;
-  pages: number;
-};
+type JobsApiResponse =
+  | Job[]
+  | {
+      items?: Job[];
+      data?: Job[];
+      jobs?: Job[];
+      total?: number;
+      page?: number;
+      limit?: number;
+      pages?: number;
+    };
 
 async function getJobs(): Promise<{ jobs: Job[]; error?: string }> {
   try {
@@ -47,13 +51,16 @@ async function getJobs(): Promise<{ jobs: Job[]; error?: string }> {
       return { jobs: [], error: `API responded with ${res.status}` };
     }
 
-    const data: JobsListResponse | Job[] = await res.json();
+    const data: JobsApiResponse = await res.json();
 
     if (Array.isArray(data)) return { jobs: data };
 
-    // Prefer `items`, fall back to `data`
-    if (data && Array.isArray(data.items)) return { jobs: data.items };
-    if (data && Array.isArray(data.data)) return { jobs: data.data };
+    const maybeJobs =
+      (Array.isArray((data as any).items) && (data as any).items) ||
+      (Array.isArray((data as any).data) && (data as any).data) ||
+      (Array.isArray((data as any).jobs) && (data as any).jobs);
+
+    if (Array.isArray(maybeJobs)) return { jobs: maybeJobs };
 
     return { jobs: [], error: "Unexpected jobs response shape" };
   } catch (err) {
@@ -144,11 +151,23 @@ export default async function JobsPage() {
           </div>
 
           {jobs.length === 0 ? (
-            <p className="text-sm text-slate-500">
-              {error
-                ? "We couldn’t load any jobs. Check your API URL and org configuration."
-                : 'No jobs yet. Click "Open new requisition" to add your first role.'}
-            </p>
+            error ? (
+              <div className="space-y-3">
+                <p className="text-sm text-slate-500">
+                  We couldn’t load any jobs. Check your API URL and org configuration.
+                </p>
+                <button
+                  onClick={() => location.reload()}
+                  className="inline-flex items-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">
+                No jobs yet. Click "Open new requisition" to add your first role.
+              </p>
+            )
           ) : (
             <div className="overflow-hidden rounded-xl border border-slate-100">
               <table className="min-w-full divide-y divide-slate-100 text-sm">

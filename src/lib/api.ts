@@ -70,6 +70,7 @@ async function apiFetch<T>(
         ? JSON.stringify(jsonBody)
         : (rest.body as BodyInit | null | undefined),
     cache: "no-store",
+    credentials: "include",
   });
 
   // 👉 Special case: 404 = "no data" instead of hard error
