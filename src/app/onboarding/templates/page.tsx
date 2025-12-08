@@ -1,180 +1,311 @@
-// src/app/onboarding/templates/page.tsx
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { AuthGate } from "@/components/dev-auth-gate";
 import api from "@/lib/api";
+import { getCurrentUser } from "@/lib/auth";
 
-export const dynamic = "force-dynamic";
-
-type OnboardingTemplateTask = {
-  id: string;
-  title: string;
-  description?: string | null;
-  assigneeType?: "EMPLOYEE" | "MANAGER" | "HR" | "OTHER";
-  dueRelativeDays?: number | null;
-  sortOrder?: number | null;
-};
+type OrgRole = "OWNER" | "ADMIN" | "MANAGER" | "EMPLOYEE";
 
 type OnboardingTemplate = {
   id: string;
   name: string;
   description?: string | null;
-  department?: string | null;
-  role?: string | null;
-  isDefault: boolean;
-  tasks?: OnboardingTemplateTask[];
-  createdAt?: string;
+  taskCount?: number | null;
 };
 
-async function getTemplates(): Promise<OnboardingTemplate[]> {
-  try {
-    const data = await api.get<OnboardingTemplate[]>("/onboarding/templates");
-    // normalize possible undefined → []
-    return data ?? [];
-  } catch (err) {
-    console.error("Failed to load onboarding templates:", err);
-    // Don’t crash the page – just show empty state
-    return [];
+type FormState = {
+  id?: string;
+  name: string;
+  description: string;
+};
+
+export default function OnboardingTemplatesPage() {
+  const [role, setRole] = useState<OrgRole | null>(null);
+  const [templates, setTemplates] = useState<OnboardingTemplate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [form, setForm] = useState<FormState>({
+    name: "",
+    description: "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const isManager = useMemo(
+    () => role === "OWNER" || role === "ADMIN" || role === "MANAGER",
+    [role]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    async function init() {
+      const me = await getCurrentUser();
+      const normalizedRole = (me?.role || "").toUpperCase() as OrgRole;
+      if (!cancelled) setRole(normalizedRole);
+      if (normalizedRole === "EMPLOYEE") {
+        window.location.replace("/employee");
+        return;
+      }
+      await fetchTemplates();
+    }
+    void init();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function fetchTemplates() {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await api.get<OnboardingTemplate[]>("/onboarding/templates");
+      setTemplates(data ?? []);
+    } catch (err: any) {
+      console.error("[onboarding/templates] fetch failed", err);
+      setError(err?.message || "Failed to load templates.");
+    } finally {
+      setLoading(false);
+    }
   }
-}
 
-function formatDate(value?: string) {
-  if (!value) return "";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString();
-}
+  const openCreate = () => {
+    setForm({ id: undefined, name: "", description: "" });
+    setDialogOpen(true);
+  };
 
-export default async function OnboardingTemplatesPage() {
-  const templates = await getTemplates();
+  const openEdit = (tpl: OnboardingTemplate) => {
+    setForm({
+      id: tpl.id,
+      name: tpl.name,
+      description: tpl.description ?? "",
+    });
+    setDialogOpen(true);
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isManager) return;
+    if (!form.name.trim()) {
+      setError("Name is required.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const payload = {
+        name: form.name.trim(),
+        description: form.description.trim(),
+      };
+      if (form.id) {
+        await api.patch(`/onboarding/templates/${form.id}`, payload);
+      } else {
+        await api.post(`/onboarding/templates`, payload);
+      }
+      setDialogOpen(false);
+      await fetchTemplates();
+    } catch (err: any) {
+      console.error("[onboarding/templates] save failed", err);
+      setError(err?.message || "Failed to save template.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!isManager) return;
+    const confirmDelete = window.confirm("Delete this template?");
+    if (!confirmDelete) return;
+    setDeletingId(id);
+    try {
+      await api.del(`/onboarding/templates/${id}`);
+      setTemplates((prev) => prev.filter((t) => t.id !== id));
+    } catch (err: any) {
+      console.error("[onboarding/templates] delete failed", err);
+      setError(err?.message || "Failed to delete template.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const renderSkeleton = () => (
+    <div className="space-y-3 animate-pulse">
+      <div className="h-10 w-48 rounded bg-slate-100" />
+      <div className="h-24 rounded-2xl border border-slate-200 bg-slate-100" />
+      <div className="h-24 rounded-2xl border border-slate-200 bg-slate-100" />
+    </div>
+  );
 
   return (
-    <div className="px-6 py-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">
-            Onboarding templates
-          </h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Standardize onboarding checklists for roles, departments and
-            locations.
-          </p>
-        </div>
-        <Link
-          href="/onboarding/templates/new"
-          className="inline-flex items-center rounded-full bg-indigo-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-600 transition"
-        >
-          + New template
-        </Link>
-      </div>
-
-      {/* Empty state / table */}
-      {templates.length === 0 ? (
-        <div className="rounded-xl border border-slate-200 bg-white px-8 py-10 text-center shadow-sm">
-          <p className="text-sm font-medium text-slate-700">
-            No onboarding templates yet.
-          </p>
-          <p className="mt-1 text-xs text-slate-500">
-            Create your first template to start assigning onboarding flows to
-            new hires.
-          </p>
-          <div className="mt-5 flex justify-center">
-            <Link
-              href="/onboarding/templates/new"
-              className="inline-flex items-center rounded-full bg-indigo-600 px-5 py-2 text-sm font-medium text-white shadow hover:bg-indigo-700 transition"
-            >
-              Create template
-            </Link>
+    <AuthGate>
+      <div className="min-h-screen bg-slate-50">
+        <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-500">
+                Onboarding · Templates
+              </p>
+              <h1 className="text-2xl font-semibold text-slate-900">
+                Onboarding templates
+              </h1>
+              <p className="text-sm text-slate-600">
+                Create reusable onboarding checklists for new hires.
+              </p>
+            </div>
+            {isManager && (
+              <button
+                onClick={openCreate}
+                className="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
+                type="button"
+              >
+                New template
+              </button>
+            )}
           </div>
-        </div>
-      ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full divide-y divide-slate-200">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
-                  Template
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
-                  Target
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
-                  Steps
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
-                  Default
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
-                  Created
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-600">
-                  Actions
-                </th>
-              </tr>
-            </thead>
 
-            <tbody className="divide-y divide-slate-200 bg-white">
-              {templates.map((t) => (
-                <tr key={t.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-4 text-sm">
-                    <div className="flex flex-col">
-                      <span className="font-medium text-slate-900">
-                        {t.name}
-                      </span>
-                      {t.description && (
-                        <span className="mt-0.5 text-xs text-slate-500 line-clamp-1">
-                          {t.description}
-                        </span>
+          {error && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+              {error}
+            </div>
+          )}
+
+          {!isManager && !loading ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              You do not have access to onboarding templates.
+            </div>
+          ) : loading ? (
+            renderSkeleton()
+          ) : templates.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-6 text-sm text-slate-600 shadow-sm">
+              No onboarding templates yet. Create one to start assigning tasks.
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="grid grid-cols-12 gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase text-slate-600">
+                <div className="col-span-4">Name</div>
+                <div className="col-span-4">Description</div>
+                <div className="col-span-2">Tasks</div>
+                <div className="col-span-2 text-right">Actions</div>
+              </div>
+              <div className="divide-y divide-slate-200">
+                {templates.map((tpl) => (
+                  <div
+                    key={tpl.id}
+                    className="grid grid-cols-12 items-center gap-3 px-4 py-3 text-sm text-slate-800"
+                  >
+                    <div className="col-span-4 font-medium">{tpl.name}</div>
+                    <div className="col-span-4 text-slate-600">
+                      {tpl.description || "—"}
+                    </div>
+                    <div className="col-span-2">
+                      {typeof tpl.taskCount === "number" ? tpl.taskCount : "—"}
+                    </div>
+                    <div className="col-span-2 flex justify-end gap-2 text-xs">
+                      <Link
+                        href={`/onboarding/templates/${tpl.id}`}
+                        className="rounded-md border border-slate-200 px-2 py-1 text-slate-700 hover:bg-slate-50"
+                      >
+                        Manage tasks
+                      </Link>
+                      {isManager && (
+                        <button
+                          onClick={() => openEdit(tpl)}
+                          className="rounded-md border border-slate-200 px-2 py-1 text-slate-700 hover:bg-slate-50"
+                          type="button"
+                        >
+                          Edit
+                        </button>
+                      )}
+                      {isManager && (
+                        <button
+                          onClick={() => handleDelete(tpl.id)}
+                          disabled={deletingId === tpl.id}
+                          className="rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+                          type="button"
+                        >
+                          {deletingId === tpl.id ? "Deleting…" : "Delete"}
+                        </button>
                       )}
                     </div>
-                  </td>
-
-                  <td className="px-4 py-4 text-sm text-slate-700">
-                    {t.department || t.role ? (
-                      <div className="flex flex-col text-xs">
-                        {t.department && <span>Dept: {t.department}</span>}
-                        {t.role && (
-                          <span className="text-slate-500">
-                            Role: {t.role}
-                          </span>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-xs text-slate-500">Any role</span>
-                    )}
-                  </td>
-
-                  <td className="px-4 py-4 text-sm text-slate-700">
-                    {(t.tasks?.length ?? 0) || 0}
-                  </td>
-
-                  <td className="px-4 py-4 text-sm">
-                    {t.isDefault ? (
-                      <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 border border-emerald-200">
-                        Default
-                      </span>
-                    ) : (
-                      <span className="text-xs text-slate-400">—</span>
-                    )}
-                  </td>
-
-                  <td className="px-4 py-4 text-sm text-slate-700">
-                    {formatDate(t.createdAt)}
-                  </td>
-
-                  <td className="px-4 py-4 text-sm text-right">
-                    <Link
-                      href={`/onboarding/templates/${t.id}`}
-                      className="text-xs font-medium text-indigo-600 hover:text-indigo-500 underline underline-offset-2"
-                    >
-                      View / edit
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
-      )}
-    </div>
+
+        {/* Dialog */}
+        {dialogOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+            <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">
+                    {form.id ? "Edit template" : "New template"}
+                  </h2>
+                  <p className="text-xs text-slate-600">
+                    Define the template name and description.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setDialogOpen(false)}
+                  className="text-xs font-semibold text-slate-500 hover:text-slate-700"
+                  type="button"
+                >
+                  Close
+                </button>
+              </div>
+
+              <form className="mt-4 space-y-4" onSubmit={handleSave}>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-700">Name</label>
+                  <input
+                    value={form.name}
+                    onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    placeholder="Sales onboarding"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-700">
+                    Description
+                  </label>
+                  <textarea
+                    value={form.description}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, description: e.target.value }))
+                    }
+                    rows={3}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    placeholder="Checklist for new sales hires."
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDialogOpen(false)}
+                    className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {saving ? "Saving…" : form.id ? "Save changes" : "Create template"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    </AuthGate>
   );
 }

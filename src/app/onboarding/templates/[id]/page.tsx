@@ -1,573 +1,380 @@
-// src/app/onboarding/templates/[id]/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { API_BASE_URL } from "@/lib/api";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { AuthGate } from "@/components/dev-auth-gate";
+import api from "@/lib/api";
+import { getCurrentUser } from "@/lib/auth";
 
-type AssigneeType = "EMPLOYEE" | "MANAGER" | "HR" | "OTHER";
+type OrgRole = "OWNER" | "ADMIN" | "MANAGER" | "EMPLOYEE";
 
-type TemplateTask = {
-  id: string;
-  title: string;
-  description?: string | null;
-  assigneeType?: AssigneeType;
-  dueRelativeDays?: number | null;
-  sortOrder?: number | null;
-};
-
-type Template = {
+type OnboardingTemplate = {
   id: string;
   name: string;
   description?: string | null;
-  department?: string | null;
-  role?: string | null;
-  isDefault: boolean;
-  tasks?: TemplateTask[];
-  createdAt?: string;
 };
 
-type Employee = {
+type OnboardingTaskTemplate = {
   id: string;
-  firstName: string;
-  lastName: string;
-  email?: string | null;
-  title?: string | null;
-  department?: string | null;
+  title: string;
+  description?: string | null;
+  dueInDays?: number | null;
 };
 
-const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
+type FormState = {
+  id?: string;
+  title: string;
+  description: string;
+  dueInDays?: number | null;
+};
 
-export default function OnboardingTemplateDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
-  const router = useRouter();
-  const { id } = params;
+export default function OnboardingTemplateDetailPage() {
+  const params = useParams<{ id: string }>();
+  const templateId = params?.id;
 
+  const [role, setRole] = useState<OrgRole | null>(null);
+  const [template, setTemplate] = useState<OnboardingTemplate | null>(null);
+  const [tasks, setTasks] = useState<OnboardingTaskTemplate[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [form, setForm] = useState<FormState>({
+    title: "",
+    description: "",
+    dueInDays: 0,
+  });
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const [template, setTemplate] = useState<Template | null>(null);
+  const isManager = useMemo(
+    () => role === "OWNER" || role === "ADMIN" || role === "MANAGER",
+    [role]
+  );
 
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [department, setDepartment] = useState("");
-  const [role, setRole] = useState("");
-  const [isDefault, setIsDefault] = useState(false);
-
-  // Employees for "Apply to employee"
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [employeesLoading, setEmployeesLoading] = useState(false);
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("");
-  const [applying, setApplying] = useState(false);
-  const [applyMessage, setApplyMessage] = useState<string | null>(null);
-
-  // Load template
   useEffect(() => {
     let cancelled = false;
+    async function init() {
+      const me = await getCurrentUser();
+      const normalizedRole = (me?.role || "").toUpperCase() as OrgRole;
+      if (!cancelled) setRole(normalizedRole);
+      if (normalizedRole === "EMPLOYEE") {
+        window.location.replace("/employee");
+        return;
+      }
+      await fetchTemplate();
+      await fetchTasks();
+    }
+    void init();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templateId]);
 
-    async function fetchTemplate() {
+  async function fetchTemplate() {
+    if (!templateId) {
+      setError("Missing template id.");
+      setLoading(false);
+      return;
+    }
+    try {
       setLoading(true);
       setError(null);
-      try {
-        const res = await fetch(`${API_BASE_URL}/onboarding/templates/${id}`, {
-          headers: {
-            "x-org-id": ORG_ID,
-          },
-          cache: "no-store",
-        });
-
-        if (!res.ok) {
-          const text = await res.text();
-          console.error(
-            "Failed to load onboarding template",
-            res.status,
-            text,
-          );
-          throw new Error(`Failed to load template: ${res.status}`);
-        }
-
-        const data = (await res.json()) as Template;
-
-        if (!cancelled) {
-          setTemplate(data);
-          setName(data.name ?? "");
-          setDescription(data.description ?? "");
-          setDepartment(data.department ?? "");
-          setRole(data.role ?? "");
-          setIsDefault(data.isDefault ?? false);
-        }
-      } catch (e: any) {
-        if (!cancelled) {
-          setError(e?.message || "Failed to load template.");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+      let data = await api.get<OnboardingTemplate>(`/onboarding/templates/${templateId}`);
+      if (!data) {
+        const list = await api.get<OnboardingTemplate[]>("/onboarding/templates");
+        data = (list || []).find((t) => t.id === templateId) as OnboardingTemplate | undefined;
       }
-    }
-
-    fetchTemplate();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [id]);
-
-  // Load employees for apply dropdown
-  useEffect(() => {
-    let cancelled = false;
-
-    async function fetchEmployees() {
-      setEmployeesLoading(true);
-      try {
-        const res = await fetch(`${API_BASE_URL}/employees`, {
-          headers: {
-            "x-org-id": ORG_ID,
-          },
-          cache: "no-store",
-        });
-
-        if (!res.ok) {
-          const text = await res.text();
-          console.error("Failed to load employees", res.status, text);
-          throw new Error(`Failed to load employees: ${res.status}`);
-        }
-
-        const data = (await res.json()) as Employee[];
-
-        if (!cancelled) {
-          setEmployees(data);
-          if (data.length > 0) {
-            setSelectedEmployeeId((prev) => prev || data[0].id);
-          }
-        }
-      } catch (e) {
-        if (!cancelled) {
-          console.error(e);
-        }
-      } finally {
-        if (!cancelled) {
-          setEmployeesLoading(false);
-        }
+      if (data) {
+        setTemplate(data);
+      } else {
+        setError("Template not found.");
       }
+    } catch (err: any) {
+      console.error("[onboarding/template] fetch failed", err);
+      setError(err?.message || "Failed to load template.");
+    } finally {
+      setLoading(false);
     }
+  }
 
-    fetchEmployees();
+  async function fetchTasks() {
+    if (!templateId) return;
+    try {
+      const data = await api.get<OnboardingTaskTemplate[]>(
+        `/onboarding/templates/${templateId}/tasks`
+      );
+      setTasks(data ?? []);
+    } catch (err: any) {
+      console.error("[onboarding/template] tasks fetch failed", err);
+      setError(err?.message || "Failed to load tasks.");
+    }
+  }
 
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const openCreate = () => {
+    setForm({ id: undefined, title: "", description: "", dueInDays: 0 });
+    setDialogOpen(true);
+  };
 
-  async function handleSave(e: React.FormEvent) {
+  const openEdit = (task: OnboardingTaskTemplate) => {
+    setForm({
+      id: task.id,
+      title: task.title,
+      description: task.description ?? "",
+      dueInDays: task.dueInDays ?? 0,
+    });
+    setDialogOpen(true);
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!template) return;
-
+    if (!isManager || !templateId) return;
+    if (!form.title.trim()) {
+      setError("Title is required.");
+      return;
+    }
     setSaving(true);
     setError(null);
-
     try {
-      const res = await fetch(`${API_BASE_URL}/onboarding/templates/${id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "x-org-id": ORG_ID,
-        },
-        body: JSON.stringify({
-          name: name.trim(),
-          description: description.trim() || null,
-          department: department.trim() || null,
-          role: role.trim() || null,
-          isDefault,
-          // steps/tasks unchanged for now
-        }),
-      });
-
-      if (!res.ok) {
-        const text = await res.text();
-        console.error("Update onboarding template failed:", res.status, text);
-        throw new Error(`Update failed: ${res.status}`);
+      const payload = {
+        title: form.title.trim(),
+        description: form.description.trim(),
+        dueInDays:
+          form.dueInDays === undefined || form.dueInDays === null
+            ? null
+            : Number(form.dueInDays),
+      };
+      if (form.id) {
+        await api.patch(`/onboarding/task-templates/${form.id}`, payload);
+      } else {
+        await api.post(`/onboarding/templates/${templateId}/tasks`, payload);
       }
-
-      const updated = (await res.json()) as Template;
-      setTemplate(updated);
-    } catch (e: any) {
-      setError(e?.message || "Failed to save changes.");
+      setDialogOpen(false);
+      await fetchTasks();
+    } catch (err: any) {
+      console.error("[onboarding/template] save task failed", err);
+      setError(err?.message || "Failed to save task.");
     } finally {
       setSaving(false);
     }
-  }
+  };
 
-  async function handleDelete() {
-    if (!template) return;
-
-    const confirmed = window.confirm(
-      "Delete this onboarding template? This cannot be undone.",
-    );
-    if (!confirmed) return;
-
-    setDeleting(true);
-    setError(null);
-
+  const handleDelete = async (id: string) => {
+    if (!isManager) return;
+    const confirmDelete = window.confirm("Delete this task?");
+    if (!confirmDelete) return;
+    setDeletingId(id);
     try {
-      const res = await fetch(`${API_BASE_URL}/onboarding/templates/${id}`, {
-        method: "DELETE",
-        headers: {
-          "x-org-id": ORG_ID,
-        },
-      });
-
-      if (!res.ok) {
-        const text = await res.text();
-        console.error("Delete onboarding template failed:", res.status, text);
-        throw new Error(`Delete failed: ${res.status}`);
-      }
-
-      router.push("/onboarding/templates");
-      router.refresh();
-    } catch (e: any) {
-      setError(e?.message || "Failed to delete template.");
-      setDeleting(false);
-    }
-  }
-
-  async function handleApply(e: React.FormEvent) {
-    e.preventDefault();
-    if (!selectedEmployeeId) {
-      setApplyMessage("Select an employee first.");
-      return;
-    }
-
-    setApplying(true);
-    setApplyMessage(null);
-
-    try {
-      const res = await fetch(
-        `${API_BASE_URL}/onboarding/templates/${id}/apply/${selectedEmployeeId}`,
-        {
-          method: "POST",
-          headers: {
-            "x-org-id": ORG_ID,
-          },
-        },
-      );
-
-      if (!res.ok) {
-        const text = await res.text();
-        console.error("Apply onboarding template failed:", res.status, text);
-        throw new Error(`Apply failed: ${res.status}`);
-      }
-
-      // You could parse the created flow here if you want
-      setApplyMessage("Onboarding flow created for this employee.");
-    } catch (e: any) {
-      setApplyMessage(e?.message || "Failed to apply template.");
+      await api.del(`/onboarding/task-templates/${id}`);
+      setTasks((prev) => prev.filter((t) => t.id !== id));
+    } catch (err: any) {
+      console.error("[onboarding/template] delete task failed", err);
+      setError(err?.message || "Failed to delete task.");
     } finally {
-      setApplying(false);
+      setDeletingId(null);
     }
-  }
+  };
 
-  function formatDate(value?: string) {
-    if (!value) return "";
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return "";
-    return d.toLocaleDateString();
-  }
-
-  if (loading && !template) {
-    return (
-      <div className="px-6 py-6">
-        <div className="max-w-4xl animate-pulse space-y-4">
-          <div className="h-6 w-48 rounded bg-slate-800" />
-          <div className="h-4 w-72 rounded bg-slate-900" />
-          <div className="h-40 w-full rounded bg-slate-900" />
-        </div>
-      </div>
-    );
-  }
-
-  if (!template) {
-    return (
-      <div className="px-6 py-6">
-        <div className="max-w-2xl rounded-xl border border-red-500/50 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-          {error || "Template not found."}
-        </div>
-      </div>
-    );
-  }
+  const renderSkeleton = () => (
+    <div className="space-y-3 animate-pulse">
+      <div className="h-10 w-48 rounded bg-slate-100" />
+      <div className="h-24 rounded-2xl border border-slate-200 bg-slate-100" />
+      <div className="h-24 rounded-2xl border border-slate-200 bg-slate-100" />
+    </div>
+  );
 
   return (
-    <div className="px-6 py-6">
-      <form
-        onSubmit={handleSave}
-        className="mx-auto max-w-4xl space-y-6"
-      >
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold text-slate-100">
-              {template.name || "Onboarding template"}
-            </h1>
-            <p className="mt-1 text-sm text-slate-400">
-              Edit template details, review the onboarding checklist, or apply it to a new hire.
-            </p>
-            {template.createdAt && (
-              <p className="mt-1 text-xs text-slate-500">
-                Created {formatDate(template.createdAt)}
-              </p>
-            )}
-          </div>
+    <AuthGate>
+      <div className="min-h-screen bg-slate-50">
+        <div className="mx-auto max-w-5xl px-6 py-8 space-y-6">
+          <Link
+            href="/onboarding/templates"
+            className="text-xs font-semibold text-indigo-700 hover:underline"
+          >
+            ← Back to templates
+          </Link>
 
-          <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
-            <button
-              type="button"
-              onClick={() => router.push("/onboarding/templates")}
-              className="text-xs text-slate-400 hover:text-slate-200"
-            >
-              Back to templates
-            </button>
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={deleting}
-              className="inline-flex items-center rounded-md border border-red-500/60 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-200 hover:bg-red-500/20 disabled:opacity-60"
-            >
-              {deleting ? "Deleting…" : "Delete template"}
-            </button>
-          </div>
+          {error && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+              {error}
+            </div>
+          )}
+
+          {loading ? (
+            renderSkeleton()
+          ) : !template ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Template not found.
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">
+                    Onboarding · Template
+                  </p>
+                  <h1 className="text-2xl font-semibold text-slate-900">
+                    {template.name}
+                  </h1>
+                  <p className="text-sm text-slate-600">
+                    {template.description || "No description provided."}
+                  </p>
+                </div>
+                {isManager && (
+                  <button
+                    onClick={openCreate}
+                    className="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
+                    type="button"
+                  >
+                    Add task
+                  </button>
+                )}
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div className="grid grid-cols-12 gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase text-slate-600">
+                  <div className="col-span-4">Title</div>
+                  <div className="col-span-5">Description</div>
+                  <div className="col-span-2">Due (days)</div>
+                  <div className="col-span-1 text-right">Actions</div>
+                </div>
+                {tasks.length === 0 ? (
+                  <div className="px-4 py-6 text-sm text-slate-600">
+                    No tasks yet. Add tasks to this template.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-200">
+                    {tasks.map((task) => (
+                      <div
+                        key={task.id}
+                        className="grid grid-cols-12 items-center gap-3 px-4 py-3 text-sm text-slate-800"
+                      >
+                        <div className="col-span-4 font-medium">{task.title}</div>
+                        <div className="col-span-5 text-slate-600">
+                          {task.description || "—"}
+                        </div>
+                        <div className="col-span-2">
+                          {task.dueInDays ?? "—"}
+                        </div>
+                        <div className="col-span-1 flex justify-end gap-2 text-xs">
+                          {isManager && (
+                            <>
+                              <button
+                                onClick={() => openEdit(task)}
+                                className="rounded-md border border-slate-200 px-2 py-1 text-slate-700 hover:bg-slate-50"
+                                type="button"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDelete(task.id)}
+                                disabled={deletingId === task.id}
+                                className="rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-rose-700 hover:bg-rose-100 disabled:opacity-60"
+                                type="button"
+                              >
+                                {deletingId === task.id ? "Deleting…" : "Delete"}
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
 
-        {error && (
-          <div className="rounded-md border border-red-500/60 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-            {error}
+        {/* Dialog */}
+        {dialogOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+            <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">
+                    {form.id ? "Edit task" : "Add task"}
+                  </h2>
+                  <p className="text-xs text-slate-600">
+                    Define the onboarding task details.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setDialogOpen(false)}
+                  className="text-xs font-semibold text-slate-500 hover:text-slate-700"
+                  type="button"
+                >
+                  Close
+                </button>
+              </div>
+
+              <form className="mt-4 space-y-4" onSubmit={handleSave}>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-700">Title</label>
+                  <input
+                    value={form.title}
+                    onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    placeholder="Complete HR paperwork"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-700">
+                    Description
+                  </label>
+                  <textarea
+                    value={form.description}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, description: e.target.value }))
+                    }
+                    rows={3}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    placeholder="Upload required documents, sign forms, etc."
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-700">
+                    Due (days after start)
+                  </label>
+                  <input
+                    type="number"
+                    value={form.dueInDays ?? ""}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        dueInDays: e.target.value === "" ? null : Number(e.target.value),
+                      }))
+                    }
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    placeholder="3"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDialogOpen(false)}
+                    className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {saving ? "Saving…" : form.id ? "Save changes" : "Add task"}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
-
-        {/* Template details */}
-        <div className="grid grid-cols-1 gap-4 rounded-xl border border-slate-800 bg-slate-950/60 p-4 md:grid-cols-2">
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">
-                Template name
-              </label>
-              <input
-                className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">
-                Description
-              </label>
-              <textarea
-                className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                rows={3}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">
-                  Department
-                </label>
-                <input
-                  className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">
-                  Role / title
-                </label>
-                <input
-                  className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <label className="mt-2 inline-flex items-center gap-2 text-sm text-slate-200">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-600 bg-slate-900 text-indigo-500 focus:ring-indigo-500"
-                checked={isDefault}
-                onChange={(e) => setIsDefault(e.target.checked)}
-              />
-              <span>Set as default onboarding template</span>
-            </label>
-
-            <p className="text-xs text-slate-500">
-              Default templates can be auto-suggested for new hires in this department or role.
-            </p>
-          </div>
-        </div>
-
-        {/* Apply to employee */}
-        <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-sm font-semibold text-slate-100">
-                Apply to employee
-              </h2>
-              <p className="mt-1 text-xs text-slate-400">
-                Create an onboarding flow for an existing employee using this template.
-              </p>
-            </div>
-            {employeesLoading && (
-              <span className="text-[11px] text-slate-500">
-                Loading employees…
-              </span>
-            )}
-          </div>
-
-          <form
-            onSubmit={handleApply}
-            className="flex flex-col gap-3 sm:flex-row sm:items-end"
-          >
-            <div className="flex-1">
-              <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">
-                Employee
-              </label>
-              <select
-                className="mt-1 w-full rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                value={selectedEmployeeId}
-                onChange={(e) => setSelectedEmployeeId(e.target.value)}
-                disabled={employeesLoading || employees.length === 0}
-              >
-                {employees.length === 0 ? (
-                  <option value="">
-                    {employeesLoading
-                      ? "Loading employees…"
-                      : "No employees found"}
-                  </option>
-                ) : (
-                  employees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.firstName} {emp.lastName}
-                      {emp.title ? ` — ${emp.title}` : ""}
-                      {emp.department ? ` (${emp.department})` : ""}
-                    </option>
-                  ))
-                )}
-              </select>
-            </div>
-
-            <div className="flex-none">
-              <button
-                type="submit"
-                disabled={
-                  applying ||
-                  employeesLoading ||
-                  !selectedEmployeeId ||
-                  employees.length === 0
-                }
-                className="w-full rounded-md bg-emerald-500 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-60"
-              >
-                {applying ? "Creating flow…" : "Apply template"}
-              </button>
-            </div>
-          </form>
-
-          {applyMessage && (
-            <p className="text-xs text-slate-300">{applyMessage}</p>
-          )}
-        </div>
-
-        {/* Steps / tasks (read-only for now) */}
-        <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-sm font-semibold text-slate-100">
-                Steps
-              </h2>
-              <p className="mt-1 text-xs text-slate-400">
-                This checklist is applied to new hires when you use this template.
-              </p>
-            </div>
-            <p className="text-[11px] text-slate-500">
-              Editing step details will be supported in a later version.
-            </p>
-          </div>
-
-          {template.tasks && template.tasks.length > 0 ? (
-            <ol className="space-y-2">
-              {template.tasks
-                .slice()
-                .sort(
-                  (a, b) =>
-                    (a.sortOrder ?? 0) - (b.sortOrder ?? 0),
-                )
-                .map((task, index) => (
-                  <li
-                    key={task.id}
-                    className="flex gap-3 rounded-lg border border-slate-800 bg-slate-950/80 p-3"
-                  >
-                    <div className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-slate-800 text-xs font-medium text-slate-200">
-                      {index + 1}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-medium text-slate-100">
-                          {task.title}
-                        </span>
-                        {task.assigneeType && (
-                          <span className="rounded-full border border-slate-700 px-2 py-0.5 text-[11px] uppercase tracking-wide text-slate-300">
-                            {task.assigneeType}
-                          </span>
-                        )}
-                      </div>
-                      {task.description && (
-                        <p className="mt-1 text-xs text-slate-400">
-                          {task.description}
-                        </p>
-                      )}
-                      {task.dueRelativeDays != null && (
-                        <p className="mt-1 text-[11px] text-slate-500">
-                          Due {task.dueRelativeDays} day
-                          {task.dueRelativeDays === 1 ? "" : "s"} after start
-                        </p>
-                      )}
-                    </div>
-                  </li>
-                ))}
-            </ol>
-          ) : (
-            <p className="text-xs text-slate-500">
-              This template currently has no steps. You can create a new template with a full checklist from the templates list.
-            </p>
-          )}
-        </div>
-
-        <div className="flex items-center justify-end gap-3 pt-2">
-          <button
-            type="button"
-            onClick={() => router.push("/onboarding/templates")}
-            className="text-sm text-slate-400 hover:text-slate-200"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="inline-flex items-center rounded-md bg-indigo-500 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-600 disabled:opacity-60"
-          >
-            {saving ? "Saving…" : "Save changes"}
-          </button>
-        </div>
-      </form>
-    </div>
+      </div>
+    </AuthGate>
   );
 }
