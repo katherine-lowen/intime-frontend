@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { AuthGate } from "@/components/dev-auth-gate";
 import api from "@/lib/api";
 import { getCurrentUser } from "@/lib/auth";
+import { PlanGate, type Plan } from "@/components/PlanGate";
+import { useCurrentOrg } from "@/hooks/useCurrentOrg";
 
 type OrgRole = "OWNER" | "ADMIN" | "MANAGER" | "EMPLOYEE";
 
@@ -36,6 +38,7 @@ function normalizeEmployees(res?: EmployeesResponse): Employee[] {
 }
 
 export default function OnboardingAssignPage() {
+  const { orgSlug, loading: orgLoading } = useCurrentOrg();
   const [role, setRole] = useState<OrgRole | null>(null);
   const [templates, setTemplates] = useState<OnboardingTemplate[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -127,8 +130,19 @@ export default function OnboardingAssignPage() {
     </div>
   );
 
+  if (orgLoading || !orgSlug) {
+    return (
+      <div className="min-h-screen bg-slate-50 p-6 text-sm text-slate-600">
+        Loading…
+      </div>
+    );
+  }
+
+  const currentPlan = null as Plan | null;
+
   return (
     <AuthGate>
+      <PlanGate required="GROWTH" current={currentPlan}>
       <div className="min-h-screen bg-slate-50">
         <div className="mx-auto max-w-4xl px-6 py-8 space-y-6">
           <div>
@@ -241,6 +255,7 @@ export default function OnboardingAssignPage() {
           )}
         </div>
       </div>
+    </PlanGate>
     </AuthGate>
   );
 }

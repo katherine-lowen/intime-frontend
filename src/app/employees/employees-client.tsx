@@ -50,7 +50,7 @@ export default function EmployeesClient({
               lineHeight: 1.4,
               whiteSpace: "pre-wrap",
             }}
-          >{`curl -sS -X POST http://localhost:3333/employees \\
+          >{`curl -sS -X POST http://localhost:3000/employees \\
   -H "Content-Type: application/json" \\
   -d '{
     "orgId":"demo-org",

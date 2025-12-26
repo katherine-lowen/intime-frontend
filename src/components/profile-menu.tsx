@@ -3,6 +3,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { orgHref } from "@/lib/org-base";
 
 const USER_KEY = "intime_user";
 
@@ -74,7 +75,7 @@ export default function ProfileMenu({ name, email }: ProfileMenuProps) {
           </div>
           <div className="py-1">
             <Link
-              href="/settings"
+              href={orgHref("/settings")}
               className="flex items-center gap-2 px-3 py-2 hover:bg-slate-800/80"
               onClick={() => setOpen(false)}
             >

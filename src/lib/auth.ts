@@ -2,8 +2,13 @@
 import type { NextAuthOptions } from "next-auth";
 
 const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8080";
-const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID || "demo-org";
+  process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8080";
+
+if (process.env.NODE_ENV === "production" && API_URL.includes("localhost")) {
+  console.warn(
+    "[auth] NEXT_PUBLIC_API_URL points to localhost in production. Update to https://api.hireintime.ai"
+  );
+}
 
 export type CurrentUser = {
   id: string;
@@ -13,6 +18,7 @@ export type CurrentUser = {
   org?: {
     id: string;
     name: string;
+    slug?: string;
   };
 };
 
@@ -37,39 +43,24 @@ export const authOptions: NextAuthOptions = {
  * Normalizes the shape so pages can safely use `user.name`, `user.email`, etc.
  */
 export async function getCurrentUser(): Promise<CurrentUser | null> {
-  // Demo/local fallback: read from localStorage if present
-  if (typeof window !== "undefined") {
-    try {
-      const raw = window.localStorage.getItem("intime_demo_user");
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed?.id && parsed?.email) {
-          return {
-            id: parsed.id,
-            email: parsed.email,
-            name: parsed.name ?? parsed.email,
-            role: parsed.role,
-            org: parsed.org,
-          };
-        }
-      }
-    } catch {
-      // ignore
-    }
-  }
-
   try {
-    // ✅ FIXED: Correct endpoint is /dev-auth/me (NOT /auth/me)
-    const res = await fetch(`${API_URL}/dev-auth/me`, {
+    const res = await fetch(`${API_URL}/me`, {
       headers: {
-        "X-Org-Id": ORG_ID,
+        "Content-Type": "application/json",
       },
-      cache: "no-store",
       credentials: "include",
+      cache: "no-store",
     });
 
     if (!res.ok) {
-      console.error("getCurrentUser: /dev-auth/me returned", res.status);
+      if (res.status === 401) {
+        return null;
+      }
+      if (res.status === 404) {
+        console.warn("getCurrentUser: /me returned 404; treating as unauthenticated");
+        return null;
+      }
+      console.error("getCurrentUser: /me returned", res.status);
       return null;
     }
 
@@ -89,12 +80,13 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
         email: u.email,
         name,
         role: u.role,
-        org: raw.org
-          ? {
-              id: raw.org.id,
-              name: raw.org.name,
-            }
-          : undefined,
+            org: raw.org
+              ? {
+                  id: raw.org.id,
+                  name: raw.org.name,
+                  slug: raw.org.slug,
+                }
+              : undefined,
       };
     }
 
@@ -110,7 +102,12 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
         email: raw.email,
         name,
         role: raw.role,
-        org: raw.org,
+        org: raw.org
+          ? {
+              ...raw.org,
+              slug: raw.org.slug ?? raw.org.id,
+            }
+          : undefined,
       };
     }
 

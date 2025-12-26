@@ -1,5 +1,6 @@
 // src/app/careers/status/[publicId]/page.tsx
 import Link from "next/link";
+import { API_BASE_URL } from "@/lib/api";
 import api from "@/lib/api";
 
 type CandidateStatusResponse = {
@@ -18,6 +19,14 @@ type CandidateStatusResponse = {
     location?: string | null;
     department?: string | null;
     description?: string | null;
+    orgSlug?: string | null;
+  } | null;
+  org?: {
+    name: string;
+    logoUrl?: string | null;
+    tagline?: string | null;
+    supportEmail?: string | null;
+    supportUrl?: string | null;
   } | null;
   answers: {
     id: string;
@@ -51,18 +60,82 @@ function formatStage(stage: string) {
     .join(" ");
 }
 
+function getStageDisplay(stage: string) {
+  const normalized = stage?.toUpperCase();
+  switch (normalized) {
+    case "APPLIED":
+      return {
+        label: "Application received",
+        message:
+          "Your application has been received and is in the queue for review.",
+        tone: "neutral" as const,
+      };
+    case "REVIEW":
+    case "SCREEN":
+      return {
+        label: "Under review",
+        message: "The hiring team is reviewing your application.",
+        tone: "neutral" as const,
+      };
+    case "INTERVIEW":
+      return {
+        label: "Interviewing",
+        message:
+          "You are in the interview process. The team will contact you with next steps.",
+        tone: "neutral" as const,
+      };
+    case "OFFER":
+      return {
+        label: "Offer stage",
+        message: "You are in the offer stage. The company will reach out with details.",
+        tone: "positive" as const,
+      };
+    case "HIRED":
+      return {
+        label: "Hired",
+        message: "Congratulations, you have been hired for this role.",
+        tone: "positive" as const,
+      };
+    case "REJECTED":
+    case "DECLINED":
+      return {
+        label: "No longer in process",
+        message:
+          "You are no longer being considered for this role. Thank you for your interest.",
+        tone: "negative" as const,
+      };
+    default:
+      return {
+        label: "In process",
+        message: "Your application is in progress with the hiring team.",
+        tone: "neutral" as const,
+      };
+  }
+}
+
+function stageBadgeClass(tone: "neutral" | "positive" | "negative") {
+  if (tone === "positive") {
+    return "border-emerald-100 bg-emerald-50 text-emerald-700";
+  }
+  if (tone === "negative") {
+    return "border-rose-100 bg-rose-50 text-rose-700";
+  }
+  return "border-slate-200 bg-slate-100 text-slate-700";
+}
+
 export const dynamic = "force-dynamic";
 
 export default async function CandidateStatusPage({
   params,
 }: {
-  params: { publicId: string };
+  params: Promise<{ publicId: string }>;
 }) {
+  const { publicId } = await params;
   let data: CandidateStatusResponse | null = null;
   let error: string | null = null;
 
   try {
-    data = await getCandidateStatus(params.publicId);
+    data = await getCandidateStatus(publicId);
   } catch (e) {
     console.error("Failed to load candidate status", e);
     error =
@@ -91,7 +164,7 @@ export default async function CandidateStatusPage({
     );
   }
 
-  const { candidate, job, answers } = data;
+  const { candidate, job, answers, org } = data;
 
   const appliedDate = new Date(candidate.appliedAt);
   const appliedLabel = Number.isNaN(appliedDate.getTime())
@@ -99,155 +172,123 @@ export default async function CandidateStatusPage({
     : appliedDate.toLocaleString();
 
   const stageLabel = formatStage(candidate.stage);
+  const stageDisplay = getStageDisplay(candidate.stage);
+
+  const supportLink = org?.supportUrl || org?.supportEmail;
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-10 space-y-8">
+    <main className="mx-auto max-w-xl px-6 py-10 space-y-6">
       {/* Header */}
-      <header className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-          Application status
+      <header className="space-y-3 text-center">
+        {org?.logoUrl ? (
+          <div className="mx-auto h-14 w-14 overflow-hidden rounded-full border border-slate-200 bg-white shadow-sm">
+            <img
+              src={org.logoUrl}
+              alt={org.name}
+              className="h-full w-full object-cover"
+            />
+          </div>
+        ) : (
+          <div className="mx-auto h-12 w-12 rounded-full bg-slate-200" />
+        )}
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          {org?.name || "Application status"}
         </p>
-        <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
-          {candidate.name}
+        <h1 className="text-xl font-semibold tracking-tight text-slate-900">
+          Application for {job?.title ?? "this role"}
         </h1>
-        <p className="text-sm text-neutral-600">
-          This page lets you check the status of your application with the
-          hiring team. Save this link if you want to come back later.
-        </p>
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-neutral-500">
-          {candidate.email && (
-            <span className="rounded-full bg-neutral-100 px-2 py-1">
-              {candidate.email}
-            </span>
-          )}
-          <span className="rounded-full bg-neutral-100 px-2 py-1">
-            Applied {appliedLabel}
-          </span>
-          {candidate.source && (
-            <span className="rounded-full bg-neutral-100 px-2 py-1">
-              Source: {candidate.source}
-            </span>
-          )}
-        </div>
+        {org?.tagline && (
+          <p className="text-xs text-slate-500">{org.tagline}</p>
+        )}
       </header>
 
-      {/* Layout */}
-      <section className="grid gap-4 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1.1fr)]">
-        {/* Left: status + answers */}
-        <div className="space-y-4">
-          {/* Status card */}
-          <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                  Current status
-                </p>
-                <p className="mt-1 text-sm font-semibold text-neutral-900">
-                  {stageLabel}
-                </p>
-              </div>
-              <div className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
-                Application received
-              </div>
-            </div>
-            <p className="mt-3 text-xs text-neutral-600">
-              The hiring team uses Intime to track applications. As they move
-              you through the process, this status may update to reflect stages
-              like screening, interviews, or offer.
-            </p>
-          </div>
+      <div className="rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm backdrop-blur">
+        <p className="text-sm font-semibold text-slate-900">
+          Hi {candidate.name || "there"}, here’s your application status.
+        </p>
+        <div className="mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium">
+          <span
+            className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-semibold ${stageBadgeClass(
+              stageDisplay.tone
+            )}`}
+          >
+            {stageDisplay.label}
+          </span>
+        </div>
+        <p className="mt-2 text-sm text-slate-700">{stageDisplay.message}</p>
 
-          {/* Answers card */}
-          <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
-            <h2 className="text-sm font-semibold text-neutral-900">
-              Your application details
-            </h2>
-            <p className="mt-1 text-xs text-neutral-600">
-              A snapshot of what you submitted with your application.
-            </p>
-
-            {answers.length === 0 ? (
-              <p className="mt-3 text-xs text-neutral-400">
-                No additional questions were answered as part of this
-                application.
-              </p>
-            ) : (
-              <dl className="mt-3 space-y-3 text-sm">
-                {answers.map((a) => (
-                  <div
-                    key={a.id}
-                    className="rounded-xl border border-neutral-100 bg-neutral-50 px-3 py-2"
-                  >
-                    <dt className="text-[11px] font-medium text-neutral-600">
-                      {a.questionLabel}
-                    </dt>
-                    <dd className="mt-1 whitespace-pre-wrap text-xs text-neutral-900">
-                      {a.answerText || "—"}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            )}
-          </div>
+        <div className="mt-4 space-y-1 text-xs text-slate-500">
+          <div>Stage: {stageLabel}</div>
+          <div>Applied: {appliedLabel}</div>
+          {job?.location && <div>Location: {job.location}</div>}
+          {candidate.email && <div>Email: {candidate.email}</div>}
+          {candidate.source && <div>Source: {candidate.source}</div>}
         </div>
 
-        {/* Right: job summary */}
-        <aside className="space-y-4">
-          <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-              Role
-            </p>
-            <p className="mt-1 text-sm font-semibold text-neutral-900">
-              {job?.title ?? "Role no longer listed"}
-            </p>
-            {job && (
-              <>
-                <p className="mt-1 text-xs text-neutral-600">
-                  {[job.location, job.department]
-                    .filter(Boolean)
-                    .join(" • ") || "Location not specified"}
-                </p>
-                {job.description && (
-                  <p className="mt-3 line-clamp-5 whitespace-pre-wrap text-xs text-neutral-600">
-                    {job.description}
-                  </p>
-                )}
-                <div className="mt-3">
-                  <Link
-                    href={`/careers/${job.id}`}
-                    className="inline-flex items-center text-xs font-medium text-indigo-600 hover:underline"
-                  >
-                    View full job description →
-                  </Link>
-                </div>
-              </>
-            )}
-            {!job && (
-              <p className="mt-2 text-xs text-neutral-500">
-                This job may have been closed or removed since you applied, but
-                your application is still on record with the hiring team.
-              </p>
-            )}
-          </div>
-
-          <div className="rounded-2xl border border-neutral-200 bg-white p-4 text-xs text-neutral-600 shadow-sm">
-            <p className="font-semibold text-neutral-800">Need help?</p>
-            <p className="mt-1">
-              If you have questions about your application, reply directly to
-              any email you received from the recruiter or hiring manager. This
-              page is a read-only view powered by Intime.
-            </p>
-            <div className="mt-3">
-              <Link
-                href="/careers"
-                className="inline-flex items-center text-xs font-medium text-neutral-700 hover:underline"
+        {supportLink && (
+          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            <p className="font-semibold text-slate-800">Need help?</p>
+            {org?.supportUrl ? (
+              <a
+                href={org.supportUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 inline-flex items-center text-[11px] font-medium text-indigo-600 hover:underline"
               >
-                Back to open roles →
-              </Link>
-            </div>
+                Contact {org.name} →
+              </a>
+            ) : (
+              <a
+                href={`mailto:${org?.supportEmail}`}
+                className="mt-1 inline-flex items-center text-[11px] font-medium text-indigo-600 hover:underline"
+              >
+                Email {org?.supportEmail}
+              </a>
+            )}
           </div>
-        </aside>
-      </section>
+        )}
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur">
+        <h2 className="text-sm font-semibold text-slate-900">
+          Your application details
+        </h2>
+        <p className="mt-1 text-xs text-slate-600">
+          A snapshot of what you submitted with your application.
+        </p>
+
+        {answers.length === 0 ? (
+          <p className="mt-3 text-xs text-slate-400">
+            No additional questions were answered as part of this application.
+          </p>
+        ) : (
+          <dl className="mt-3 space-y-3 text-sm">
+            {answers.map((a) => (
+              <div
+                key={a.id}
+                className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2"
+              >
+                <dt className="text-[11px] font-medium text-slate-600">
+                  {a.questionLabel}
+                </dt>
+                <dd className="mt-1 whitespace-pre-wrap text-xs text-slate-900">
+                  {a.answerText || "—"}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </div>
+
+      <div className="text-center text-[11px] text-slate-500">
+        Powered by{" "}
+        <a
+          href="https://www.hireintime.ai"
+          className="font-semibold text-slate-700 hover:text-slate-900"
+        >
+          Intime
+        </a>
+      </div>
     </main>
   );
 }

@@ -2,6 +2,7 @@
 import api from "@/lib/api";
 import Link from "next/link";
 import { AuthGate } from "@/components/dev-auth-gate";
+import { orgHref } from "@/lib/org-base";
 
 export const dynamic = "force-dynamic";
 
@@ -242,7 +243,8 @@ export default async function OrgChartPage() {
         <section className="flex flex-wrap items-center justify-between gap-3">
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-[11px] text-slate-400">
-              <Link href="/people" className="text-indigo-600 hover:underline">
+             <Link href={orgHref("/people")}
+ className="text-indigo-600 hover:underline">
                 People
               </Link>
               <span className="text-slate-300">/</span>

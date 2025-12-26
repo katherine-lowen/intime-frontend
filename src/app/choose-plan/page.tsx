@@ -125,11 +125,14 @@ export default function ChoosePlanPage() {
       const res = await fetch(API_ROUTE, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          plan: selectedPlan,
-          billingPeriod: billing,
-          email: email.trim(),
-        }),
+       body: JSON.stringify({
+  plan: selectedPlan,
+  billingPeriod: billing,
+  email: email.trim(),
+
+  // TODO: replace with real org slug source
+  orgSlug: (globalThis as any).__INTIME_ORG_SLUG__ || "default",
+}),
       });
 
       if (!res.ok) {

@@ -2,6 +2,10 @@
 import api from "@/lib/api";
 import Link from "next/link";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+
 type EmployeeLite = {
   id: string;
   firstName: string;
@@ -22,7 +26,7 @@ type EmployeeDocument = {
 };
 
 async function getDocuments(): Promise<EmployeeDocument[]> {
-  const data = await api.get<EmployeeDocument[]>("/employee-documents/all");
+  const data = await api.get<EmployeeDocument[]>("/employee-documents");
 
   // Guard against api.get possibly returning undefined
   return data ?? [];

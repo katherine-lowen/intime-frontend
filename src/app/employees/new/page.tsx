@@ -5,7 +5,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { logSubmission } from "@/lib/submissions";
 
-const API = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3333").replace(
+const API = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000").replace(
   /\/$/,
   "",
 );

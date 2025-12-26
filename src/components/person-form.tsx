@@ -4,6 +4,8 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import api from "@/lib/api";
+import { orgHref } from "@/lib/org-base";
+
 
 const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID || "demo-org";
 
@@ -161,7 +163,8 @@ export default function PersonForm({
         >
           {saving ? "Saving…" : mode === "create" ? "Create" : "Save Changes"}
         </button>
-        <a href="/people" className="text-sm underline">
+        <a href={orgHref("/people")}
+ className="text-sm underline">
           Cancel
         </a>
       </div>

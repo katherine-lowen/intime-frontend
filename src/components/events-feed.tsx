@@ -26,7 +26,7 @@ function formatUTC(iso?: string) {
 }
 
 export default async function EventsFeed() {
-  const api = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3333").replace(/\/$/, "");
+  const api = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
   const org = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
 
   let events: EventItem[] = [];

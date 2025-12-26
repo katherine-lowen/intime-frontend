@@ -1,6 +1,8 @@
 // src/app/payroll/page.tsx
 import Link from "next/link";
 import { AuthGate } from "@/components/dev-auth-gate";
+import { orgHref } from "@/lib/org-base";
+
 import {
   Download,
   Settings,
@@ -197,7 +199,7 @@ export default async function PayrollPage() {
               <div className="flex flex-col items-end gap-3 text-xs">
                 <div className="flex flex-wrap items-center gap-3">
                   <Link
-                    href="/settings#payroll"
+                    href={orgHref("/settings#payroll")}
                     className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm text-slate-700 shadow-sm transition-all duration-200 hover:bg-slate-50"
                   >
                     <Settings className="h-4 w-4" />

@@ -26,6 +26,16 @@ type FormState = {
 
 const kindOptions: TimeoffPolicy["kind"][] = ["UNLIMITED", "FIXED", "ACCRUAL"];
 
+async function apiDelete(path: string) {
+  const anyApi = api as any;
+  if (typeof anyApi.delete === "function") return anyApi.delete(path);
+  if (typeof anyApi.remove === "function") return anyApi.remove(path);
+  if (typeof anyApi.del === "function") return anyApi.del(path);
+  if (typeof anyApi.request === "function")
+    return anyApi.request({ method: "DELETE", url: path });
+  throw new Error("ApiClient is missing a DELETE method (delete/remove/request).");
+}
+
 export default function TimeoffPoliciesPage() {
   const router = useRouter();
 
@@ -42,15 +52,11 @@ export default function TimeoffPoliciesPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [role, setRole] = useState<OrgRole | null>(null);
 
-  const isAdminOwner = useMemo(
-    () => (role === "OWNER" || role === "ADMIN"),
-    [role]
-  );
+  const isAdminOwner = useMemo(() => role === "OWNER" || role === "ADMIN", [role]);
   const isManager = useMemo(
     () => role === "OWNER" || role === "ADMIN" || role === "MANAGER",
     [role]
   );
-  const isEmployee = role === "EMPLOYEE";
 
   useEffect(() => {
     let cancelled = false;
@@ -59,15 +65,15 @@ export default function TimeoffPoliciesPage() {
         const me = await getCurrentUser();
         const normalizedRole = (me?.role || "").toUpperCase() as OrgRole;
         if (!cancelled) setRole(normalizedRole);
+
         if (normalizedRole === "EMPLOYEE") {
           router.replace("/employee/timeoff");
           return;
         }
+
         setLoading(true);
         const data = await api.get<TimeoffPolicy[]>("/timeoff/policies");
-        if (!cancelled) {
-          setPolicies(data ?? []);
-        }
+        if (!cancelled) setPolicies(data ?? []);
       } catch (err: any) {
         if (!cancelled) {
           console.error("[timeoff/policies] fetch failed", err);
@@ -110,10 +116,12 @@ export default function TimeoffPoliciesPage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAdminOwner) return;
+
     if (!formState.name.trim()) {
       setError("Name is required.");
       return;
     }
+
     if (
       formState.kind === "FIXED" &&
       (formState.annualAllowanceDays == null ||
@@ -122,28 +130,24 @@ export default function TimeoffPoliciesPage() {
       setError("Annual allowance days required for fixed policies.");
       return;
     }
+
     setSaving(true);
     setError(null);
+
     try {
+      const payload = {
+        name: formState.name.trim(),
+        kind: formState.kind,
+        annualAllowanceDays:
+          formState.kind === "FIXED" ? Number(formState.annualAllowanceDays) : null,
+      };
+
       if (formState.id) {
-        await api.patch(`/timeoff/policies/${formState.id}`, {
-          name: formState.name.trim(),
-          kind: formState.kind,
-          annualAllowanceDays:
-            formState.kind === "FIXED"
-              ? Number(formState.annualAllowanceDays)
-              : null,
-        });
+        await api.patch(`/timeoff/policies/${formState.id}`, payload);
       } else {
-        await api.post(`/timeoff/policies`, {
-          name: formState.name.trim(),
-          kind: formState.kind,
-          annualAllowanceDays:
-            formState.kind === "FIXED"
-              ? Number(formState.annualAllowanceDays)
-              : null,
-        });
+        await api.post(`/timeoff/policies`, payload);
       }
+
       const refreshed = await api.get<TimeoffPolicy[]>("/timeoff/policies");
       setPolicies(refreshed ?? []);
       setFormOpen(false);
@@ -158,13 +162,13 @@ export default function TimeoffPoliciesPage() {
 
   const handleDelete = async (id: string) => {
     if (!isAdminOwner) return;
-    const confirmDelete = window.confirm(
-      "Delete this policy? This cannot be undone."
-    );
+
+    const confirmDelete = window.confirm("Delete this policy? This cannot be undone.");
     if (!confirmDelete) return;
+
     setDeletingId(id);
     try {
-      await api.del(`/timeoff/policies/${id}`);
+      await apiDelete(`/timeoff/policies/${id}`);
       setPolicies((prev) => prev.filter((p) => p.id !== id));
     } catch (err: any) {
       console.error("[timeoff/policies] delete failed", err);
@@ -198,6 +202,7 @@ export default function TimeoffPoliciesPage() {
                 Manage PTO, sick leave, and other time off policies for your org.
               </p>
             </div>
+
             {isAdminOwner && (
               <button
                 onClick={openCreate}
@@ -236,28 +241,24 @@ export default function TimeoffPoliciesPage() {
                     <div className="col-span-2">Updated</div>
                     <div className="col-span-2 text-right">Actions</div>
                   </div>
+
                   <div className="divide-y divide-slate-200">
                     {policies.map((policy) => (
                       <div
                         key={policy.id}
                         className="grid grid-cols-12 gap-3 px-4 py-3 text-sm text-slate-800"
                       >
-                        <div className="col-span-4 font-medium">
-                          {policy.name}
-                        </div>
+                        <div className="col-span-4 font-medium">{policy.name}</div>
+                        <div className="col-span-2">{policy.kind}</div>
                         <div className="col-span-2">
-                          {policy.kind}
-                        </div>
-                        <div className="col-span-2">
-                          {policy.kind === "FIXED"
-                            ? policy.annualAllowanceDays ?? "—"
-                            : "—"}
+                          {policy.kind === "FIXED" ? policy.annualAllowanceDays ?? "—" : "—"}
                         </div>
                         <div className="col-span-2 text-xs text-slate-500">
                           {policy.updatedAt?.slice(0, 10) ||
                             policy.createdAt?.slice(0, 10) ||
                             "—"}
                         </div>
+
                         <div className="col-span-2 flex justify-end gap-2 text-xs">
                           {isAdminOwner ? (
                             <>
@@ -296,9 +297,7 @@ export default function TimeoffPoliciesPage() {
                   <h2 className="text-lg font-semibold text-slate-900">
                     {formState.id ? "Edit policy" : "New policy"}
                   </h2>
-                  <p className="text-xs text-slate-600">
-                    Define the policy name and allowance.
-                  </p>
+                  <p className="text-xs text-slate-600">Define the policy name and allowance.</p>
                 </div>
                 <button
                   onClick={() => {
@@ -315,9 +314,7 @@ export default function TimeoffPoliciesPage() {
               <form className="space-y-4" onSubmit={handleSave}>
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-700">
-                      Name *
-                    </label>
+                    <label className="text-xs font-medium text-slate-700">Name *</label>
                     <input
                       value={formState.name}
                       onChange={(e) =>
@@ -330,9 +327,7 @@ export default function TimeoffPoliciesPage() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-700">
-                      Kind *
-                    </label>
+                    <label className="text-xs font-medium text-slate-700">Kind *</label>
                     <select
                       value={formState.kind}
                       onChange={(e) =>
@@ -363,8 +358,7 @@ export default function TimeoffPoliciesPage() {
                       onChange={(e) =>
                         setFormState((prev) => ({
                           ...prev,
-                          annualAllowanceDays:
-                            e.target.value === "" ? null : Number(e.target.value),
+                          annualAllowanceDays: e.target.value === "" ? null : Number(e.target.value),
                         }))
                       }
                       className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"

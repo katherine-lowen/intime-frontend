@@ -1,156 +1,82 @@
-// src/app/api/stripe/webhook/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY || null;
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || null;
-const apiBase =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
-
-// Build-safe: no top-level throws
-const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
-
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+async function finalizeInBackend(payload: {
+  sessionId: string;
+  customerId?: string | null;
+  subscriptionId?: string | null;
+  metadata?: Record<string, any> | null;
+  clientReferenceId?: string | null;
+  customerEmail?: string | null;
+}) {
+  const url =
+    process.env.BACKEND_URL ||
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    process.env.NEXT_PUBLIC_API_URL;
+  const token =
+    process.env.BILLING_SYNC_TOKEN || process.env.NEXT_PUBLIC_BILLING_SYNC_TOKEN; // ✅ must match backend check
+
+  if (!url || !token) return;
+
+  await fetch(`${url}/billing/stripe/finalize`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-billing-token": token,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function POST(req: NextRequest) {
-  // At runtime, if Stripe isn't configured, return 500 instead of killing the build
-  if (!stripe || !webhookSecret) {
-    console.error(
-      "[Stripe webhook] called but Stripe is not fully configured (missing STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET)"
-    );
-    return new NextResponse("Stripe not configured", { status: 500 });
-  }
-
-  const sig = req.headers.get("stripe-signature");
-  if (!sig) {
-    return new NextResponse("Missing stripe-signature header", {
-      status: 400,
-    });
-  }
-
-  const rawBody = await req.text();
-
-  let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
-  } catch (err: any) {
-    console.error("[Stripe webhook] Signature error:", err?.message || err);
-    return new NextResponse(`Webhook Error: ${err?.message ?? "Invalid"}`, {
-      status: 400,
-    });
-  }
+    const secretKey = process.env.STRIPE_SECRET_KEY;
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
-  try {
-    // Data we want to send to backend
-    let orgId: string | undefined;
-    let stripeCustomerId: string | null = null;
-    let stripeSubscriptionId: string | null = null;
-    let stripePriceId: string | null = null;
-    let billingInterval: "month" | "year" | null = null;
-    let billingStatus: string | null = null;
-    let currentPeriodEndIso: string | null = null;
-
-    switch (event.type) {
-      case "checkout.session.completed": {
-        const session = event.data.object as any;
-
-        orgId = session.metadata?.orgId;
-        stripeCustomerId = (session.customer as string | null) ?? null;
-        stripeSubscriptionId = (session.subscription as string | null) ?? null;
-
-        const mode = session.mode; // "subscription" or "payment"
-        if (mode === "subscription") {
-          billingStatus = "active";
-        }
-
-        break;
-      }
-
-      case "customer.subscription.created":
-      case "customer.subscription.updated":
-      case "customer.subscription.deleted": {
-        const subscription = event.data.object as any;
-
-        orgId = subscription.metadata?.orgId;
-        stripeCustomerId = (subscription.customer as string | null) ?? null;
-        stripeSubscriptionId = subscription.id ?? null;
-
-        const price = subscription.items?.data?.[0]?.price;
-        if (price) {
-          stripePriceId = price.id ?? null;
-          billingInterval = price.recurring?.interval ?? null;
-        }
-
-        if (subscription.current_period_end) {
-          currentPeriodEndIso = new Date(
-            subscription.current_period_end * 1000
-          ).toISOString();
-        }
-
-        billingStatus = subscription.status ?? null;
-        break;
-      }
-
-      case "invoice.paid": {
-        const invoice = event.data.object as any;
-
-        const sub = invoice.subscription as string | undefined;
-        const customer = invoice.customer as string | undefined;
-        const line = invoice.lines?.data?.[0] as any;
-
-        stripeCustomerId = customer ?? null;
-        stripeSubscriptionId = sub ?? null;
-
-        if (line?.price) {
-          stripePriceId = line.price.id ?? null;
-          billingInterval = line.price.recurring?.interval ?? null;
-        }
-
-        if (invoice.lines?.data?.[0]?.subscription_details?.metadata?.orgId) {
-          orgId =
-            invoice.lines.data[0].subscription_details.metadata.orgId;
-        } else if (invoice.metadata?.orgId) {
-          orgId = invoice.metadata.orgId;
-        }
-
-        billingStatus = "active";
-        break;
-      }
-
-      default:
-        // For unhandled types, just acknowledge
-        return NextResponse.json({ received: true });
-    }
-
-    // If we still don't know orgId, just acknowledge
-    if (!orgId) {
-      console.warn(
-        "[Stripe webhook] Event without orgId metadata – type:",
-        event.type
+    if (!secretKey || !webhookSecret) {
+      return NextResponse.json(
+        { error: "Stripe webhook not configured" },
+        { status: 500 }
       );
-      return NextResponse.json({ received: true });
     }
 
-    // Send normalized billing info to backend
-    await fetch(`${apiBase}/billing/stripe-webhook`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-org-id": orgId,
-      },
-      body: JSON.stringify({
-        stripeCustomerId,
-        stripeSubscriptionId,
-        stripePriceId,
-        billingInterval,
-        billingStatus,
-        currentPeriodEnd: currentPeriodEndIso,
-      }),
-    });
+    const signature = req.headers.get("stripe-signature");
+    if (!signature) {
+      return NextResponse.json(
+        { error: "Missing stripe-signature" },
+        { status: 400 }
+      );
+    }
+
+    const rawBody = await req.text();
+
+    const stripe = new Stripe(secretKey);
+    const event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+
+    // ✅ Only handle the one event that "activates" the org
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object as Stripe.Checkout.Session;
+
+      await finalizeInBackend({
+        sessionId: session.id,
+        customerId: (session.customer as string) ?? null,
+        subscriptionId: (session.subscription as string) ?? null,
+        metadata: session.metadata ?? null,
+        clientReferenceId: session.client_reference_id ?? null,
+        customerEmail: session.customer_details?.email || session.customer_email || null,
+      });
+    }
 
     return NextResponse.json({ received: true });
-  } catch (err) {
-    console.error("[Stripe webhook] handler error:", err);
-    return new NextResponse("Webhook handler error", { status: 500 });
+  } catch (err: any) {
+    console.error("[Stripe webhook] error", err);
+    // return 400 so Stripe can retry if signature/event parsing failed
+    return NextResponse.json(
+      { error: err?.message || "Webhook error" },
+      { status: 400 }
+    );
   }
 }

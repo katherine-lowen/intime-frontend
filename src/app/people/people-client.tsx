@@ -3,6 +3,8 @@
 
 import Link from "next/link";
 import { AuthGate } from "@/components/dev-auth-gate";
+import { orgHref } from "@/lib/org-base";
+
 
 // Local type definitions instead of importing from ./page
 type Person = {
@@ -47,7 +49,7 @@ export default function PeopleClient({
         </div>
         <div className="flex gap-2">
           <Link
-            href="/people/new"
+            href={orgHref("/people/new")}
             className="rounded border px-3 py-2 text-sm hover:bg-gray-50"
           >
             + Add Person
@@ -107,7 +109,7 @@ export default function PeopleClient({
           {hasAnyPeople ? (
             <p className="mt-1">
               Try clearing the filters or{" "}
-              <Link href="/people/new" className="underline">
+              <Link href={orgHref("/people/new")} className="underline">
                 adding a new person
               </Link>
               .
@@ -115,7 +117,7 @@ export default function PeopleClient({
           ) : (
             <p className="mt-1">
               Get started by{" "}
-              <Link href="/people/new" className="underline">
+              <Link href={orgHref("/people/new")} className="underline">
                 adding your first person
               </Link>
               .

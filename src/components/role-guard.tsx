@@ -6,8 +6,18 @@ import { useAuth } from "@/context/auth";
 import type { ReactNode } from "react";
 
 export function RequireAdmin({ children }: { children: ReactNode }) {
-  const { currentRole } = useAuth();
-  if (currentRole !== "admin") {
+  const { activeOrg, isLoading } = useAuth();
+  const role = activeOrg?.role;
+
+  if (isLoading) {
+    return (
+      <div className="p-8">
+        <p className="text-sm text-neutral-500">Checking access…</p>
+      </div>
+    );
+  }
+
+  if (!role || (role !== "OWNER" && role !== "ADMIN")) {
     return (
       <div className="p-8 space-y-3">
         <h2 className="text-xl font-semibold">Admins only</h2>
@@ -24,8 +34,18 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
 }
 
 export function RequireEmployee({ children }: { children: ReactNode }) {
-  const { currentRole } = useAuth();
-  if (currentRole !== "employee") {
+  const { activeOrg, isLoading } = useAuth();
+  const role = activeOrg?.role;
+
+  if (isLoading) {
+    return (
+      <div className="p-8">
+        <p className="text-sm text-neutral-500">Checking access…</p>
+      </div>
+    );
+  }
+
+  if (!role) {
     return (
       <div className="p-8 space-y-3">
         <h2 className="text-xl font-semibold">Employees only</h2>

@@ -6,6 +6,8 @@ import api from "@/lib/api";
 import EmployeeTimeOffPanel from "@/components/employee-timeoff-panel";
 import Link from "next/link";
 import { AuthGate } from "@/components/dev-auth-gate";
+import { orgHref } from "@/lib/org-base";
+
 
 type EmployeeStatus = "ACTIVE" | "ON_LEAVE" | "CONTRACTOR" | "ALUMNI" | null;
 
@@ -68,7 +70,8 @@ export default function MyTimePage() {
           </p>
           <p className="text-xs text-slate-500">
             Make sure you have at least one employee in{" "}
-            <Link href="/people" className="text-indigo-600 hover:underline">
+            <Link href={orgHref("/people")}
+ className="text-indigo-600 hover:underline">
               People
             </Link>
             .

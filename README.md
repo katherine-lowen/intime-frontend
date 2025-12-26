@@ -34,3 +34,9 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+Billing:
+- BACKEND_URL: backend base used by API routes/webhooks
+- BILLING_SYNC_TOKEN: shared token passed as x-billing-token when finalizing Stripe checkout
+- STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET: required for Stripe checkout + webhook validation
+- NEXT_PUBLIC_BILLING_SYNC_TOKEN: shared token passed as x-billing-token when finalizing Stripe checkout from the browser

@@ -1,22 +1,29 @@
+// src/app/performance/cycles/[id]/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { format } from "date-fns";
+import { orgHref } from "@/lib/org-base";
+
 import { AuthGate } from "@/components/dev-auth-gate";
 import api from "@/lib/api";
+import type { PerformanceCycle } from "@/lib/performance-types";
+import {
+  getPerformanceCycle,
+  getPerformanceCycleReviews,
+  updatePerformanceCycleStatus,
+} from "@/lib/api-performance";
 import { getCurrentUser } from "@/lib/auth";
 
 type OrgRole = "OWNER" | "ADMIN" | "MANAGER" | "EMPLOYEE";
-type CycleStatus = "DRAFT" | "ACTIVE" | "CLOSED";
+// Allow any status string coming back from the API
+type ReviewStatus = string;
 
-type ReviewStatus =
-  | "NOT_STARTED"
-  | "SELF_IN_PROGRESS"
-  | "SELF_SUBMITTED"
-  | "MANAGER_SUBMITTED"
-  | "COMPLETE";
+
+// ✅ add explicit cycle status type so TS stops complaining
+type CycleStatus = "DRAFT" | "ACTIVE" | "CLOSED";
 
 type ReviewAnswer = {
   questionId: string;
@@ -32,22 +39,17 @@ type ReviewSubmission = {
 
 type EmployeeReview = {
   id: string;
-  employeeId: string;
+  employeeId?: string;
   employeeName?: string | null;
   managerName?: string | null;
-  status: ReviewStatus;
+  // accept whatever the API sends (still expected to be our enum-ish strings)
+  status: string;
   selfReview?: ReviewSubmission | null;
   managerReview?: ReviewSubmission | null;
   templateName?: string | null;
 };
 
-type ReviewCycle = {
-  id: string;
-  name: string;
-  startDate: string;
-  endDate: string;
-  status: CycleStatus;
-};
+
 
 type Employee = {
   id: string;
@@ -73,7 +75,10 @@ type FormState = {
 function formatPeriod(start?: string, end?: string) {
   if (!start || !end) return "—";
   try {
-    return `${format(new Date(start), "MMM d, yyyy")} – ${format(new Date(end), "MMM d, yyyy")}`;
+    return `${format(new Date(start), "MMM d, yyyy")} – ${format(
+      new Date(end),
+      "MMM d, yyyy"
+    )}`;
   } catch {
     return `${start} – ${end}`;
   }
@@ -93,7 +98,7 @@ export default function PerformanceCycleDetailPage() {
   const cycleId = params?.id;
 
   const [role, setRole] = useState<OrgRole | null>(null);
-  const [cycle, setCycle] = useState<ReviewCycle | null>(null);
+  const [cycle, setCycle] = useState<PerformanceCycle | null>(null);
   const [reviews, setReviews] = useState<EmployeeReview[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -137,47 +142,51 @@ export default function PerformanceCycleDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cycleId]);
 
-  async function fetchCycle() {
-    if (!cycleId) {
-      setError("Missing cycle id.");
-      setLoading(false);
+async function fetchCycle() {
+  if (!cycleId) {
+    setError("Missing cycle id.");
+    setLoading(false);
+    return;
+  }
+
+  try {
+    setLoading(true);
+    setError(null);
+
+    const data = await getPerformanceCycle(cycleId);
+
+    if (!data) {
+      setCycle(null);
+      setError("Review cycle not found.");
       return;
     }
-    try {
-      setLoading(true);
-      setError(null);
-      let data = await api.get<ReviewCycle>(`/performance/cycles/${cycleId}`);
-      if (!data) {
-        const list = await api.get<ReviewCycle[]>("/performance/cycles");
-        data = (list || []).find((c) => c.id === cycleId) as ReviewCycle | undefined;
-      }
-      if (data) {
-        setCycle(data);
-        setForm({
-          id: data.id,
-          name: data.name,
-          startDate: data.startDate?.slice(0, 10) || "",
-          endDate: data.endDate?.slice(0, 10) || "",
-          status: data.status,
-        });
-      } else {
-        setError("Review cycle not found.");
-      }
-    } catch (err: any) {
-      console.error("[performance cycle] fetch failed", err);
-      setError(err?.message || "Failed to load review cycle.");
-    } finally {
-      setLoading(false);
-    }
+
+    const status: CycleStatus =
+      data.status === "DRAFT" || data.status === "ACTIVE" || data.status === "CLOSED"
+        ? (data.status as CycleStatus)
+        : "DRAFT";
+
+    setCycle(data);
+    setForm({
+      id: data.id,
+      name: data.name,
+      startDate: data.startDate?.slice(0, 10) || "",
+      endDate: data.endDate?.slice(0, 10) || "",
+      status,
+    });
+  } catch (err: any) {
+    console.error("[performance cycle] fetch failed", err);
+    setError(err?.message || "Failed to load review cycle.");
+  } finally {
+    setLoading(false);
   }
+}
 
   async function fetchReviews() {
     if (!cycleId) return;
     try {
       setError(null);
-      const data = await api.get<EmployeeReview[]>(
-        `/performance/cycles/${cycleId}/reviews`
-      );
+      const data = await getPerformanceCycleReviews(cycleId);
       setReviews(data ?? []);
     } catch (err: any) {
       console.error("[performance cycle] reviews fetch failed", err);
@@ -187,7 +196,9 @@ export default function PerformanceCycleDetailPage() {
 
   async function fetchEmployees() {
     try {
-      const data = await api.get<EmployeesResponse>("/employees?page=1&pageSize=100");
+      const data = await api.get<EmployeesResponse>(
+        "/employees?page=1&pageSize=100"
+      );
       setEmployees(normalizeEmployees(data));
     } catch (err) {
       console.error("[performance cycle] employees fetch failed", err);
@@ -201,7 +212,7 @@ export default function PerformanceCycleDetailPage() {
       name: cycle.name,
       startDate: cycle.startDate?.slice(0, 10) || "",
       endDate: cycle.endDate?.slice(0, 10) || "",
-      status: cycle.status,
+      status: cycle.status as CycleStatus,
     });
     setDialogOpen(true);
   };
@@ -236,8 +247,8 @@ export default function PerformanceCycleDetailPage() {
     if (!isManager || !cycleId) return;
     setStatusUpdating(true);
     try {
-      await api.patch(`/performance/cycles/${cycleId}`, { status: next });
-      setCycle((prev) => (prev ? { ...prev, status: next } : prev));
+      await updatePerformanceCycleStatus(cycleId, next);
+      setCycle((prev: PerformanceCycle | null) => (prev ? { ...prev, status: next } : prev));
     } catch (err: any) {
       console.error("[performance cycle] status update failed", err);
       setError(err?.message || "Failed to update status.");
@@ -266,7 +277,7 @@ export default function PerformanceCycleDetailPage() {
     }
   };
 
-  const renderStatusChip = (status: CycleStatus) => {
+  const renderStatusChip = (status: PerformanceCycle["status"]) => {
     const color =
       status === "ACTIVE"
         ? "bg-emerald-50 text-emerald-700 border-emerald-200"
@@ -324,6 +335,21 @@ export default function PerformanceCycleDetailPage() {
               <div className="text-sm text-slate-600">
                 {cycle ? formatPeriod(cycle.startDate, cycle.endDate) : "—"}
               </div>
+              <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                <span>
+                  Completion: {cycle?.submittedCount ?? 0} of{" "}
+                  {cycle?.totalReviews ?? 0} reviews (
+                  {cycle?.completionPercent ?? 0}%)
+                </span>
+                <span>
+                  Reminders:{" "}
+                  {cycle?.reminderEnabled
+                    ? `Enabled · ${
+                        cycle?.reminderDaysBeforeEnd ?? 0
+                      } days before end`
+                    : "Disabled"}
+                </span>
+              </div>
             </div>
             {isManager && (
               <div className="flex flex-wrap items-center gap-2">
@@ -361,7 +387,7 @@ export default function PerformanceCycleDetailPage() {
 
         <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
           <Link
-            href="/performance"
+            href={orgHref("/performance")}
             className="text-xs font-semibold text-indigo-700 hover:underline"
           >
             ← Back to performance
@@ -407,7 +433,9 @@ export default function PerformanceCycleDetailPage() {
                           <div className="col-span-3">
                             {rev.managerName ?? "—"}
                           </div>
-                          <div className="col-span-3">{renderReviewStatus(rev.status)}</div>
+                          <div className="col-span-3">
+                            {renderReviewStatus(rev.status)}
+                          </div>
                           <div className="col-span-2 text-center">
                             {rev.selfReview ? (
                               <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700">
@@ -461,17 +489,42 @@ export default function PerformanceCycleDetailPage() {
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2 text-xs">
                     <Link
-                      href="/performance/templates"
+                      href={orgHref("/performance/templates")}
                       className="rounded-md border border-slate-200 px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50"
                     >
                       Browse templates
                     </Link>
                     <Link
-                      href="/performance/templates/new"
+                      href={orgHref("/performance/templates/new")}
                       className="rounded-md bg-slate-900 px-3 py-2 font-semibold text-white hover:bg-slate-800"
                     >
                       New template
                     </Link>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    Reminders
+                  </h3>
+                  <p className="mt-1 text-xs text-slate-600">
+                    Reviewers who have not submitted by this point will receive
+                    reminder notifications (once hooked up).
+                  </p>
+                  <div className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                    {cycle?.reminderEnabled ? (
+                      <>
+                        <div className="font-semibold text-slate-900">
+                          Enabled
+                        </div>
+                          <div>
+                            {cycle.reminderDaysBeforeEnd ?? 0} days before end
+                            date.
+                          </div>
+                      </>
+                    ) : (
+                      <div>Disabled</div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -503,10 +556,14 @@ export default function PerformanceCycleDetailPage() {
 
               <form className="mt-4 space-y-4" onSubmit={handleSave}>
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-700">Name</label>
+                  <label className="text-xs font-medium text-slate-700">
+                    Name
+                  </label>
                   <input
                     value={form.name}
-                    onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, name: e.target.value }))
+                    }
                     className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     placeholder="Mid-year review"
                     required
@@ -521,7 +578,10 @@ export default function PerformanceCycleDetailPage() {
                       type="date"
                       value={form.startDate}
                       onChange={(e) =>
-                        setForm((prev) => ({ ...prev, startDate: e.target.value }))
+                        setForm((prev) => ({
+                          ...prev,
+                          startDate: e.target.value,
+                        }))
                       }
                       className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                       required
@@ -535,7 +595,10 @@ export default function PerformanceCycleDetailPage() {
                       type="date"
                       value={form.endDate}
                       onChange={(e) =>
-                        setForm((prev) => ({ ...prev, endDate: e.target.value }))
+                        setForm((prev) => ({
+                          ...prev,
+                          endDate: e.target.value,
+                        }))
                       }
                       className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                       required
@@ -544,11 +607,16 @@ export default function PerformanceCycleDetailPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-700">Status</label>
+                  <label className="text-xs font-medium text-slate-700">
+                    Status
+                  </label>
                   <select
                     value={form.status}
                     onChange={(e) =>
-                      setForm((prev) => ({ ...prev, status: e.target.value as CycleStatus }))
+                      setForm((prev) => ({
+                        ...prev,
+                        status: e.target.value as CycleStatus,
+                      }))
                     }
                     className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   >
@@ -607,7 +675,9 @@ export default function PerformanceCycleDetailPage() {
               <div className="space-y-4 p-4">
                 <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                   <div className="text-xs text-slate-600">Status</div>
-                  <div className="mt-1">{renderReviewStatus(detailReview.status)}</div>
+                  <div className="mt-1">
+                    {renderReviewStatus(detailReview.status)}
+                  </div>
                 </div>
 
                 <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
@@ -647,7 +717,9 @@ export default function PerformanceCycleDetailPage() {
                       ))}
                     </div>
                   ) : (
-                    <div className="text-xs text-slate-600">No self review submitted.</div>
+                    <div className="text-xs text-slate-600">
+                      No self review submitted.
+                    </div>
                   )}
                 </div>
 
@@ -688,7 +760,9 @@ export default function PerformanceCycleDetailPage() {
                       ))}
                     </div>
                   ) : (
-                    <div className="text-xs text-slate-600">No manager review submitted.</div>
+                    <div className="text-xs text-slate-600">
+                      No manager review submitted.
+                    </div>
                   )}
                 </div>
               </div>

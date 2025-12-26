@@ -2,6 +2,8 @@
 import api from "@/lib/api";
 import Link from "next/link";
 import { AuthGate } from "@/components/dev-auth-gate";
+import { orgHref } from "@/lib/org-base";
+
 
 export const dynamic = "force-dynamic";
 
@@ -168,7 +170,7 @@ export default async function TimeOverviewPage() {
           </div>
 
           <div className="flex items-center gap-3 text-xs">
-            <Link href="/timeoff" className="text-indigo-600 hover:underline">
+            <Link href={orgHref("/timeoff")} className="text-indigo-600 hover:underline">
               Manage time off →
             </Link>
           </div>

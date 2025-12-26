@@ -39,9 +39,10 @@ async function getPeople(): Promise<Person[]> {
 export default async function EditTeamPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  const [team, people] = await Promise.all([getTeam(params.id), getPeople()]);
+  const { id } = await params;
+  const [team, people] = await Promise.all([getTeam(id), getPeople()]);
 
   return (
     <AuthGate>

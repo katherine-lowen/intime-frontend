@@ -2,6 +2,8 @@
 "use client";
 
 import Link from "next/link";
+import { orgHref } from "@/lib/org-base";
+
 
 export function HeroPanel() {
   return (
@@ -25,7 +27,7 @@ export function HeroPanel() {
           {/* Primary buttons */}
           <div className="flex flex-wrap items-center gap-3 pt-1">
             <Link
-              href="/people" // or "/people/new" if you have that route
+              href={orgHref("/people")} // or "/people/new" if you have that route
               className="btn-primary-gradient inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-white shadow-sm"
             >
               <span className="text-sm">+</span>
@@ -33,7 +35,7 @@ export function HeroPanel() {
             </Link>
 
             <Link
-              href="/jobs" // or "/jobs/new"
+              href={orgHref("/jobs")} // or "/jobs/new"
               className="btn-holographic inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-slate-800"
             >
               <span>▢</span>

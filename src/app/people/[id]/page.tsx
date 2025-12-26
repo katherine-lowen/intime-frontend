@@ -7,6 +7,8 @@ import { useParams, useRouter } from "next/navigation";
 import { AuthGate } from "@/components/dev-auth-gate";
 import api from "@/lib/api";
 import { getCurrentUser, type CurrentUser } from "@/lib/auth";
+import { orgHref } from "@/lib/org-base";
+
 
 type EmployeeStatus = "ACTIVE" | "INACTIVE" | "ON_LEAVE" | "CONTRACTOR" | "ALUMNI";
 
@@ -14,16 +16,35 @@ type EmployeeDetail = {
   id: string;
   firstName: string;
   lastName: string;
+  preferredName?: string | null;
   email?: string | null;
+  phone?: string | null;
   title?: string | null;
   department?: string | null;
   status?: EmployeeStatus | null;
   location?: string | null;
   manager?: { id: string; name: string } | null;
   teams?: { id: string; name: string }[];
+  employmentType?: string | null;
+  startDate?: string | null;
+  workLocation?: string | null;
+  compensation?: {
+    baseSalary?: number | null;
+    currency?: string | null;
+    paySchedule?: string | null;
+    bonusTarget?: string | null;
+    equitySummary?: string | null;
+  } | null;
+  documents?: {
+    id: string;
+    name?: string | null;
+    type?: string | null;
+    category?: string | null;
+    uploadedAt?: string | null;
+    fileName?: string | null;
+    url?: string | null;
+  }[];
 };
-
-type TabKey = "overview" | "timeoff" | "onboarding" | "reviews" | "documents";
 
 function statusLabel(status?: EmployeeStatus | null) {
   switch (status) {
@@ -48,7 +69,6 @@ export default function EmployeeDetailPage() {
 
   const [me, setMe] = useState<CurrentUser | null>(null);
   const [employee, setEmployee] = useState<EmployeeDetail | null>(null);
-  const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -114,13 +134,35 @@ export default function EmployeeDetailPage() {
   }, [employeeId, me, isEmployeeRole, router]);
 
   const name = `${employee?.firstName ?? ""} ${employee?.lastName ?? ""}`.trim() || "Employee";
+  const prefName = employee?.preferredName || name;
+
+  const formatCurrency = (value?: number | null, currency?: string | null) => {
+    if (value == null) return null;
+    try {
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: currency || "USD",
+        maximumFractionDigits: 0,
+      }).format(value);
+    } catch {
+      return `$${value.toLocaleString()}`;
+    }
+  };
+
+  const formatDate = (dateString?: string | null) => {
+    if (!dateString) return "—";
+    const d = new Date(dateString);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleDateString();
+  };
 
   return (
     <AuthGate>
       <main className="min-h-screen bg-slate-50">
         <div className="mx-auto max-w-5xl px-6 py-8 space-y-6">
           <div className="flex items-center gap-2 text-xs text-slate-500">
-            <Link href="/people" className="hover:text-slate-700">
+            <Link href={orgHref("/people")}
+ className="hover:text-slate-700">
               People
             </Link>
             <span className="text-slate-300">→</span>
@@ -136,12 +178,12 @@ export default function EmployeeDetailPage() {
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-700">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-indigo-100 text-base font-semibold text-indigo-700">
                   {name.slice(0, 2).toUpperCase()}
                 </div>
                 <div>
                   <h1 className="text-xl font-semibold text-slate-900">
-                    {name}
+                    {prefName}
                   </h1>
                   <p className="text-sm text-slate-600">
                     {employee?.title || "—"} · {employee?.department || "—"}
@@ -154,92 +196,237 @@ export default function EmployeeDetailPage() {
                   {statusLabel(employee?.status)}
                 </span>
                 {employee?.manager?.name && (
-                  <span>Manager: {employee.manager.name}</span>
+                  <span>
+                    Manager:{" "}
+                    {employee.manager.id ? (
+                      <Link
+                        href={`/people/${employee.manager.id}`}
+                        className="text-indigo-600 hover:underline"
+                      >
+                        {employee.manager.name}
+                      </Link>
+                    ) : (
+                      employee.manager.name
+                    )}
+                  </span>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Tabs */}
-          <div className="flex items-center gap-2 border-b border-slate-200">
-            {(["overview", "timeoff", "onboarding", "reviews", "documents"] as TabKey[]).map(
-              (tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`px-3 py-2 text-sm font-medium ${
-                    activeTab === tab
-                      ? "border-b-2 border-indigo-600 text-indigo-700"
-                      : "text-slate-600 hover:text-slate-800"
-                  }`}
-                >
-                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                </button>
-              )
-            )}
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            {loading ? (
-              <div className="space-y-3 animate-pulse">
-                <div className="h-4 w-32 rounded bg-slate-100" />
-                <div className="h-24 rounded bg-slate-100" />
+          <div className="grid gap-4 md:grid-cols-[1.4fr_1fr]">
+            {/* Left column */}
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-slate-200 bg-white/90 p-6 shadow-sm backdrop-blur">
+                <h2 className="text-sm font-semibold text-slate-900">
+                  Personal information
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Basic details and contact information.
+                </p>
+                <dl className="mt-4 grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+                  <Field label="Full name" value={name || "—"} />
+                  <Field label="Preferred name" value={employee?.preferredName || "—"} />
+                  <Field
+                    label="Email"
+                    value={
+                      employee?.email ? (
+                        <a
+                          className="text-indigo-600 hover:underline"
+                          href={`mailto:${employee.email}`}
+                        >
+                          {employee.email}
+                        </a>
+                      ) : (
+                        "—"
+                      )
+                    }
+                  />
+                  <Field
+                    label="Phone"
+                    value={
+                      employee?.phone ? (
+                        <a
+                          className="text-indigo-600 hover:underline"
+                          href={`tel:${employee.phone}`}
+                        >
+                          {employee.phone}
+                        </a>
+                      ) : (
+                        "—"
+                      )
+                    }
+                  />
+                  <Field label="Location" value={employee?.location || employee?.workLocation || "—"} />
+                  <Field label="Status" value={statusLabel(employee?.status)} />
+                  <Field
+                    label="Teams"
+                    value={
+                      employee?.teams && employee.teams.length > 0
+                        ? employee.teams.map((t) => t.name).join(", ")
+                        : "—"
+                    }
+                  />
+                </dl>
               </div>
-            ) : !employee ? (
-              <p className="text-sm text-slate-600">Employee not found.</p>
-            ) : (
-              <>
-                {activeTab === "overview" && (
-                  <div className="space-y-3 text-sm text-slate-700">
-                    <div>
-                      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Contact
-                      </h3>
-                      <p>{employee.email || "—"}</p>
+
+              <div className="rounded-2xl border border-slate-200 bg-white/90 p-6 shadow-sm backdrop-blur">
+                <h2 className="text-sm font-semibold text-slate-900">
+                  Job details
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Role, reporting, and employment information.
+                </p>
+                <dl className="mt-4 grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+                  <Field label="Job title" value={employee?.title || "—"} />
+                  <Field label="Department" value={employee?.department || "—"} />
+                  <Field
+                    label="Manager"
+                    value={
+                      employee?.manager?.name ? (
+                        employee.manager.id ? (
+                          <Link
+                            href={`/people/${employee.manager.id}`}
+                            className="text-indigo-600 hover:underline"
+                          >
+                            {employee.manager.name}
+                          </Link>
+                        ) : (
+                          employee.manager.name
+                        )
+                      ) : (
+                        "—"
+                      )
+                    }
+                  />
+                  <Field label="Employment type" value={employee?.employmentType || "—"} />
+                  <Field label="Start date" value={formatDate(employee?.startDate)} />
+                  <Field
+                    label="Work location"
+                    value={employee?.workLocation || employee?.location || "—"}
+                  />
+                </dl>
+              </div>
+            </div>
+
+            {/* Right column */}
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-slate-200 bg-white/90 p-6 shadow-sm backdrop-blur">
+                <h2 className="text-sm font-semibold text-slate-900">
+                  Compensation
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Read-only compensation snapshot.
+                </p>
+                {employee?.compensation ? (
+                  <dl className="mt-4 space-y-2 text-sm text-slate-800">
+                    <div className="flex items-center justify-between">
+                      <dt className="text-xs uppercase tracking-wide text-slate-500">
+                        Base salary
+                      </dt>
+                      <dd className="text-sm">
+                        {formatCurrency(
+                          employee.compensation.baseSalary,
+                          employee.compensation.currency
+                        ) || "—"}
+                        {employee.compensation.paySchedule
+                          ? ` / ${employee.compensation.paySchedule.toLowerCase()}`
+                          : ""}
+                      </dd>
                     </div>
-                    <div>
-                      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Manager
-                      </h3>
-                      <p>{employee.manager?.name || "—"}</p>
-                    </div>
-                    <div>
-                      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Teams
-                      </h3>
-                      <p>
-                        {employee.teams && employee.teams.length > 0
-                          ? employee.teams.map((t) => t.name).join(", ")
-                          : "—"}
-                      </p>
-                    </div>
+                    {employee.compensation.bonusTarget && (
+                      <div className="flex items-center justify-between">
+                        <dt className="text-xs uppercase tracking-wide text-slate-500">
+                          Bonus target
+                        </dt>
+                        <dd className="text-sm">{employee.compensation.bonusTarget}</dd>
+                      </div>
+                    )}
+                    {employee.compensation.equitySummary && (
+                      <div className="flex items-center justify-between">
+                        <dt className="text-xs uppercase tracking-wide text-slate-500">
+                          Equity
+                        </dt>
+                        <dd className="text-sm">{employee.compensation.equitySummary}</dd>
+                      </div>
+                    )}
+                  </dl>
+                ) : (
+                  <div className="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-500">
+                    Compensation details are not available for this employee. {/* TODO: bind when API provides */}
                   </div>
                 )}
-                {activeTab === "timeoff" && (
-                  <p className="text-sm text-slate-600">
-                    Time off summary not available in this preview.
-                  </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white/90 p-6 shadow-sm backdrop-blur">
+                <h2 className="text-sm font-semibold text-slate-900">Documents</h2>
+                <p className="text-xs text-slate-500">
+                  Key documents like tax forms and offer letters.
+                </p>
+
+                {employee?.documents && employee.documents.length > 0 ? (
+                  <ul className="mt-4 space-y-2">
+                    {employee.documents.map((doc) => (
+                      <li
+                        key={doc.id}
+                        className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs"
+                      >
+                        <div>
+                          <div className="font-medium text-slate-800">
+                            {doc.name || doc.fileName || "Document"}
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            {(doc.type || doc.category || "File")} · Uploaded{" "}
+                            {formatDate(doc.uploadedAt)}
+                          </div>
+                        </div>
+                        {doc.url && (
+                          <a
+                            href={doc.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center rounded-full border border-slate-300 bg-white px-3 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            View
+                          </a>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-500">
+                    No documents on file for this employee. {/* TODO: bind when API provides */}
+                  </div>
                 )}
-                {activeTab === "onboarding" && (
-                  <p className="text-sm text-slate-600">
-                    Onboarding tasks not available in this preview.
-                  </p>
-                )}
-                {activeTab === "reviews" && (
-                  <p className="text-sm text-slate-600">
-                    Performance reviews not available in this preview.
-                  </p>
-                )}
-                {activeTab === "documents" && (
-                  <p className="text-sm text-slate-600">
-                    Documents not available in this preview.
-                  </p>
-                )}
-              </>
-            )}
+              </div>
+            </div>
           </div>
+
+          {loading && !employee && (
+            <div className="space-y-3 animate-pulse">
+              <div className="h-4 w-32 rounded bg-slate-100" />
+              <div className="h-24 rounded bg-slate-100" />
+            </div>
+          )}
         </div>
       </main>
     </AuthGate>
+  );
+}
+
+function Field({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1">
+      <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+        {label}
+      </dt>
+      <dd className="text-sm text-slate-800">{value ?? "—"}</dd>
+    </div>
   );
 }

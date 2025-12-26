@@ -7,6 +7,8 @@ import { CompensationPanel } from "./components/CompensationPanel";
 import { SystemDiagram } from "./components/SystemDiagram";
 import { GrowthCard } from "./components/GrowthCard";
 import { Users, Target, TrendingUp, CheckCircle2 } from "lucide-react";
+import { orgHref } from "@/lib/org-base";
+
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +65,8 @@ export default function TalentOverviewPage() {
                 description="Manage open roles, candidate pipelines, and interview processes."
                 status="active"
                 accentColor="#2C6DF9"
-                href="/hiring"   // ← ROUTE TO RECRUITING WORKSPACE
+                href={orgHref("/hiring")}
+   // ← ROUTE TO RECRUITING WORKSPACE
               />
               <TalentModuleCard
                 title="Headcount planning"

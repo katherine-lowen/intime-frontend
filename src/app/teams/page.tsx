@@ -6,21 +6,15 @@ import Link from "next/link";
 import { AuthGate } from "@/components/dev-auth-gate";
 import api from "@/lib/api";
 import { getCurrentUser, type CurrentUser } from "@/lib/auth";
-
-type Team = {
-  id: string;
-  name: string;
-  department?: string | null;
-  lead?: { id: string; name: string; title?: string | null } | null;
-  memberCount?: number | null;
-  members?: { id: string; name: string; title?: string | null }[];
-};
+import TeamMembersModal from "./team-members-modal";
+import type { Team } from "./types";
 
 export default function TeamsPage() {
   const [me, setMe] = useState<CurrentUser | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [modalTeam, setModalTeam] = useState<Team | null>(null);
 
   const isEmployee = useMemo(() => {
     const role = (me?.role || "").toUpperCase();
@@ -114,8 +108,18 @@ export default function TeamsPage() {
                     <div className="col-span-3 text-slate-700">
                       {team.department || "—"}
                     </div>
-                    <div className="col-span-2 text-right text-slate-600">
-                      {team.memberCount ?? team.members?.length ?? 0}
+                    <div className="col-span-2 flex items-center justify-end gap-2 text-right text-slate-600">
+                      <span>
+                        {team.memberCount ?? team.members?.length ?? 0}
+                      </span>
+                      {!isEmployee && (
+                        <button
+                          onClick={() => setModalTeam(team)}
+                          className="text-[11px] font-medium text-indigo-600 hover:underline"
+                        >
+                          Manage
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -127,6 +131,22 @@ export default function TeamsPage() {
             <p className="text-xs text-slate-500">
               You have read-only access to teams.
             </p>
+          )}
+          {!isEmployee && modalTeam && (
+            <TeamMembersModal
+              team={modalTeam}
+              onClose={() => setModalTeam(null)}
+              onSaved={() => {
+                // refetch
+                setLoading(true);
+                setModalTeam(null);
+                void (async () => {
+                  const data = await api.get<Team[]>(`/teams`);
+                  setTeams(data ?? []);
+                  setLoading(false);
+                })();
+              }}
+            />
           )}
         </div>
       </main>

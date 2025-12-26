@@ -1,5 +1,7 @@
 // src/app/talent/headcount/page.tsx
 import { AuthGate } from "@/components/dev-auth-gate";
+import { orgHref } from "@/lib/org-base";
+
 
 export const dynamic = "force-dynamic";
 
@@ -162,7 +164,7 @@ export default async function HeadcountPlanningPage() {
               </p>
 
               <a
-                href="/hiring"
+                href={orgHref("/hiring")}
                 className="mt-3 inline-flex items-center gap-1 text-[11px] font-medium text-indigo-300 hover:underline"
               >
                 Open Hiring workspace →

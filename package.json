@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "start": "next start -p 3000",
+    "build": "NEXT_DISABLE_TURBOPACK=1 next build --webpack",
+    "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {
@@ -39,6 +39,8 @@
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
+    "@sentry/nextjs": "^10.30.0",
+    "@sentry/types": "^10.32.1",
     "@supabase/supabase-js": "^2.86.0",
     "@vercel/analytics": "^1.6.1",
     "@vercel/speed-insights": "^1.2.0",

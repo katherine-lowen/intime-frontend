@@ -1,9 +1,11 @@
-// next.config.js
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,
-  // (Optional) keep during YC if you want to bypass TS blocks in prod builds:
-  // typescript: { ignoreBuildErrors: true },
+  async rewrites() {
+    return [
+      // Everything your frontend calls like "/api/..." will be proxied to your backend
+      { source: "/api/:path*", destination: "http://localhost:3002/:path*" },
+    ];
+  },
 };
 
 module.exports = nextConfig;

@@ -2,6 +2,8 @@
 import api from "@/lib/api";
 import Link from "next/link";
 import { AuthGate } from "@/components/dev-auth-gate";
+import { orgHref } from "@/lib/org-base";
+
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +27,7 @@ type Employee = {
 };
 
 type PageProps = {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 };
 
 async function getTeams(): Promise<Team[]> {
@@ -49,7 +51,7 @@ async function getEmployees(): Promise<Employee[]> {
 }
 
 export default async function TeamIntelligencePage({ params }: PageProps) {
-  const teamId = params.id;
+  const { id: teamId } = await params;
 
   let teams: Team[] = [];
   let employees: Employee[] = [];
@@ -68,7 +70,7 @@ export default async function TeamIntelligencePage({ params }: PageProps) {
       <AuthGate>
         <main className="p-6 space-y-4">
           <Link
-            href="/teams"
+            href={orgHref("/teams")}
             className="text-sm text-indigo-600 hover:underline"
           >
             ← Back to Teams
@@ -99,7 +101,7 @@ export default async function TeamIntelligencePage({ params }: PageProps) {
         <header className="flex items-center justify-between gap-4">
           <div className="space-y-1">
             <Link
-              href="/teams"
+              href={orgHref("/teams")}
               className="text-xs text-indigo-600 hover:underline"
             >
               ← Back to Teams

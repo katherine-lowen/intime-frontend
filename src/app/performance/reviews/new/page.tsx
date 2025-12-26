@@ -1,4 +1,3 @@
-// src/app/performance/reviews/new/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -13,14 +12,20 @@ type EmployeeOption = {
   department?: string | null;
 };
 
-const API_URL =
-  (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080").replace(/\/$/, "");
+const API_URL = (
+  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080"
+).replace(/\/$/, "");
 const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
+
+function getBase() {
+  const inferred = (globalThis as any).__INTIME_ORG_SLUG__ as string | undefined;
+  return inferred ? `/org/${inferred}` : "";
+}
 
 export default function NewPerformanceReviewPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-const preselectedEmployeeId = searchParams?.get("employeeId") ?? null;
+  const preselectedEmployeeId = searchParams?.get("employeeId") ?? null;
 
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [loadingEmployees, setLoadingEmployees] = useState(true);
@@ -37,7 +42,6 @@ const preselectedEmployeeId = searchParams?.get("employeeId") ?? null;
 
   const hasPreselectedEmployee = !!preselectedEmployeeId;
 
-  // Load employees for the dropdown
   useEffect(() => {
     async function loadEmployees() {
       try {
@@ -57,7 +61,6 @@ const preselectedEmployeeId = searchParams?.get("employeeId") ?? null;
         const data = (await res.json()) as EmployeeOption[];
         setEmployees(data);
 
-        // If we *don't* have a preselected employee, default to first in list
         if (!hasPreselectedEmployee && data.length > 0) {
           setEmployeeId(data[0].id);
         }
@@ -75,13 +78,9 @@ const preselectedEmployeeId = searchParams?.get("employeeId") ?? null;
     e.preventDefault();
     setError(null);
 
-    if (!employeeId) {
-      setError("Select an employee.");
-      return;
-    }
+    if (!employeeId) return setError("Select an employee.");
     if (!period.trim()) {
-      setError("Review period is required (e.g. 2025 H1, Q3 2024).");
-      return;
+      return setError("Review period is required (e.g. 2025 H1, Q3 2024).");
     }
 
     setSaving(true);
@@ -107,11 +106,13 @@ const preselectedEmployeeId = searchParams?.get("employeeId") ?? null;
         throw new Error(`Create failed: ${res.status}`);
       }
 
-      // If we came from a person profile, go back there.
+      const base = getBase();
+
+      // If we came from a person profile, go back there (org-scoped if available).
       if (hasPreselectedEmployee && employeeId) {
-        router.push(`/people/${employeeId}`);
+        router.push(`${base}/people/${employeeId}`);
       } else {
-        router.push("/performance/reviews");
+        router.push(`${base}/performance/reviews`);
       }
       router.refresh();
     } catch (e: any) {
@@ -124,10 +125,11 @@ const preselectedEmployeeId = searchParams?.get("employeeId") ?? null;
   const hasEmployees = employees.length > 0;
 
   function handleBack() {
+    const base = getBase();
     if (hasPreselectedEmployee && employeeId) {
-      router.push(`/people/${employeeId}`);
+      router.push(`${base}/people/${employeeId}`);
     } else {
-      router.push("/performance/reviews");
+      router.push(`${base}/performance/reviews`);
     }
   }
 
@@ -177,7 +179,6 @@ const preselectedEmployeeId = searchParams?.get("employeeId") ?? null;
             </div>
           )}
 
-          {/* Employee + Period */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="block text-xs font-medium uppercase tracking-wide text-slate-600">
@@ -222,7 +223,6 @@ const preselectedEmployeeId = searchParams?.get("employeeId") ?? null;
             </div>
           </div>
 
-          {/* Rating */}
           <div>
             <label className="block text-xs font-medium uppercase tracking-wide text-slate-600">
               Rating (optional)
@@ -238,7 +238,6 @@ const preselectedEmployeeId = searchParams?.get("employeeId") ?? null;
             </p>
           </div>
 
-          {/* Manager summary */}
           <div>
             <label className="block text-xs font-medium uppercase tracking-wide text-slate-600">
               Manager summary
@@ -252,7 +251,6 @@ const preselectedEmployeeId = searchParams?.get("employeeId") ?? null;
             />
           </div>
 
-          {/* Employee summary */}
           <div>
             <label className="block text-xs font-medium uppercase tracking-wide text-slate-600">
               Employee self-review (optional)
@@ -266,7 +264,6 @@ const preselectedEmployeeId = searchParams?.get("employeeId") ?? null;
             />
           </div>
 
-          {/* Actions */}
           <div className="flex items-center justify-between gap-4 pt-2">
             <button
               type="button"

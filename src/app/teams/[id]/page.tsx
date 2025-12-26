@@ -1,6 +1,8 @@
 // src/app/teams/[id]/page.tsx
 import Link from "next/link";
 import api from "@/lib/api";
+import { orgHref } from "@/lib/org-base";
+
 
 export const dynamic = "force-dynamic";
 
@@ -53,9 +55,9 @@ function statusLabel(status?: EmployeeStatus | null) {
 export default async function TeamPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  const teamId = params.id;
+  const { id: teamId } = await params;
   const team = await getTeam(teamId);
 
   if (!team) {
@@ -63,11 +65,12 @@ export default async function TeamPage({
       <main className="mx-auto max-w-5xl px-6 py-8">
         {/* Breadcrumbs */}
         <div className="mb-4 flex items-center gap-2 text-xs text-slate-400">
-          <Link href="/people" className="text-indigo-600 hover:underline">
+          <Link href={orgHref("people")}
+ className="text-indigo-600 hover:underline">
             People
           </Link>
           <span className="text-slate-300">/</span>
-          <Link href="/teams" className="text-indigo-600 hover:underline">
+          <Link href={orgHref("/teams")} className="text-indigo-600 hover:underline">
             Teams
           </Link>
           <span className="text-slate-300">/</span>
@@ -81,7 +84,7 @@ export default async function TeamPage({
 
         <div className="mt-4">
           <Link
-            href="/teams"
+            href={orgHref("/teams")}
             className="text-xs font-medium text-indigo-600 hover:underline"
           >
             ← Back to Teams
@@ -95,11 +98,11 @@ export default async function TeamPage({
     <main className="mx-auto max-w-5xl px-6 py-8">
       {/* Breadcrumbs */}
       <div className="mb-4 flex items-center gap-2 text-xs text-slate-400">
-        <Link href="/people" className="text-indigo-600 hover:underline">
+        <Link href={orgHref("/people")} className="text-indigo-600 hover:underline">
           People
         </Link>
         <span className="text-slate-300">/</span>
-        <Link href="/teams" className="text-indigo-600 hover:underline">
+        <Link href={orgHref("/teams")} className="text-indigo-600 hover:underline">
           Teams
         </Link>
         <span className="text-slate-300">/</span>

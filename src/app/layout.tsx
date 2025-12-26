@@ -3,7 +3,7 @@ import "./globals.css";
 import type { ReactNode } from "react";
 
 import { IdentitySync } from "@/components/IdentitySync";
-import { AppFrame } from "@/components/AppFrame";
+import { AuthProvider } from "@/context/auth";
 
 // Vercel Analytics + Speed Insights
 import { Analytics } from "@vercel/analytics/react";
@@ -18,11 +18,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body className="bg-slate-50 text-slate-900 antialiased">
-        {/* Sync Supabase → localStorage client-side */}
-        <IdentitySync />
-
-        {/* App shell (sidebar/topnav logic) */}
-        <AppFrame>{children}</AppFrame>
+        <AuthProvider>
+          {/* Sync Supabase → localStorage client-side */}
+          <IdentitySync />
+          {children}
+        </AuthProvider>
 
         {/* Vercel Analytics */}
         <Analytics />

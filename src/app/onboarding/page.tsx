@@ -344,9 +344,12 @@ export default async function OnboardingListPage() {
                               className="border-b last:border-b-0 hover:bg-gray-50/70"
                             >
                               <td className="px-6 py-3">
-                                <div className="font-medium text-gray-900">
+                                <Link
+                                  href={`/onboarding/flows/${flow.id}`}
+                                  className="font-medium text-gray-900 hover:underline"
+                                >
                                   {name}
-                                </div>
+                                </Link>
                                 <div className="text-xs text-gray-500">
                                   {subtitle || "Team member"}
                                 </div>

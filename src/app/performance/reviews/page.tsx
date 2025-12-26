@@ -2,6 +2,8 @@
 import api from "@/lib/api";
 import { AuthGate } from "@/components/dev-auth-gate";
 import Link from "next/link";
+import { orgHref } from "@/lib/org-base";
+
 
 export const dynamic = "force-dynamic";
 
@@ -147,7 +149,7 @@ export default async function PerformanceReviewsPage({
                   </span>
                 </span>
                 <Link
-                  href="/performance/reviews"
+                  href={orgHref("/performance/reviews")}
                   className="text-[11px] font-medium text-slate-500 hover:text-slate-700"
                 >
                   Clear filter
@@ -157,7 +159,7 @@ export default async function PerformanceReviewsPage({
           </div>
 
           <Link
-            href="/performance/reviews/new"
+            href={orgHref("/performance/reviews/new")}
             className="inline-flex items-center rounded-full bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
           >
             + New review
@@ -246,12 +248,26 @@ export default async function PerformanceReviewsPage({
                       {formatDate(r.createdAt)}
                     </td>
                     <td className="px-4 py-3 text-right text-sm">
-                      <Link
-                        href={`/performance/reviews/${r.id}`}
-                        className="text-xs font-medium text-indigo-600 hover:text-indigo-500 hover:underline"
-                      >
-                        Open
-                      </Link>
+                      <div className="flex flex-wrap justify-end gap-2 text-xs">
+                        <Link
+                          href={`/performance/reviews/${r.id}`}
+                          className="inline-flex items-center rounded-md border border-slate-200 px-2 py-1 font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                          View
+                        </Link>
+                        <Link
+                          href={`/performance/reviews/${r.id}/form?role=self`}
+                          className="inline-flex items-center rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 font-medium text-indigo-700 hover:bg-indigo-100"
+                        >
+                          Self review
+                        </Link>
+                        <Link
+                          href={`/performance/reviews/${r.id}/form?role=manager`}
+                          className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2 py-1 font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                          Manager review
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}

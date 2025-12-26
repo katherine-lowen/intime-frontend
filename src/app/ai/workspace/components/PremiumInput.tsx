@@ -1,14 +1,23 @@
 import { Paperclip, Mic, Zap, ArrowUp } from "lucide-react";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 
 interface PremiumInputProps {
   onSend: (message: string) => void;
+  preset?: string;
 }
 
-export function PremiumInput({ onSend }: PremiumInputProps) {
+export function PremiumInput({ onSend, preset }: PremiumInputProps) {
   const [message, setMessage] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (preset !== undefined) {
+      setMessage(preset);
+      inputRef.current?.focus();
+    }
+  }, [preset]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,10 +121,11 @@ export function PremiumInput({ onSend }: PremiumInputProps) {
             {/* Input field */}
             <input
               type="text"
+              ref={inputRef}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask about your workforce…"
+              placeholder="Ask about your org… headcount, hiring, PTO, performance"
               className="flex-1 bg-transparent border-none outline-none text-slate-100 placeholder-slate-500 text-[15px]"
             />
 

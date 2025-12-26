@@ -44,6 +44,11 @@ type ReviewDetail = {
 
 // ---- Helpers ----
 
+function getBase() {
+  const inferred = (globalThis as any).__INTIME_ORG_SLUG__ as string | undefined;
+  return inferred ? `/org/${inferred}` : "";
+}
+
 function ratingBadge(rating: ReviewRating) {
   if (!rating) {
     return (
@@ -113,7 +118,6 @@ function getEmployeeName(r: ReviewDetail) {
 async function getReview(id: string): Promise<ReviewDetail | null> {
   try {
     const data = await api.get<ReviewDetail>(`/performance-reviews/${id}`);
-    // Guard in case api.get returns undefined
     return data ?? null;
   } catch (err) {
     console.error("Failed to load performance review:", err);
@@ -126,11 +130,16 @@ async function getReview(id: string): Promise<ReviewDetail | null> {
 export default async function PerformanceReviewDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id?: string }>;
 }) {
-  const review = await getReview(params.id);
+  const { id } = await params;
+  const reviewId = id ?? "";
+  if (!reviewId) notFound();
+
+  const review = await getReview(reviewId);
   if (!review) notFound();
 
+  const base = getBase();
   const employeeName = getEmployeeName(review);
 
   return (
@@ -149,19 +158,41 @@ export default async function PerformanceReviewDetailPage({
                 Created {formatDate(review.createdAt)}
               </span>
             </p>
+
+            {/* Quick actions */}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link
+                href={`${base}/performance/reviews/${review.id}/form?role=self`}
+                className="inline-flex items-center rounded-md border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
+              >
+                Self review form
+              </Link>
+              <Link
+                href={`${base}/performance/reviews/${review.id}/form?role=manager`}
+                className="inline-flex items-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Manager review form
+              </Link>
+              <Link
+                href={`${base}/performance/reviews/${review.id}/summary`}
+                className="inline-flex items-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                View summary
+              </Link>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             {review.employee && (
               <Link
-                href={`/people/${review.employee.id}`}
+                href={`${base}/people/${review.employee.id}`}
                 className="text-xs text-slate-500 hover:text-slate-700"
               >
                 ← Back to person
               </Link>
             )}
             <Link
-              href="/performance/reviews"
+              href={`${base}/performance/reviews`}
               className="text-xs text-slate-500 hover:text-slate-700"
             >
               All reviews
@@ -172,7 +203,6 @@ export default async function PerformanceReviewDetailPage({
         <section className="grid gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1.3fr)]">
           {/* LEFT COLUMN */}
           <div className="space-y-4">
-            {/* Manager summary */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-900">
                 Manager summary
@@ -187,7 +217,6 @@ export default async function PerformanceReviewDetailPage({
               </div>
             </div>
 
-            {/* Employee self-review */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-900">
                 Employee self-review
@@ -204,7 +233,6 @@ export default async function PerformanceReviewDetailPage({
               </div>
             </div>
 
-            {/* Raw manager feedback */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <h3 className="text-sm font-semibold text-slate-900">
                 Raw manager feedback
@@ -223,7 +251,6 @@ export default async function PerformanceReviewDetailPage({
               </div>
             </div>
 
-            {/* Raw self-review */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <h3 className="text-sm font-semibold text-slate-900">
                 Raw self-review text
@@ -256,7 +283,7 @@ export default async function PerformanceReviewDetailPage({
                   <dd className="text-right">
                     {review.employee ? (
                       <Link
-                        href={`/people/${review.employee.id}`}
+                        href={`${base}/people/${review.employee.id}`}
                         className="font-medium text-slate-900 hover:text-indigo-600 hover:underline"
                       >
                         {employeeName}

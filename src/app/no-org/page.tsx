@@ -1,4 +1,8 @@
 // src/app/no-org/page.tsx
+"use client";
+
+import Link from "next/link";
+import { orgHref } from "@/lib/org-base";
 
 export default function NoOrgPage() {
   return (
@@ -13,18 +17,18 @@ export default function NoOrgPage() {
             Ask an admin to add you, or start a new workspace.
           </p>
           <div className="mt-4 flex gap-3 text-sm">
-            <a
-              href="/settings"
+            <Link
+              href={orgHref("/settings")}
               className="rounded-md bg-indigo-600 px-4 py-2 font-medium text-white shadow-sm hover:bg-indigo-700"
             >
               Go to settings
-            </a>
-            <a
+            </Link>
+            <Link
               href="/login"
               className="rounded-md border border-slate-200 bg-white px-4 py-2 font-medium text-slate-700 shadow-sm hover:bg-slate-50"
             >
               Switch account
-            </a>
+            </Link>
           </div>
         </div>
       </div>

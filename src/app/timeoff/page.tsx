@@ -4,6 +4,8 @@
 import { useEffect, useState, FormEvent } from "react";
 import api from "@/lib/api";
 import Link from "next/link";
+import { orgHref } from "@/lib/org-base";
+
 
 type TimeOffPolicyKind = "UNLIMITED" | "FIXED";
 
@@ -344,7 +346,7 @@ export default function TimeOffPage() {
         {/* Calendar button */}
         <div className="flex flex-wrap items-center gap-2">
           <Link
-            href="/timeoff/calendar"
+            href={orgHref("/timeoff/calendar")}
             className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-semibold text-slate-50 hover:bg-slate-800"
           >
             View time off calendar

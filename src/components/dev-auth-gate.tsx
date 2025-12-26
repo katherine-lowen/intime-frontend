@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import type React from "react";
 import { getCurrentUser, type CurrentUser } from "@/lib/auth";
 
@@ -33,7 +33,6 @@ const EMPLOYEE_ALLOWED_PREFIXES = [
 ];
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
   const pathname = usePathname();
 
   const [user, setUser] = useState<CurrentUser | null>(null);
@@ -43,41 +42,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     let cancelled = false;
 
     async function check() {
-      // Skip auth on public routes
-      if (isPublic(pathname)) {
-        setChecking(false);
-        return;
-      }
-
       setChecking(true);
       const me = await getCurrentUser();
       if (cancelled) return;
-
-      if (!me) {
-        router.replace("/login");
-        return;
-      }
-
-      // No org membership – send to setup page
-      if (!me.org && pathname !== NO_ORG_ROUTE) {
-        router.replace(NO_ORG_ROUTE);
-        return;
-      }
-
-      // If employee-level role, keep them on employee experience only
-      const role = (me.role || "").toUpperCase();
-      const isEmployee = !["OWNER", "ADMIN", "MANAGER"].includes(role);
-      if (isEmployee) {
-        const allowed = pathname
-          ? EMPLOYEE_ALLOWED_PREFIXES.some((p) =>
-              pathname.startsWith(p)
-            )
-          : false;
-        if (!allowed) {
-          router.replace(EMPLOYEE_HOME);
-          return;
-        }
-      }
 
       setUser(me);
       setChecking(false);
@@ -88,7 +55,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [pathname, router]);
+  }, [pathname]);
 
   // While checking, render a lightweight placeholder to avoid layout jumps
   if (checking) {

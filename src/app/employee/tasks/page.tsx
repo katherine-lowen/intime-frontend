@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import api from "@/lib/api";
 import { AuthGate } from "@/components/dev-auth-gate";
 
@@ -22,6 +23,7 @@ export default function EmployeeTasksPage() {
   const [openTasks, setOpenTasks] = useState<Task[]>([]);
   const [completedTasks, setCompletedTasks] = useState<Task[]>([]);
   const [statusFilter, setStatusFilter] = useState<"OPEN" | "COMPLETED">("OPEN");
+  const [segmentFilter, setSegmentFilter] = useState<"ALL" | "ONBOARDING" | "OTHER">("ALL");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,10 +51,23 @@ export default function EmployeeTasksPage() {
     void load();
   }, []);
 
-  const filteredTasks = useMemo(
-    () => (statusFilter === "OPEN" ? openTasks : completedTasks),
-    [statusFilter, openTasks, completedTasks]
+  const onboardingOpen = openTasks.filter((t) =>
+    (t.source || t.category || "").toUpperCase().includes("ONBOARDING")
   );
+  const onboardingCompleted = completedTasks.filter((t) =>
+    (t.source || t.category || "").toUpperCase().includes("ONBOARDING")
+  );
+
+  const filteredTasks = useMemo(() => {
+    const base = statusFilter === "OPEN" ? openTasks : completedTasks;
+    if (segmentFilter === "ALL") return base;
+    const isOnboarding = segmentFilter === "ONBOARDING";
+    return base.filter((t) => {
+      const tag = (t.source || t.category || "").toUpperCase();
+      const matches = tag.includes("ONBOARDING");
+      return isOnboarding ? matches : !matches;
+    });
+  }, [statusFilter, openTasks, completedTasks, segmentFilter]);
 
   const markComplete = async (id: string) => {
     try {
@@ -79,11 +94,45 @@ export default function EmployeeTasksPage() {
   return (
     <AuthGate>
       <div className="space-y-6">
-        <div>
+        <div className="space-y-2">
           <h1 className="text-xl font-semibold text-slate-900">My tasks</h1>
           <p className="text-sm text-slate-600">
             Onboarding and general tasks assigned to you.
           </p>
+          {onboardingOpen.length > 0 && (
+            <p className="text-xs text-slate-500">
+              Welcome! Let&apos;s complete your onboarding. You have {onboardingOpen.length} onboarding tasks and{" "}
+              {openTasks.length - onboardingOpen.length} other tasks.
+            </p>
+          )}
+          {onboardingOpen.length > 0 && (
+            <Link
+              href="/employee/onboarding"
+              className="inline-flex items-center text-[11px] font-medium text-indigo-600 hover:underline"
+            >
+              View onboarding checklist →
+            </Link>
+          )}
+          {onboardingOpen.length + onboardingCompleted.length > 0 && (
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <span>
+                Onboarding progress: {onboardingCompleted.length}/
+                {onboardingOpen.length + onboardingCompleted.length}
+              </span>
+              <div className="h-2 w-32 rounded-full bg-slate-100 overflow-hidden">
+                <div
+                  className="h-full bg-indigo-500"
+                  style={{
+                    width: `${Math.round(
+                      (onboardingCompleted.length /
+                        Math.max(onboardingOpen.length + onboardingCompleted.length, 1)) *
+                        100
+                    )}%`,
+                  }}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {error && (
@@ -108,6 +157,20 @@ export default function EmployeeTasksPage() {
                   }`}
                 >
                   {status === "OPEN" ? "Open" : "Completed"}
+                </button>
+              ))}
+              {(["ALL", "ONBOARDING", "OTHER"] as const).map((seg) => (
+                <button
+                  key={seg}
+                  type="button"
+                  onClick={() => setSegmentFilter(seg)}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                    segmentFilter === seg
+                      ? "border-slate-300 bg-slate-100 text-slate-800"
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  {seg === "ALL" ? "All" : seg === "ONBOARDING" ? "Onboarding" : "Other"}
                 </button>
               ))}
             </div>

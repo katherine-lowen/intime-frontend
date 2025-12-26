@@ -1,123 +1,165 @@
 // src/lib/api.ts
-// Single source of truth for the external API host.
-// We accept either NEXT_PUBLIC_API_BASE_URL or NEXT_PUBLIC_API_URL to avoid
-// misconfiguration between server and client components.
-const rawBase =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
+
+// Prefer NEXT_PUBLIC_API_URL (what we'll set on Vercel), but keep backward-compat
+const RAW_BASE =
   process.env.NEXT_PUBLIC_API_URL ||
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
   "http://localhost:8080";
 
-// Normalize: strip trailing slash and an accidental "/api" path segment so we don't
-// end up calling nonexistent routes like /api/employees.
-export const API_BASE_URL = rawBase
-  .replace(/\/$/, "")
-  .replace(/\/api$/i, "");
-
-// Optional: use this ONLY if you want to force a specific org for debugging.
-// Leave it undefined in real multi-org mode.
-const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID || "";
-
-/**
- * Try to read identity info from the browser.
- * Populated by IdentitySync.tsx after Supabase login.
- */
-function getIdentityHeaders(): Record<string, string> {
-  if (typeof window === "undefined") {
-    return {};
-  }
-
-  const email = window.localStorage.getItem("intime_user_email") || "";
-  const name = window.localStorage.getItem("intime_user_name") || "";
-
-  const headers: Record<string, string> = {};
-  if (email) headers["x-user-email"] = email;
-  if (name) headers["x-user-name"] = name;
-
-  // If you *really* want to hard-force an org on the frontend side
-  // (e.g., demo or single-tenant mode), set NEXT_PUBLIC_ORG_ID in env.
-  if (ORG_ID) {
-    headers["x-org-id"] = ORG_ID;
-  }
-
-  return headers;
+if (
+  process.env.NODE_ENV === "production" &&
+  RAW_BASE.includes("localhost")
+) {
+  console.warn(
+    "[api] NEXT_PUBLIC_API_URL points to localhost in production. Update to https://api.hireintime.ai"
+  );
 }
 
-/**
- * Low-level fetch wrapper.
- *
- * NOTE: 404 is treated as "no data" and returns `undefined` instead of throwing,
- * so callers like `/auth/me` don't blow up the whole app.
- */
-async function apiFetch<T>(
-  path: string,
-  options: RequestInit & { jsonBody?: unknown } = {}
-): Promise<T | undefined> {
-  const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
-
-  const { jsonBody, headers, ...rest } = options;
-
-  const finalHeaders: HeadersInit = {
-    "Content-Type": "application/json",
-    ...getIdentityHeaders(),
-    ...(headers || {}),
-  };
-
-  const res = await fetch(url, {
-    ...rest,
-    headers: finalHeaders,
-    body:
-      jsonBody !== undefined
-        ? JSON.stringify(jsonBody)
-        : (rest.body as BodyInit | null | undefined),
-    cache: "no-store",
-    credentials: "include",
-  });
-
-  // 👉 Special case: 404 = "no data" instead of hard error
-  if (res.status === 404) {
-    const text = await res.text().catch(() => "");
-    console.warn(
-      "[api.ts] 404",
-      options.method || "GET",
-      url,
-      "→",
-      res.status,
-      text
-    );
-    return undefined as T;
-  }
-
-  if (!res.ok) {
-    const text = await res.text();
-    console.error(
-      "[api.ts] Error",
-      options.method || "GET",
-      url,
-      "→",
-      res.status,
-      text
-    );
-    throw new Error(
-      `API ${options.method || "GET"} ${path} failed: ${res.status}`
-    );
-  }
-
-  // Handle 204 No Content
-  if (res.status === 204) {
-    return undefined as T;
-  }
-
-  return (await res.json()) as T;
+function normalizeBaseUrl(base: string) {
+  // trim trailing slash
+  return base.replace(/\/+$/, "");
 }
 
-const api = {
-  get:  <T>(path: string) => apiFetch<T>(path, { method: "GET" }),
-  post: <T>(path: string, body?: unknown) =>
-    apiFetch<T>(path, { method: "POST", jsonBody: body }),
-  patch: <T>(path: string, body?: unknown) =>
-    apiFetch<T>(path, { method: "PATCH", jsonBody: body }),
-  del:  <T>(path: string) =>
-    apiFetch<T>(path, { method: "DELETE" }),
+function joinUrl(base: string, path: string) {
+  const b = normalizeBaseUrl(base);
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return `${b}${p}`;
+}
+
+export const API_BASE_URL = normalizeBaseUrl(RAW_BASE);
+
+type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+
+type ApiErrorShape = {
+  status?: number;
+  code?: string;
+  message?: string;
+  data?: any;
+  requestId?: string | undefined;
+  plan?: string;
+  retryAfter?: string | null;
+  response?: { status: number; data: any; requestId?: string | undefined };
+  [key: string]: any;
 };
 
+class ApiClient {
+  private async request<T>(
+    method: HttpMethod,
+    path: string,
+    body?: unknown
+  ): Promise<T> {
+    const url = joinUrl(API_BASE_URL, path);
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    const options: RequestInit = {
+      method,
+      headers,
+      // Keep this ON: supports cookie auth, and doesn't break header-based auth.
+      credentials: "include",
+      cache: "no-store",
+    };
+
+    if (body !== undefined) {
+      options.body = JSON.stringify(body);
+    }
+
+    let res: Response;
+    try {
+      res = await fetch(url, options);
+    } catch (err: any) {
+      const apiError: ApiErrorShape = new Error(
+        err?.message || "Network error"
+      );
+      apiError.code = "NETWORK_ERROR";
+      apiError.cause = err;
+      throw apiError;
+    }
+
+    const requestId =
+      res.headers.get("x-request-id") || res.headers.get("x-requestid");
+
+    const rawText = await res.text();
+    let data: any = null;
+
+    if (rawText) {
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        data = rawText;
+      }
+    }
+
+    if (!res.ok) {
+      const apiError: ApiErrorShape = new Error(
+        typeof data === "object" && data?.message
+          ? data.message
+          : `Request failed with status ${res.status}`
+      );
+
+      apiError.status = res.status;
+      apiError.data = data;
+      apiError.requestId =
+        requestId ||
+        (typeof data === "object" && data?._requestId ? data._requestId : undefined);
+
+      // Normalize common codes
+      if (res.status === 401) apiError.code = "UNAUTHORIZED";
+      if (res.status === 403) apiError.code = "FORBIDDEN";
+      if (res.status === 404) apiError.code = "NOT_FOUND";
+
+      if (res.status === 402) {
+        apiError.code = "PLAN_REQUIRED";
+        apiError.plan =
+          (data as any)?.plan ||
+          (typeof (data as any)?.message === "string" &&
+          (data as any).message.toUpperCase().includes("SCALE")
+            ? "SCALE"
+            : "GROWTH");
+      } else if (res.status === 429) {
+        apiError.code = "RATE_LIMITED";
+        apiError.retryAfter = res.headers.get("retry-after");
+      }
+
+      apiError.response = {
+        status: res.status,
+        data,
+        requestId: apiError.requestId,
+      };
+
+      throw apiError;
+    }
+
+    // Attach request id to object payloads for debugging
+    if (data && typeof data === "object") {
+      (data as any)._requestId = requestId;
+    }
+
+    return data as T;
+  }
+
+  get<T>(path: string): Promise<T> {
+    return this.request<T>("GET", path);
+  }
+
+  post<T>(path: string, body?: unknown): Promise<T> {
+    return this.request<T>("POST", path, body);
+  }
+
+  put<T>(path: string, body?: unknown): Promise<T> {
+    return this.request<T>("PUT", path, body);
+  }
+
+  patch<T>(path: string, body?: unknown): Promise<T> {
+    return this.request<T>("PATCH", path, body);
+  }
+
+  delete<T>(path: string): Promise<T> {
+    return this.request<T>("DELETE", path);
+  }
+}
+
+const api = new ApiClient();
 export default api;

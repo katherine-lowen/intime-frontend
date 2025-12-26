@@ -35,9 +35,47 @@ type ReviewItem = {
   status: string;
 };
 
+type TimeOffPolicyKind = "UNLIMITED" | "FIXED" | "ACCRUAL";
+
+type TimeOffPolicy = {
+  id: string;
+  name: string;
+  kind: TimeOffPolicyKind;
+  annualAllowanceDays?: number | null;
+};
+
+type TimeOffRequest = {
+  id: string;
+  type: string;
+  startDate: string;
+  endDate: string;
+  status: string;
+};
+
+function countDaysInYearRange(startStr: string, endStr: string, year: number): number {
+  const start = new Date(startStr);
+  const end = new Date(endStr);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
+
+  const yearStart = new Date(year, 0, 1);
+  const yearEnd = new Date(year, 11, 31);
+
+  const effectiveStart = start < yearStart ? yearStart : start;
+  const effectiveEnd = end > yearEnd ? yearEnd : end;
+
+  if (effectiveEnd < effectiveStart) return 0;
+
+  const msPerDay = 1000 * 60 * 60 * 24;
+  return (
+    Math.floor((effectiveEnd.getTime() - effectiveStart.getTime()) / msPerDay) + 1
+  );
+}
+
 export default function EmployeeHomePage() {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [timeoff, setTimeoff] = useState<TimeoffItem[]>([]);
+  const [approvedTimeoff, setApprovedTimeoff] = useState<TimeOffRequest[]>([]);
+  const [policies, setPolicies] = useState<TimeOffPolicy[]>([]);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [reviews, setReviews] = useState<ReviewItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,17 +86,21 @@ export default function EmployeeHomePage() {
     async function load() {
       try {
         setLoading(true);
-        const [meRes, timeoffRes, tasksRes, reviewsRes] = await Promise.all([
+        const [meRes, timeoffRes, tasksRes, reviewsRes, approvedRes, policiesRes] = await Promise.all([
           api.get<MeResponse>("/me"),
           api.get<{ items: TimeoffItem[] }>("/me/timeoff?upcoming=true"),
           api.get<{ items: TaskItem[] }>("/me/tasks?status=OPEN"),
           api.get<{ items: ReviewItem[] }>("/me/reviews?current=true"),
+          api.get<{ items: TimeOffRequest[] }>("/me/timeoff?status=APPROVED"),
+          api.get<TimeOffPolicy[]>("/timeoff/policies"),
         ]);
         if (cancelled) return;
         setMe(meRes ?? null);
         setTimeoff(timeoffRes?.items ?? []);
         setTasks(tasksRes?.items ?? []);
         setReviews(reviewsRes?.items ?? []);
+        setApprovedTimeoff(approvedRes?.items ?? []);
+        setPolicies(policiesRes ?? []);
       } catch (err: any) {
         if (!cancelled) {
           console.error("[employee home] fetch failed", err);
@@ -75,6 +117,30 @@ export default function EmployeeHomePage() {
   }, []);
 
   const name = `${me?.firstName ?? ""} ${me?.lastName ?? ""}`.trim() || "there";
+  const currentYear = new Date().getFullYear();
+
+  const allowancePolicy =
+    policies.find(
+      (p) => p.kind === "FIXED" || p.kind === "ACCRUAL"
+    ) || null;
+
+  const allowance =
+    allowancePolicy?.annualAllowanceDays != null
+      ? allowancePolicy.annualAllowanceDays
+      : null;
+
+  const approvedPtoDays = approvedTimeoff
+    .filter((r) => r.status === "APPROVED" && r.type?.toUpperCase() === "PTO")
+    .reduce(
+      (sum, r) => sum + countDaysInYearRange(r.startDate, r.endDate, currentYear),
+      0
+    );
+
+  const remaining =
+    allowance != null ? Math.max(allowance - approvedPtoDays, 0) : null;
+
+  const primaryPolicy = policies[0] ?? null;
+  const isUnlimited = primaryPolicy?.kind === "UNLIMITED";
 
   return (
     <AuthGate>
@@ -94,7 +160,54 @@ export default function EmployeeHomePage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+          <CardShell
+            title="Time off balance"
+            href="/employee/timeoff"
+            loading={loading}
+            emptyText="No time off policy assigned."
+          >
+            {isUnlimited ? (
+              <div className="text-sm text-slate-700">
+                {primaryPolicy?.name || "PTO"} ·{" "}
+                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                  Unlimited
+                </span>
+              </div>
+            ) : allowance != null ? (
+              <div className="space-y-2 text-sm text-slate-700">
+                <div className="flex items-center justify-between">
+                  <span>{allowancePolicy?.name || primaryPolicy?.name || "PTO"}</span>
+                  <span className="text-xs text-slate-600">
+                    {remaining} of {allowance} days remaining
+                  </span>
+                </div>
+                <div className="mt-1 h-1.5 w-full rounded-full bg-slate-100">
+                  <div
+                    className="h-1.5 rounded-full bg-indigo-500"
+                    style={{
+                      width: `${
+                        allowance > 0
+                          ? Math.min(
+                              100,
+                              Math.max(
+                                0,
+                                Math.round(((allowance - (remaining ?? 0)) / allowance) * 100)
+                              )
+                            )
+                          : 0
+                      }%`,
+                    }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-600">
+                Your time off balance will appear once a policy is assigned.
+              </p>
+            )}
+          </CardShell>
+
           <CardShell
             title="Upcoming time off"
             href="/employee/timeoff"

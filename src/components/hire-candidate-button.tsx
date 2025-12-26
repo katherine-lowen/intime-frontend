@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3333";
+  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID || "demo-org";
 
 export default function HireCandidateButton({

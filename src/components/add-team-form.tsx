@@ -3,6 +3,8 @@
 
 import { useState, type FormEvent } from "react";
 import api from "@/lib/api";
+import { orgHref } from "@/lib/org-base";
+
 
 const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID || "demo-org";
 
@@ -67,7 +69,7 @@ export default function AddTeamForm({ onDone }: { onDone?: () => void }) {
         >
           {saving ? "Saving…" : "Save"}
         </button>
-        <a href="/teams" className="text-sm underline">
+        <a href={orgHref("/teams")} className="text-sm underline">
           Cancel
         </a>
       </div>

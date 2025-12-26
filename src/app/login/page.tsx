@@ -1,39 +1,47 @@
 // src/app/login/page.tsx
 "use client";
 
-import { FormEvent, useEffect } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const router = useRouter();
+  const apiBase = useMemo(
+    () => process.env.NEXT_PUBLIC_API_URL || (typeof window !== "undefined" ? window.location.origin : ""),
+    []
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  // If we're already here and someone refreshes, we do nothing special.
-  // All "auth" is just a redirect to /dashboard for now.
-
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setError(null);
     const formData = new FormData(e.currentTarget);
-    const email = (formData.get("email") as string) || "demo@intime.ai";
-    const lower = email.toLowerCase();
-    const role = lower.includes("employee") ? "EMPLOYEE" : "ADMIN";
+    const email = (formData.get("email") as string) || "";
+    const password = (formData.get("password") as string) || "";
 
-    // Store a lightweight demo user locally so AuthGate sees a session
     try {
-      window.localStorage.setItem(
-        "intime_demo_user",
-        JSON.stringify({
-          id: "emp_demo",
-          email,
-          name: email.split("@")[0],
-          role,
-          org: { id: "demo-org", name: "Intime demo workspace" },
-        })
-      );
-    } catch {
-      // ignore
+      setLoading(true);
+      const res = await fetch(`${apiBase}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email, password }),
+      });
+      if (!res.ok) {
+        setError("Login failed. Please check your credentials.");
+        setLoading(false);
+        return;
+      }
+      const data = await res.json().catch(() => null);
+      const orgSlug =
+        data?.org?.slug || data?.orgSlug || data?.slug || data?.org?.id || data?.orgId || "";
+      router.push(orgSlug ? `/org/${orgSlug}/getting-started` : "/org");
+    } catch (err: any) {
+      setError(err?.message || "Unable to reach the login service.");
+    } finally {
+      setLoading(false);
     }
-
-    router.push("/dashboard");
   };
 
   return (
@@ -89,15 +97,14 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            className="mt-2 inline-flex w-full items-center justify-center rounded-full bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-500"
+            className="mt-2 inline-flex w-full items-center justify-center rounded-full bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
+            disabled={loading}
           >
-            Enter workspace
+            {loading ? "Signing in…" : "Enter workspace"}
           </button>
 
-          <p className="mt-2 text-[11px] text-slate-500">
-            In this YC preview build, auth is simplified so you can focus on the
-            product itself.
-          </p>
+          {error ? <p className="text-xs text-red-400">{error}</p> : null}
+
         </form>
       </div>
     </main>

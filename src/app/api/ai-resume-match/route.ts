@@ -2,7 +2,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
-import * as pdfParse from "pdf-parse";
 import mammoth from "mammoth";
 
 const apiKey = process.env.OPENAI_API_KEY;
@@ -26,6 +25,8 @@ type AiMatchResult = {
 
 // --- helper: robust text extraction for PDF/DOCX/TXT ------------------------
 
+export const runtime = "nodejs";
+
 async function extractResumeText(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
@@ -35,9 +36,9 @@ async function extractResumeText(file: File): Promise<string> {
   // PDF
   if (mime === "application/pdf" || ext === "pdf") {
     try {
+      const pdfModule = await import("pdf-parse");
       // pdf-parse is CommonJS; support both .default and function export
-      const parser =
-        (pdfParse as any).default || (pdfParse as any);
+      const parser = (pdfModule as any).default || (pdfModule as any);
       const data = await parser(buffer);
       return (data && (data as any).text) || "";
     } catch (err) {

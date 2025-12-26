@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import api from "@/lib/api";
+import { orgHref } from "@/lib/org-base";
 
 type EmployeeStatus = "ACTIVE" | "ON_LEAVE" | "CONTRACTOR" | "ALUMNI";
 
@@ -113,7 +114,7 @@ export default function NewEmployeePage() {
       if (created?.employeeId) {
         router.push(`/people/${created.employeeId}`);
       } else {
-        router.push("/people");
+        router.push(orgHref("/people"));
       }
     } catch (err: any) {
       console.error("Create employee failed", err);
@@ -130,7 +131,8 @@ export default function NewEmployeePage() {
     <main className="mx-auto max-w-3xl px-6 py-8">
       {/* Breadcrumbs */}
       <div className="mb-4 flex items-center gap-2 text-xs text-slate-400">
-        <Link href="/people" className="text-indigo-600 hover:underline">
+        <Link href={orgHref("/people")}
+ className="text-indigo-600 hover:underline">
           People
         </Link>
         <span className="text-slate-300">/</span>
@@ -148,7 +150,7 @@ export default function NewEmployeePage() {
           </p>
         </div>
         <Link
-          href="/people"
+          href={orgHref("/people")}
           className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
         >
           Cancel

@@ -11,43 +11,53 @@ interface KPIData {
   orbClass: string;
 }
 
-const kpis: KPIData[] = [
-  {
-    title: 'Headcount',
-    value: '247',
-    change: 12,
-    trend: 'up',
-    badge: 'Live',
-    icon: <Users className="w-5 h-5" />,
-    orbClass: 'orb-gradient-blue'
-  },
-  {
-    title: 'Hiring Load',
-    value: '8/12',
-    change: -2,
-    trend: 'down',
-    icon: <Briefcase className="w-5 h-5" />,
-    orbClass: 'orb-gradient-purple'
-  },
-  {
-    title: 'Engagement',
-    value: '4.2',
-    change: 0,
-    trend: 'neutral',
-    icon: <Target className="w-5 h-5" />,
-    orbClass: 'orb-gradient-emerald'
-  },
-  {
-    title: 'Time-off',
-    value: '23',
-    change: 5,
-    trend: 'up',
-    icon: <Calendar className="w-5 h-5" />,
-    orbClass: 'orb-gradient-cyan'
-  }
-];
+type KPICardsProps = {
+  headcount?: number;
+  openJobs?: number;
+  activeTimeOffRequests?: number;
+};
 
-export function KPICards() {
+export function KPICards({
+  headcount = 247,
+  openJobs = 8,
+  activeTimeOffRequests = 23
+}: KPICardsProps) {
+  const kpis: KPIData[] = [
+    {
+      title: 'Headcount',
+      value: headcount.toString(),
+      change: 12,
+      trend: 'up',
+      badge: 'Live',
+      icon: <Users className="w-5 h-5" />,
+      orbClass: 'orb-gradient-blue'
+    },
+    {
+      title: 'Hiring Load',
+      value: `${openJobs}/12`,
+      change: -2,
+      trend: 'down',
+      icon: <Briefcase className="w-5 h-5" />,
+      orbClass: 'orb-gradient-purple'
+    },
+    {
+      title: 'Engagement',
+      value: '4.2',
+      change: 0,
+      trend: 'neutral',
+      icon: <Target className="w-5 h-5" />,
+      orbClass: 'orb-gradient-emerald'
+    },
+    {
+      title: 'Time-off',
+      value: activeTimeOffRequests.toString(),
+      change: 5,
+      trend: 'up',
+      icon: <Calendar className="w-5 h-5" />,
+      orbClass: 'orb-gradient-cyan'
+    }
+  ];
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
       {kpis.map((kpi, index) => (

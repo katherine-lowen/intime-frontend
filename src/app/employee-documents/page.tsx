@@ -99,7 +99,7 @@ export default async function EmployeeDocumentsPage() {
                   <tr key={doc.id} className="hover:bg-slate-50/60">
                     <td className="px-4 py-2">
                       <Link
-                        href={`/employee-documents/${doc.id}`}
+                        href={`${(globalThis as any).__INTIME_ORG_SLUG__ ? `/org/${(globalThis as any).__INTIME_ORG_SLUG__}` : ""}/employee-documents/${doc.id}`}
                         className="font-medium text-indigo-600 hover:underline"
                       >
                         {doc.title}
@@ -108,7 +108,7 @@ export default async function EmployeeDocumentsPage() {
                     <td className="px-4 py-2 text-slate-700">
                       {doc.employee ? (
                         <Link
-                          href={`/people/${doc.employee.id}`}
+                          href={`${(globalThis as any).__INTIME_ORG_SLUG__ ? `/org/${(globalThis as any).__INTIME_ORG_SLUG__}` : ""}/people/${doc.employee.id}`}
                           className="hover:underline"
                         >
                           {formatEmployeeName(doc.employee)}

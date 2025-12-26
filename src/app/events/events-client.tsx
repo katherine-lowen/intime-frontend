@@ -11,7 +11,7 @@ type EventItem = {
   createdAt: string;
 };
 
-const API = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3333").replace(/\/$/, "");
+const API = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 const ORG = process.env.NEXT_PUBLIC_ORG_ID ?? "demo-org";
 
 export default function EventsClient() {

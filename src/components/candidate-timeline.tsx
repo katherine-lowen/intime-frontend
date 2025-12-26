@@ -39,7 +39,7 @@ export default function CandidateTimeline({ candidateId }: CandidateTimelineProp
     async function load() {
       try {
         const org = process.env.NEXT_PUBLIC_ORG_ID || "demo-org";
-        const api = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3333";
+        const api = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
         const res = await fetch(`${api}/events?candidateId=${candidateId}`, {
           headers: { "X-Org-Id": org },

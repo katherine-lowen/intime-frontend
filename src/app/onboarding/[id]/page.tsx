@@ -115,9 +115,10 @@ function flowStatusClasses(status: OnboardingFlow["status"]) {
 export default async function OnboardingFlowPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  const flow = await getFlow(params.id);
+  const { id } = await params;
+  const flow = await getFlow(id);
 
   if (!flow) {
     return (
