@@ -1,81 +1,105 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { useParams } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
+import { use, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
+import { Textarea } from "@/components/ui/textarea";
 import { SupportErrorCard } from "@/components/support/SupportErrorCard";
 import api from "@/lib/api";
-import { useCurrentOrg } from "@/hooks/useCurrentOrg";
-import { toast } from "sonner";
 
-type OnboardingCounts = {
-  employeesCount: number;
-  invitesCount: number;
-  timeOffPoliciesCount: number;
-  jobsCount: number;
-  hasCompanyProfile: boolean;
-  subscriptionStatus?: string | null;
-  plan?: string | null;
-};
+type Basics = { name: string; website?: string; headcountRange?: string; industry?: string };
+type Team = { departments?: string; location?: string; managers?: string };
+type Invite = { email: string; role: string };
 
-export default function GettingStartedPage() {
-  const params = useParams<{ orgSlug: string }>();
-  const orgSlug = params?.orgSlug;
-  const { orgName } = useCurrentOrg();
-  const [counts, setCounts] = useState<OnboardingCounts | null>(null);
+type StepKey = "basics" | "team" | "invites";
+type StepMeta = { key: StepKey; title: string; description: string; optional?: boolean };
+
+const STEPS: StepMeta[] = [
+  {
+    key: "basics",
+    title: "Workspace basics",
+    description: "Name and brand your org so invites feel polished.",
+  },
+  {
+    key: "team",
+    title: "Team structure",
+    description: "Departments and locations help unlock smart defaults.",
+    optional: true,
+  },
+  {
+    key: "invites",
+    title: "Invite teammates",
+    description: "Bring your team in and assign roles.",
+    optional: true,
+  },
+];
+
+export default function GettingStartedWizard({ params }: { params: Promise<{ orgSlug: string }> }) {
+  const { orgSlug } = use(params);
+  return <WizardClient orgSlug={orgSlug} />;
+}
+
+function WizardClient({ orgSlug }: { orgSlug: string }) {
+  const router = useRouter();
+  const [step, setStep] = useState<StepKey>("basics");
+  const [basics, setBasics] = useState<Basics>({ name: "" });
+  const [team, setTeam] = useState<Team>({});
+  const [invites, setInvites] = useState<Invite[]>([]);
+  const [completion, setCompletion] = useState<Record<StepKey, boolean>>({
+    basics: false,
+    team: false,
+    invites: false,
+  });
+  const [loading, setLoading] = useState(true);
+  const [savingKey, setSavingKey] = useState<StepKey | "finish" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [requestId, setRequestId] = useState<string | null>(null);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
   useEffect(() => {
-    if (!orgSlug) return;
-    const slug = orgSlug;
     let cancelled = false;
     async function load() {
       try {
-        setError(null);
-        // Try org-specific summary
-        const orgLookup = await api.get<{ id?: string; data?: { id: string } }>(
-          `/org/lookup?slug=${encodeURIComponent(slug)}`
-        );
-        const orgId = orgLookup?.id || orgLookup?.data?.id;
-        let summary: any = null;
-        if (orgId) {
-          try {
-            summary = await api.get<any>(`/orgs/${orgId}/onboarding/summary`);
-          } catch {
-            // fallback to dashboard summary if available
-            summary = await api.get<any>("/dashboard/summary");
-          }
-        } else {
-          summary = await api.get<any>("/dashboard/summary");
-        }
-        const reqId = summary?._requestId;
-        if (!cancelled) {
-          setRequestId(reqId || null);
-          setCounts({
-            employeesCount: summary?.counts?.employees ?? summary?.employeesCount ?? 0,
-            invitesCount:
-              summary?.counts?.invites ??
-              summary?.invitedMembersCount ??
-              summary?.invitesCount ??
-              0,
-            timeOffPoliciesCount:
-              summary?.counts?.policies ?? summary?.timeOffPoliciesCount ?? 0,
-            jobsCount: summary?.counts?.jobs ?? summary?.jobsCount ?? 0,
-            hasCompanyProfile: !!(summary?.org?.logoUrl || summary?.org?.name),
-            subscriptionStatus: summary?.subscriptionStatus ?? summary?.billingStatus ?? null,
-            plan: summary?.plan ?? summary?.org?.plan ?? null,
-          });
-        }
+        setLoading(true);
+        const res = await api.get<any>(`/orgs/${orgSlug}/onboarding`);
+        if (cancelled) return;
+        const saved = res || {};
+        if (saved?.basics) setBasics((prev) => ({ ...prev, ...saved.basics }));
+        if (saved?.team) setTeam((prev) => ({ ...prev, ...saved.team }));
+        if (Array.isArray(saved?.invites)) setInvites(saved.invites);
+
+        const basicsDone = Boolean(saved?.basics?.name);
+        const teamDone =
+          Boolean(saved?.team?.departments) ||
+          Boolean(saved?.team?.location) ||
+          Boolean(saved?.team?.managers) ||
+          Boolean(saved?.teamComplete);
+        const invitesDone =
+          Boolean(saved?.invitesComplete) ||
+          (Array.isArray(saved?.invites) && saved.invites.length > 0);
+
+        const computedCompletion: Record<StepKey, boolean> = {
+          basics: basicsDone,
+          team: teamDone,
+          invites: invitesDone,
+        };
+        setCompletion(computedCompletion);
+
+        const firstIncomplete =
+          (saved?.progress?.firstIncompleteStep as StepKey | undefined) ||
+          STEPS.find((s) => !computedCompletion[s.key])?.key ||
+          "invites";
+        setStep(firstIncomplete);
       } catch (err: any) {
-        if (!cancelled) {
-          setError(err?.message || "Unable to load onboarding status");
-          setRequestId(err?.requestId || null);
-        }
+        setError(err?.message || "Unable to load onboarding");
+        setRequestId(err?.requestId || null);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     }
     void load();
@@ -84,151 +108,383 @@ export default function GettingStartedPage() {
     };
   }, [orgSlug]);
 
-  const steps = useMemo(() => {
-    const status = counts;
-    return [
-      {
-        id: "company",
-        title: "Add company details",
-        description: "Logo, name, and basics for your workspace.",
-        href: `/org/${orgSlug}/settings`,
-        complete: !!status?.hasCompanyProfile,
-      },
-      {
-        id: "import",
-        title: "Import employees (CSV)",
-        description: "Bring your team into People in one step.",
-        href: `/org/${orgSlug}/people/import`,
-        complete: (status?.employeesCount ?? 0) > 0,
-      },
-      {
-        id: "invite",
-        title: "Invite your team",
-        description: "Send invites so teammates can log in.",
-        href: `/org/${orgSlug}/settings/members`,
-        complete: (status?.invitesCount ?? 0) > 0 || (status?.employeesCount ?? 0) > 1,
-      },
-      {
-        id: "pto",
-        title: "Set up time off policy",
-        description: "Create PTO rules and approvals.",
-        href: `/org/${orgSlug}/time-off`,
-        complete: (status?.timeOffPoliciesCount ?? 0) > 0,
-      },
-      {
-        id: "job",
-        title: "Create your first job",
-        description: "Start hiring with ATS + AI.",
-        href: `/org/${orgSlug}/hiring`,
-        complete: (status?.jobsCount ?? 0) > 0,
-      },
-      {
-        id: "perf",
-        title: "Run your first performance cycle",
-        description: "Kick off a review cycle.",
-        href: `/org/${orgSlug}/performance`,
-        complete: false,
-      },
-      {
-        id: "billing",
-        title: "Activate your plan",
-        description: "Finish billing to go live.",
-        href: `/org/${orgSlug}/settings/billing`,
-        complete:
-          (status?.subscriptionStatus || "").toLowerCase() === "active" ||
-          (status?.subscriptionStatus || "").toLowerCase() === "trialing",
-      },
-    ];
-  }, [counts, orgSlug]);
+  const completedCount = useMemo(
+    () => Object.values(completion).filter(Boolean).length,
+    [completion]
+  );
+  const currentIndex = STEPS.findIndex((s) => s.key === step);
+  const percent = useMemo(() => {
+    const savedPct = Math.round((completedCount / STEPS.length) * 100);
+    const viewedPct = Math.round((Math.max(currentIndex, 0) / STEPS.length) * 100);
+    return Math.min(100, Math.max(savedPct, viewedPct));
+  }, [completedCount, currentIndex]);
 
-  const progress = useMemo(() => {
-    const total = steps.length;
-    const completed = steps.filter((s) => s.complete).length;
-    const percent = Math.round((completed / total) * 100);
-    return { total, completed, percent };
-  }, [steps]);
-
-  const nextStep = steps.find((s) => !s.complete);
-
-  const copyChecklist = async () => {
-    const lines = steps.map((s) => `- ${s.title}: ${window.location.origin}${s.href}`);
-    try {
-      await navigator.clipboard.writeText(lines.join("\n"));
-      toast("Checklist copied");
-    } catch {
-      // ignore
-    }
+  const markSaved = (key: StepKey) => {
+    setCompletion((prev) => ({ ...prev, [key]: true }));
+    setLastSaved(new Date());
   };
 
-  if (!orgSlug) {
-    return (
-      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-        Organization not found.
-      </div>
+  const saveBasics = useCallback(
+    async (advance = false) => {
+      if (!basics.name.trim()) return;
+      setSavingKey("basics");
+      try {
+        await api.post(`/orgs/${orgSlug}/onboarding/basics`, basics);
+        markSaved("basics");
+        if (advance) setStep("team");
+      } catch (err: any) {
+        setError(err?.message || "Unable to save basics");
+        setRequestId(err?.requestId || null);
+      } finally {
+        setSavingKey(null);
+      }
+    },
+    [basics, orgSlug]
+  );
+
+  const saveTeam = useCallback(
+    async (advance = false) => {
+      const hasContent =
+        Boolean(team.departments?.trim()) ||
+        Boolean(team.location?.trim()) ||
+        Boolean(team.managers?.trim());
+      if (!hasContent && !advance) return;
+      setSavingKey("team");
+      try {
+        await api.post(`/orgs/${orgSlug}/onboarding/team`, team);
+        markSaved("team");
+        if (advance) setStep("invites");
+      } catch (err: any) {
+        setError(err?.message || "Unable to save team");
+        setRequestId(err?.requestId || null);
+      } finally {
+        setSavingKey(null);
+      }
+    },
+    [orgSlug, team]
+  );
+
+  const finishOnboarding = useCallback(async () => {
+    setSavingKey("finish");
+    try {
+      toast.success("Welcome to Intime — you're in.");
+      router.replace(`/org/${orgSlug}/home`);
+    } finally {
+      setSavingKey(null);
+    }
+  }, [orgSlug, router]);
+
+  const saveInvites = useCallback(
+    async (advanceToFinish = false) => {
+      const filtered = invites.filter((i) => i.email.trim());
+      setSavingKey("invites");
+      try {
+        await api.post(`/orgs/${orgSlug}/onboarding/invites`, { invites: filtered });
+        markSaved("invites");
+        if (advanceToFinish) {
+          await finishOnboarding();
+        }
+      } catch (err: any) {
+        setError(err?.message || "Unable to save invites");
+        setRequestId(err?.requestId || null);
+      } finally {
+        setSavingKey(null);
+      }
+    },
+    [invites, orgSlug, finishOnboarding]
+  );
+
+  const addInviteRow = () =>
+    setInvites((prev) => [...prev, { email: "", role: "EMPLOYEE" }]);
+  const updateInvite = (idx: number, field: keyof Invite, value: string) =>
+    setInvites((prev) =>
+      prev.map((inv, i) => (i === idx ? { ...inv, [field]: value } : inv))
     );
+
+  if (!orgSlug) {
+    return <SupportErrorCard title="Onboarding" message="Organization not found" />;
   }
 
+  const currentStep = STEPS.find((s) => s.key === step) ?? STEPS[0];
+
   return (
-    <main className="mx-auto max-w-5xl px-4 py-10 space-y-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">Getting started</p>
-          <h1 className="text-2xl font-semibold text-slate-900">
-            Get {orgName || "your org"} live
-          </h1>
-          <p className="text-sm text-slate-600">
-            Estimated time: 10–15 minutes. Complete the steps below to onboard your workspace.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={copyChecklist}>Copy onboarding checklist</Button>
-          {nextStep && (
-            <Button asChild variant="outline">
-              <Link href={nextStep.href}>Next best action</Link>
-            </Button>
-          )}
+    <main className="mx-auto max-w-6xl space-y-6 px-4 py-10">
+      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/70 p-5 shadow-sm backdrop-blur">
+        <div className="flex flex-col items-start justify-between gap-3 md:flex-row md:items-center">
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-slate-500">Onboarding</p>
+            <h1 className="text-2xl font-semibold text-slate-900">Finish setting up Intime</h1>
+            <p className="text-sm text-slate-600">
+              Three quick steps. We auto-save as you move.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="w-48">
+              <Progress value={percent} />
+              <p className="mt-1 text-right text-[11px] text-slate-500">{percent}% complete</p>
+            </div>
+            <Badge variant="secondary" className="rounded-full border border-slate-200 bg-slate-50 text-slate-700">
+              {lastSaved
+                ? `Saved ${lastSaved.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                : "Autosaves enabled"}
+            </Badge>
+          </div>
         </div>
       </div>
 
       {error ? (
-        <SupportErrorCard title="Unable to load onboarding" message={error} requestId={requestId} />
+        <SupportErrorCard title="Onboarding" message={error} requestId={requestId} />
       ) : null}
 
-      <Card className="border-slate-200">
-        <CardHeader className="flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Progress</CardTitle>
-            <Badge variant="outline" className="text-[11px]">
-              {progress.completed} / {progress.total} complete
-            </Badge>
-          </div>
-          <Progress value={progress.percent} className="h-2" />
-          <p className="text-xs text-slate-500">{progress.percent}% done</p>
-        </CardHeader>
-      </Card>
-
-      <div className="grid gap-3">
-        {steps.map((step) => (
-          <Card
-            key={step.id}
-            className={`border ${step.complete ? "border-emerald-200 bg-emerald-50" : "border-slate-200"}`}
-          >
-            <CardContent className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="space-y-1">
+      <div className="grid gap-6 lg:grid-cols-3">
+        <section className="space-y-4 lg:col-span-2">
+          <Card className="border-slate-200">
+            <CardHeader className="flex flex-col gap-2 border-b border-slate-100/80 bg-slate-50/60 sm:flex-row sm:items-center sm:justify-between">
+              <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-slate-900">{step.title}</span>
-                  {step.complete ? (
-                    <Badge className="bg-emerald-500/20 text-emerald-800">Done</Badge>
+                  <Badge variant="outline" className="rounded-full">
+                    Step {currentIndex + 1} of {STEPS.length}
+                  </Badge>
+                  {currentStep.optional ? (
+                    <Badge variant="secondary" className="rounded-full bg-indigo-50 text-indigo-700">
+                      Optional
+                    </Badge>
                   ) : null}
                 </div>
-                <p className="text-xs text-slate-600">{step.description}</p>
+                <CardTitle className="text-lg font-semibold text-slate-900">{currentStep.title}</CardTitle>
+                <p className="text-sm text-slate-600">{currentStep.description}</p>
               </div>
-              <Button asChild variant={step.complete ? "outline" : "default"} size="sm">
-                <Link href={step.href}>{step.complete ? "Review" : "Go"}</Link>
-              </Button>
+              <div className="flex items-center gap-2">
+                {currentIndex > 0 ? (
+                  <Button variant="ghost" size="sm" onClick={() => setStep(STEPS[currentIndex - 1].key)}>
+                    Back
+                  </Button>
+                ) : null}
+                {currentStep.optional && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      markSaved(currentStep.key);
+                      const next = STEPS[currentIndex + 1];
+                      if (next) setStep(next.key);
+                      else void finishOnboarding();
+                    }}
+                  >
+                    Skip for now
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              {loading ? (
+                <p className="text-sm text-slate-600">Loading your details…</p>
+              ) : null}
+
+              {currentStep.key === "basics" ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2 sm:col-span-2">
+                    <label className="text-xs font-medium text-slate-600">Organization name</label>
+                    <Input
+                      value={basics.name}
+                      onChange={(e) => setBasics((p) => ({ ...p, name: e.target.value }))}
+                      onBlur={() => void saveBasics(false)}
+                      placeholder="Intime"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-slate-600">Website</label>
+                    <Input
+                      value={basics.website || ""}
+                      onChange={(e) => setBasics((p) => ({ ...p, website: e.target.value }))}
+                      onBlur={() => void saveBasics(false)}
+                      placeholder="https://company.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-slate-600">Headcount range</label>
+                    <Input
+                      value={basics.headcountRange || ""}
+                      onChange={(e) => setBasics((p) => ({ ...p, headcountRange: e.target.value }))}
+                      onBlur={() => void saveBasics(false)}
+                      placeholder="11-50"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-slate-600">Industry</label>
+                    <Input
+                      value={basics.industry || ""}
+                      onChange={(e) => setBasics((p) => ({ ...p, industry: e.target.value }))}
+                      onBlur={() => void saveBasics(false)}
+                      placeholder="Software"
+                    />
+                  </div>
+                  <div className="flex items-center justify-end gap-2 sm:col-span-2">
+                    <Button
+                      onClick={() => void saveBasics(true)}
+                      disabled={savingKey === "basics" || !basics.name.trim()}
+                    >
+                      Continue
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+
+              {currentStep.key === "team" ? (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-slate-600">Departments</label>
+                    <Textarea
+                      value={team.departments || ""}
+                      onChange={(e) => setTeam((p) => ({ ...p, departments: e.target.value }))}
+                      onBlur={() => void saveTeam(false)}
+                      placeholder="e.g. Engineering, Sales, People"
+                    />
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-slate-600">Default location</label>
+                      <Input
+                        value={team.location || ""}
+                        onChange={(e) => setTeam((p) => ({ ...p, location: e.target.value }))}
+                        onBlur={() => void saveTeam(false)}
+                        placeholder="HQ city or region"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-slate-600">Managers (optional)</label>
+                      <Input
+                        value={team.managers || ""}
+                        onChange={(e) => setTeam((p) => ({ ...p, managers: e.target.value }))}
+                        onBlur={() => void saveTeam(false)}
+                        placeholder="Add names or emails"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-end gap-2">
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        markSaved("team");
+                        setStep("invites");
+                      }}
+                    >
+                      Skip for now
+                    </Button>
+                    <Button onClick={() => void saveTeam(true)} disabled={savingKey === "team"}>
+                      Continue
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+
+              {currentStep.key === "invites" ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">Invite teammates</p>
+                      <p className="text-xs text-slate-600">We&apos;ll send them a welcome email.</p>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={addInviteRow}>
+                      Add invite
+                    </Button>
+                  </div>
+                  {invites.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-600">
+                      Add a couple of teammates to kick things off.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {invites.map((inv, idx) => (
+                        <div
+                          key={idx}
+                          className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2"
+                        >
+                          <Input
+                            placeholder="email@company.com"
+                            value={inv.email}
+                            onChange={(e) => updateInvite(idx, "email", e.target.value)}
+                            onBlur={() => void saveInvites(false)}
+                          />
+                          <Input
+                            placeholder="Role (OWNER/ADMIN/MANAGER/EMPLOYEE)"
+                            value={inv.role}
+                            onChange={(e) => updateInvite(idx, "role", e.target.value.toUpperCase())}
+                            onBlur={() => void saveInvites(false)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        markSaved("invites");
+                        void finishOnboarding();
+                      }}
+                    >
+                      Skip for now
+                    </Button>
+                    <Button
+                      onClick={() => void saveInvites(true)}
+                      disabled={savingKey === "invites" || invites.some((i) => !i.email.trim())}
+                    >
+                      Finish & go to home
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
-        ))}
+        </section>
+
+        <aside className="space-y-4">
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="text-sm font-semibold text-slate-900">Steps</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {STEPS.map((s, idx) => {
+                const isCurrent = s.key === currentStep.key;
+                const isComplete = completion[s.key];
+                return (
+                  <button
+                    key={s.key}
+                    className={`flex w-full items-center justify-between rounded-lg border px-3 py-3 text-left transition ${
+                      isCurrent
+                        ? "border-indigo-200 bg-indigo-50 text-indigo-900 shadow-sm"
+                        : "border-slate-200 hover:border-indigo-200 hover:bg-slate-50"
+                    }`}
+                    onClick={() => setStep(s.key)}
+                  >
+                    <div>
+                      <p className="text-sm font-medium">
+                        {idx + 1}. {s.title}
+                      </p>
+                      <p className="text-[11px] text-slate-600">{s.description}</p>
+                    </div>
+                    <Badge variant={isComplete ? "default" : "outline"} className="shrink-0 rounded-full">
+                      {isComplete ? "Done" : isCurrent ? "In progress" : "Pending"}
+                    </Badge>
+                  </button>
+                );
+              })}
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200">
+            <CardHeader>
+              <CardTitle className="text-sm font-semibold text-slate-900">What to expect</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-slate-600">
+              <p>Autosave keeps changes, so you can move quickly.</p>
+              <p>We&apos;ll direct you to Home once you finish — no dead ends.</p>
+              <p>Need help? Email support@hireintime.ai anytime.</p>
+            </CardContent>
+          </Card>
+        </aside>
       </div>
     </main>
   );
